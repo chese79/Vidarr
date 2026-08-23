@@ -10,6 +10,14 @@ import type {
   CreateRootFolder,
   Settings,
   UpdateSettings,
+  LibraryConnector,
+  CreateLibraryConnector,
+  UpdateLibraryConnector,
+  LibraryConnectorTestResult,
+  Recommendation,
+  RecommendationRefreshResult,
+  RecommendationProviderConfig,
+  UpdateRecommendationProviderConfig,
 } from '@vidarr/shared-types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -59,5 +67,39 @@ export const api = {
     get: () => request<Settings>('/config'),
     update: (data: UpdateSettings) =>
       request<Settings>('/config', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  libraryConnectors: {
+    list: () => request<LibraryConnector[]>('/libraryconnector'),
+    create: (data: CreateLibraryConnector) =>
+      request<LibraryConnector>('/libraryconnector', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: UpdateLibraryConnector) =>
+      request<LibraryConnector>(`/libraryconnector/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    remove: (id: number) => request<void>(`/libraryconnector/${id}`, { method: 'DELETE' }),
+    test: (id: number) =>
+      request<LibraryConnectorTestResult>(`/libraryconnector/${id}/test`, { method: 'POST' }),
+    sync: (id: number) =>
+      request<{ ok: boolean; artistCount: number }>(`/libraryconnector/${id}/sync`, {
+        method: 'POST',
+      }),
+  },
+  recommendations: {
+    list: () => request<Recommendation[]>('/recommendation'),
+    refresh: () =>
+      request<RecommendationRefreshResult>('/recommendation/refresh', { method: 'POST' }),
+    dismiss: (id: number) =>
+      request<Recommendation>(`/recommendation/${id}/dismiss`, { method: 'POST' }),
+    add: (id: number, data: { rootFolderId: number; qualityProfileId: number }) =>
+      request<Artist>(`/recommendation/${id}/add`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  recommendationProviders: {
+    list: () => request<RecommendationProviderConfig[]>('/recommendationprovider'),
+    update: (provider: string, data: UpdateRecommendationProviderConfig) =>
+      request<RecommendationProviderConfig>(`/recommendationprovider/${provider}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
   },
 };

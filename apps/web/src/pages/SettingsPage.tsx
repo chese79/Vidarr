@@ -1,7 +1,81 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { TransferMode } from '@vidarr/shared-types';
+import type { RecommendationProviderConfig, TransferMode } from '@vidarr/shared-types';
+
+const PROVIDER_LABEL: Record<string, string> = {
+  lastfm: 'Last.fm',
+  spotify: 'Spotify',
+  musicbrainz: 'MusicBrainz',
+};
+
+function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
+  const queryClient = useQueryClient();
+  const [enabled, setEnabled] = useState(config.enabled);
+  const [apiKey, setApiKey] = useState(config.apiKey ?? '');
+  const [clientId, setClientId] = useState(config.clientId ?? '');
+  const [clientSecret, setClientSecret] = useState(config.clientSecret ?? '');
+
+  const update = useMutation({
+    mutationFn: () =>
+      api.recommendationProviders.update(config.provider, {
+        enabled,
+        apiKey: apiKey || null,
+        clientId: clientId || null,
+        clientSecret: clientSecret || null,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recommendationProviders'] }),
+  });
+
+  return (
+    <div className="form-row" style={{ alignItems: 'center' }}>
+      <label style={{ width: 110 }}>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />{' '}
+        {PROVIDER_LABEL[config.provider] ?? config.provider}
+      </label>
+      {config.provider === 'spotify' ? (
+        <>
+          <input
+            placeholder="Client ID"
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+          />
+          <input
+            placeholder="Client Secret"
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+          />
+        </>
+      ) : config.provider === 'lastfm' ? (
+        <input placeholder="API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+      ) : (
+        <span className="empty-state" style={{ padding: 0 }}>
+          No credentials required
+        </span>
+      )}
+      <button type="button" onClick={() => update.mutate()}>
+        Save
+      </button>
+    </div>
+  );
+}
+
+function RecommendationProvidersSection() {
+  const providers = useQuery({
+    queryKey: ['recommendationProviders'],
+    queryFn: api.recommendationProviders.list,
+  });
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Recommendation Providers</h3>
+      {providers.data?.map((p) => (
+        <ProviderRow key={p.provider} config={p} />
+      ))}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -61,6 +135,8 @@ export default function SettingsPage() {
         </div>
         <button type="submit">Save</button>
       </form>
+
+      <RecommendationProvidersSection />
     </div>
   );
 }

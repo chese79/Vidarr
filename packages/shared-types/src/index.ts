@@ -112,3 +112,101 @@ export type Settings = z.infer<typeof SettingsSchema>;
 
 export const UpdateSettingsSchema = SettingsSchema.partial();
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>;
+
+// --- Library Connectors & Artist Recommendations (M2.5) ---
+
+export const LibraryConnectorType = z.enum(['plex', 'jellyfin', 'subsonic']);
+export type LibraryConnectorType = z.infer<typeof LibraryConnectorType>;
+
+export const LibraryConnectorSchema = z.object({
+  id: z.number().int(),
+  name: z.string().min(1),
+  type: LibraryConnectorType,
+  host: z.string().min(1),
+  authToken: z.string().nullable(),
+  username: z.string().nullable(),
+  musicLibraryId: z.string().nullable(),
+  enabled: z.boolean(),
+  lastSyncedAt: z.string().nullable(),
+  lastSyncStatus: z.string().nullable(),
+  lastSyncError: z.string().nullable(),
+});
+export type LibraryConnector = z.infer<typeof LibraryConnectorSchema>;
+
+export const CreateLibraryConnectorSchema = z.object({
+  name: z.string().min(1),
+  type: LibraryConnectorType,
+  host: z.string().min(1),
+  authToken: z.string().nullable().optional(),
+  username: z.string().nullable().optional(),
+  password: z.string().nullable().optional(),
+  enabled: z.boolean().default(true),
+});
+export type CreateLibraryConnector = z.infer<typeof CreateLibraryConnectorSchema>;
+
+export const UpdateLibraryConnectorSchema = CreateLibraryConnectorSchema.partial();
+export type UpdateLibraryConnector = z.infer<typeof UpdateLibraryConnectorSchema>;
+
+export const LibraryConnectorTestResultSchema = z.object({
+  ok: z.boolean(),
+  message: z.string().optional(),
+});
+export type LibraryConnectorTestResult = z.infer<typeof LibraryConnectorTestResultSchema>;
+
+export const LibraryArtistSchema = z.object({
+  id: z.number().int(),
+  connectorId: z.number().int(),
+  externalId: z.string(),
+  name: z.string(),
+  genre: z.string().nullable(),
+  playCount: z.number().int().nullable(),
+});
+export type LibraryArtist = z.infer<typeof LibraryArtistSchema>;
+
+export const RecommendationProviderName = z.enum(['lastfm', 'spotify', 'musicbrainz']);
+export type RecommendationProviderName = z.infer<typeof RecommendationProviderName>;
+
+export const RecommendationProviderConfigSchema = z.object({
+  id: z.number().int(),
+  provider: RecommendationProviderName,
+  enabled: z.boolean(),
+  apiKey: z.string().nullable(),
+  clientId: z.string().nullable(),
+  clientSecret: z.string().nullable(),
+});
+export type RecommendationProviderConfig = z.infer<typeof RecommendationProviderConfigSchema>;
+
+export const UpdateRecommendationProviderConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  apiKey: z.string().nullable().optional(),
+  clientId: z.string().nullable().optional(),
+  clientSecret: z.string().nullable().optional(),
+});
+export type UpdateRecommendationProviderConfig = z.infer<
+  typeof UpdateRecommendationProviderConfigSchema
+>;
+
+export const RecommendationSourceHitSchema = z.object({
+  id: z.number().int(),
+  source: z.enum(['library', 'lastfm', 'spotify', 'musicbrainz']),
+  seedArtistName: z.string(),
+  score: z.number(),
+  reason: z.string(),
+});
+export type RecommendationSourceHit = z.infer<typeof RecommendationSourceHitSchema>;
+
+export const RecommendationSchema = z.object({
+  id: z.number().int(),
+  artistName: z.string(),
+  mbid: z.string().nullable(),
+  aggregateScore: z.number(),
+  dateFound: z.string(),
+  sourceHits: z.array(RecommendationSourceHitSchema),
+});
+export type Recommendation = z.infer<typeof RecommendationSchema>;
+
+export const RecommendationRefreshResultSchema = z.object({
+  totalRecommendations: z.number().int(),
+  newRecommendations: z.number().int(),
+});
+export type RecommendationRefreshResult = z.infer<typeof RecommendationRefreshResultSchema>;

@@ -4,11 +4,15 @@ import ArtistDetailPage from './pages/ArtistDetailPage';
 import QualityProfilesPage from './pages/QualityProfilesPage';
 import RootFoldersPage from './pages/RootFoldersPage';
 import SettingsPage from './pages/SettingsPage';
+import DiscoverPage from './pages/DiscoverPage';
+import LibraryConnectorsPage from './pages/LibraryConnectorsPage';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
+  { to: '/discover', label: 'Discover' },
   { to: '/quality-profiles', label: 'Quality Profiles' },
   { to: '/root-folders', label: 'Root Folders' },
+  { to: '/connectors', label: 'Library Connectors' },
   { to: '/settings', label: 'Settings' },
 ];
 
@@ -31,6 +35,8 @@ export default function App() {
           <Route path="/artist/:id" element={<ArtistDetailPage />} />
           <Route path="/quality-profiles" element={<QualityProfilesPage />} />
           <Route path="/root-folders" element={<RootFoldersPage />} />
+          <Route path="/discover" element={<DiscoverPage />} />
+          <Route path="/connectors" element={<LibraryConnectorsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

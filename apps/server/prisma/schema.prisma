@@ -203,3 +203,70 @@ model TagOnArtist {
 
   @@id([artistId, tagId])
 }
+
+model LibraryConnector {
+  id             Int       @id @default(autoincrement())
+  name           String
+  type           String // "plex" | "jellyfin" | "subsonic"
+  host           String
+  authToken      String? // Plex X-Plex-Token, or Jellyfin API key
+  username       String? // Jellyfin / Subsonic
+  password       String? // Subsonic only (salted-MD5 auth requires it server-side)
+  musicLibraryId String? // cached: Plex section key, or Jellyfin userId
+  enabled        Boolean   @default(true)
+  lastSyncedAt   DateTime?
+  lastSyncStatus String? // "success" | "failed"
+  lastSyncError  String?
+
+  libraryArtists LibraryArtist[]
+}
+
+model LibraryArtist {
+  id             Int              @id @default(autoincrement())
+  connectorId    Int
+  connector      LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  externalId     String
+  name           String
+  normalizedName String
+  genre          String?
+  playCount      Int?
+  lastSyncedAt   DateTime         @default(now())
+
+  @@unique([connectorId, externalId])
+}
+
+model RecommendationProviderConfig {
+  id             Int       @id @default(autoincrement())
+  provider       String    @unique // "lastfm" | "spotify" | "musicbrainz"
+  enabled        Boolean   @default(false)
+  apiKey         String? // Last.fm
+  clientId       String? // Spotify
+  clientSecret   String? // Spotify
+  accessToken    String? // Spotify (cached client-credentials token)
+  tokenExpiresAt DateTime? // Spotify
+}
+
+model Recommendation {
+  id                   Int      @id @default(autoincrement())
+  artistName           String
+  normalizedArtistName String   @unique
+  mbid                 String?
+  aggregateScore       Float
+  dismissed            Boolean  @default(false)
+  dateFound            DateTime @default(now())
+  lastSeenAt           DateTime @default(now())
+  addedArtistId        Int?
+
+  sourceHits RecommendationSourceHit[]
+}
+
+model RecommendationSourceHit {
+  id               Int            @id @default(autoincrement())
+  recommendationId Int
+  recommendation   Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  source           String // "library" | "lastfm" | "spotify" | "musicbrainz"
+  sourceRef        String?
+  seedArtistName   String
+  score            Float
+  reason           String
+}

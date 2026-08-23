@@ -42,6 +42,14 @@ async function main() {
     },
   });
 
+  for (const provider of ['lastfm', 'spotify', 'musicbrainz']) {
+    await prisma.recommendationProviderConfig.upsert({
+      where: { provider },
+      update: {},
+      create: { provider },
+    });
+  }
+
   console.log('Seed complete.');
 }
 

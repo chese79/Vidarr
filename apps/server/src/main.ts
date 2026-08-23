@@ -9,6 +9,9 @@ import { musicVideoRoutes } from './api/musicvideo.js';
 import { qualityProfileRoutes } from './api/qualityprofile.js';
 import { rootFolderRoutes } from './api/rootfolder.js';
 import { settingsRoutes } from './api/settings.js';
+import { libraryConnectorRoutes } from './api/libraryconnector.js';
+import { recommendationRoutes } from './api/recommendation.js';
+import { recommendationProviderRoutes } from './api/recommendationprovider.js';
 
 const app = Fastify({ logger: true });
 
@@ -30,6 +33,9 @@ await app.register(musicVideoRoutes);
 await app.register(qualityProfileRoutes);
 await app.register(rootFolderRoutes);
 await app.register(settingsRoutes);
+await app.register(libraryConnectorRoutes);
+await app.register(recommendationRoutes);
+await app.register(recommendationProviderRoutes);
 
 const webDistPath = process.env.WEB_DIST_PATH ?? path.resolve(process.cwd(), '../web/dist');
 if (existsSync(webDistPath)) {

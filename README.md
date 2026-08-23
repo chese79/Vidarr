@@ -4,13 +4,18 @@ A self-hosted, Sonarr/Radarr-style automation app for music videos: monitor arti
 find and grab new music videos from YouTube and generic indexers (Torznab/Newznab + a torrent or
 usenet client), and organize them into a media library for Plex/Jellyfin/Emby.
 
-Status: **M1 (foundation)** — data model, CRUD API, and web UI shell for artists, music videos,
-quality profiles, and root folders. No automated searching/downloading yet; see `docs/plan.md`
-for the full build plan (M2 adds the YouTube + indexer/download-client pipelines).
+Status: **M1 (foundation)** + **M2.5 (library connectors & recommendations)** — data model, CRUD
+API, and web UI shell for artists, music videos, quality profiles, and root folders, plus a
+Discover feature that recommends artists from a connected Plex/Jellyfin/Navidrome library and
+Last.fm/Spotify/MusicBrainz similarity data. No automated searching/downloading yet; see
+`docs/plan.md` for the full build plan (M2 adds the YouTube + indexer/download-client pipelines).
 
 vidarr is purely an orchestrator, like Sonarr/Radarr/Lidarr — it doesn't host, scrape, or
 distribute content itself. It automates whatever indexers, download clients, and YouTube sources
 you configure it to use.
+
+Licensed under GPL-3.0-or-later — see `LICENSE` and `NOTICE.md` (vidarr's domain model and some
+logic are adapted from the GPL-3.0-licensed Sonarr/Radarr/Lidarr projects).
 
 ## Local development
 

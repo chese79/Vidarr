@@ -1,10 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { CreateArtistSchema, UpdateArtistSchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
-
-function sortNameFor(name: string): string {
-  return name.replace(/^(the|a|an)\s+/i, '').trim();
-}
+import { sortNameFor } from '../pipeline/normalize.js';
 
 export async function artistRoutes(app: FastifyInstance) {
   app.get('/api/v1/artist', async () => {
