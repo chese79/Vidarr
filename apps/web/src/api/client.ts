@@ -18,6 +18,8 @@ import type {
   RecommendationRefreshResult,
   RecommendationProviderConfig,
   UpdateRecommendationProviderConfig,
+  ImvdbArtist,
+  ImvdbVideoCandidate,
 } from '@vidarr/shared-types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -101,5 +103,13 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
+  },
+  imvdb: {
+    searchArtists: (q: string) =>
+      request<ImvdbArtist[]>(`/imvdb/search-artists?q=${encodeURIComponent(q)}`),
+    getArtistVideos: (slug: string, name: string) =>
+      request<ImvdbVideoCandidate[]>(
+        `/imvdb/artist/${encodeURIComponent(slug)}/videos?name=${encodeURIComponent(name)}`,
+      ),
   },
 };

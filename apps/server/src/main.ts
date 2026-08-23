@@ -12,6 +12,7 @@ import { settingsRoutes } from './api/settings.js';
 import { libraryConnectorRoutes } from './api/libraryconnector.js';
 import { recommendationRoutes } from './api/recommendation.js';
 import { recommendationProviderRoutes } from './api/recommendationprovider.js';
+import { imvdbRoutes } from './api/imvdb.js';
 
 const app = Fastify({ logger: true });
 
@@ -36,6 +37,7 @@ await app.register(settingsRoutes);
 await app.register(libraryConnectorRoutes);
 await app.register(recommendationRoutes);
 await app.register(recommendationProviderRoutes);
+await app.register(imvdbRoutes);
 
 const webDistPath = process.env.WEB_DIST_PATH ?? path.resolve(process.cwd(), '../web/dist');
 if (existsSync(webDistPath)) {

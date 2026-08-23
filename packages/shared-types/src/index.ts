@@ -107,6 +107,7 @@ export const SettingsSchema = z.object({
   namingFormat: z.string(),
   transferMode: TransferMode,
   minFreeSpaceMb: z.number().int(),
+  imvdbApiKey: z.string().nullable(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -210,3 +211,19 @@ export const RecommendationRefreshResultSchema = z.object({
   newRecommendations: z.number().int(),
 });
 export type RecommendationRefreshResult = z.infer<typeof RecommendationRefreshResultSchema>;
+
+// --- IMVDb metadata (M2) ---
+
+export const ImvdbArtistSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+});
+export type ImvdbArtist = z.infer<typeof ImvdbArtistSchema>;
+
+export const ImvdbVideoCandidateSchema = z.object({
+  imvdbVideoId: z.string(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+  thumbnailUrl: z.string().nullable(),
+});
+export type ImvdbVideoCandidate = z.infer<typeof ImvdbVideoCandidateSchema>;

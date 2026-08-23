@@ -2,13 +2,221 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import type { ImvdbArtist, ImvdbVideoCandidate } from '@vidarr/shared-types';
 
-export default function LibraryPage() {
+function AddArtistForm({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
-  const [showAdd, setShowAdd] = useState(false);
+  const [mode, setMode] = useState<'imvdb' | 'manual'>('imvdb');
   const [name, setName] = useState('');
   const [rootFolderId, setRootFolderId] = useState<number | ''>('');
   const [qualityProfileId, setQualityProfileId] = useState<number | ''>('');
+
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ImvdbArtist[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ImvdbArtist | null>(null);
+  const [candidateVideos, setCandidateVideos] = useState<ImvdbVideoCandidate[]>([]);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  const rootFolders = useQuery({ queryKey: ['rootFolders'], queryFn: api.rootFolders.list });
+  const qualityProfiles = useQuery({
+    queryKey: ['qualityProfiles'],
+    queryFn: api.qualityProfiles.list,
+  });
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!query.trim()) return;
+    setSearching(true);
+    setSearchError(null);
+    setSelected(null);
+    try {
+      setSearchResults(await api.imvdb.searchArtists(query));
+    } catch (err) {
+      setSearchError((err as Error).message);
+    }
+    setSearching(false);
+  }
+
+  async function handleSelect(artist: ImvdbArtist) {
+    setSearchError(null);
+    setSelected(artist);
+    setLoadingVideos(true);
+    try {
+      setCandidateVideos(await api.imvdb.getArtistVideos(artist.slug, artist.name));
+    } catch (err) {
+      setSearchError((err as Error).message);
+    }
+    setLoadingVideos(false);
+  }
+
+  async function handleAddImvdb() {
+    if (!selected || rootFolderId === '' || qualityProfileId === '') return;
+    setAdding(true);
+    const artist = await api.artists.create({
+      name: selected.name,
+      imvdbArtistId: selected.slug,
+      monitored: true,
+      rootFolderId: Number(rootFolderId),
+      qualityProfileId: Number(qualityProfileId),
+    });
+    for (const video of candidateVideos) {
+      await api.musicVideos.create({
+        artistId: artist.id,
+        title: video.title,
+        imvdbVideoId: video.imvdbVideoId,
+        releaseYear: video.year ?? undefined,
+        thumbnailUrl: video.thumbnailUrl ?? undefined,
+        monitored: true,
+      });
+    }
+    queryClient.invalidateQueries({ queryKey: ['artists'] });
+    setAdding(false);
+    onDone();
+  }
+
+  const createManual = useMutation({
+    mutationFn: api.artists.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artists'] });
+      onDone();
+    },
+  });
+
+  function handleManualSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name || rootFolderId === '' || qualityProfileId === '') return;
+    createManual.mutate({
+      name,
+      monitored: true,
+      rootFolderId: Number(rootFolderId),
+      qualityProfileId: Number(qualityProfileId),
+    });
+  }
+
+  const rootFolderSelect = (
+    <select value={rootFolderId} onChange={(e) => setRootFolderId(Number(e.target.value))} required>
+      <option value="">Root folder…</option>
+      {rootFolders.data?.map((rf) => (
+        <option key={rf.id} value={rf.id}>
+          {rf.path}
+        </option>
+      ))}
+    </select>
+  );
+
+  const qualityProfileSelect = (
+    <select
+      value={qualityProfileId}
+      onChange={(e) => setQualityProfileId(Number(e.target.value))}
+      required
+    >
+      <option value="">Quality profile…</option>
+      {qualityProfiles.data?.map((qp) => (
+        <option key={qp.id} value={qp.id}>
+          {qp.name}
+        </option>
+      ))}
+    </select>
+  );
+
+  return (
+    <div className="card">
+      <div className="form-row">
+        <button
+          type="button"
+          className={mode === 'imvdb' ? '' : 'secondary'}
+          onClick={() => setMode('imvdb')}
+        >
+          Search IMVDb
+        </button>
+        <button
+          type="button"
+          className={mode === 'manual' ? '' : 'secondary'}
+          onClick={() => setMode('manual')}
+        >
+          Add manually
+        </button>
+      </div>
+
+      {mode === 'imvdb' ? (
+        <>
+          <form className="form-row" onSubmit={handleSearch}>
+            <input
+              placeholder="Artist name"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              style={{ minWidth: 240 }}
+            />
+            <button type="submit" disabled={searching}>
+              {searching ? 'Searching…' : 'Search'}
+            </button>
+          </form>
+
+          {searchError && (
+            <p className="empty-state">
+              {searchError} (add your IMVDb API key in Settings if you haven't yet)
+            </p>
+          )}
+
+          {searchResults && !selected && (
+            <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+              {searchResults.length ? (
+                searchResults.map((a) => (
+                  <button
+                    key={a.slug}
+                    type="button"
+                    className="secondary"
+                    onClick={() => handleSelect(a)}
+                  >
+                    {a.name}
+                  </button>
+                ))
+              ) : (
+                <p className="empty-state">No matches found.</p>
+              )}
+            </div>
+          )}
+
+          {selected && (
+            <>
+              <p className="empty-state">
+                {selected.name} —{' '}
+                {loadingVideos ? 'looking up videos…' : `${candidateVideos.length} video(s) found on IMVDb`}
+              </p>
+              <div className="form-row">
+                {rootFolderSelect}
+                {qualityProfileSelect}
+                <button type="button" onClick={handleAddImvdb} disabled={adding || loadingVideos}>
+                  {adding ? 'Adding…' : 'Add Artist'}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <form onSubmit={handleManualSubmit}>
+          <div className="form-row">
+            <input
+              placeholder="Artist name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+            {rootFolderSelect}
+            {qualityProfileSelect}
+            <button type="submit">Save</button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+export default function LibraryPage() {
+  const [showAdd, setShowAdd] = useState(false);
 
   const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
   const rootFolders = useQuery({ queryKey: ['rootFolders'], queryFn: api.rootFolders.list });
@@ -16,26 +224,6 @@ export default function LibraryPage() {
     queryKey: ['qualityProfiles'],
     queryFn: api.qualityProfiles.list,
   });
-
-  const createArtist = useMutation({
-    mutationFn: api.artists.create,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artists'] });
-      setShowAdd(false);
-      setName('');
-    },
-  });
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name || rootFolderId === '' || qualityProfileId === '') return;
-    createArtist.mutate({
-      name,
-      monitored: true,
-      rootFolderId: Number(rootFolderId),
-      qualityProfileId: Number(qualityProfileId),
-    });
-  }
 
   const canAdd = (rootFolders.data?.length ?? 0) > 0 && (qualityProfiles.data?.length ?? 0) > 0;
 
@@ -55,43 +243,7 @@ export default function LibraryPage() {
         </p>
       )}
 
-      {showAdd && (
-        <form className="card" onSubmit={handleSubmit}>
-          <div className="form-row">
-            <input
-              placeholder="Artist name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <select
-              value={rootFolderId}
-              onChange={(e) => setRootFolderId(Number(e.target.value))}
-              required
-            >
-              <option value="">Root folder…</option>
-              {rootFolders.data?.map((rf) => (
-                <option key={rf.id} value={rf.id}>
-                  {rf.path}
-                </option>
-              ))}
-            </select>
-            <select
-              value={qualityProfileId}
-              onChange={(e) => setQualityProfileId(Number(e.target.value))}
-              required
-            >
-              <option value="">Quality profile…</option>
-              {qualityProfiles.data?.map((qp) => (
-                <option key={qp.id} value={qp.id}>
-                  {qp.name}
-                </option>
-              ))}
-            </select>
-            <button type="submit">Save</button>
-          </div>
-        </form>
-      )}
+      {showAdd && <AddArtistForm onDone={() => setShowAdd(false)} />}
 
       {artists.data?.length ? (
         <table>

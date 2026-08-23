@@ -83,12 +83,14 @@ export default function SettingsPage() {
   const [namingFormat, setNamingFormat] = useState('');
   const [transferMode, setTransferMode] = useState<TransferMode>('hardlink');
   const [minFreeSpaceMb, setMinFreeSpaceMb] = useState(1024);
+  const [imvdbApiKey, setImvdbApiKey] = useState('');
 
   useEffect(() => {
     if (settings.data) {
       setNamingFormat(settings.data.namingFormat);
       setTransferMode(settings.data.transferMode);
       setMinFreeSpaceMb(settings.data.minFreeSpaceMb);
+      setImvdbApiKey(settings.data.imvdbApiKey ?? '');
     }
   }, [settings.data]);
 
@@ -107,9 +109,13 @@ export default function SettingsPage() {
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
-          update.mutate({ namingFormat, transferMode, minFreeSpaceMb });
+          update.mutate({ namingFormat, transferMode, minFreeSpaceMb, imvdbApiKey: imvdbApiKey || null });
         }}
       >
+        <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <label>IMVDb API key</label>
+          <input value={imvdbApiKey} onChange={(e) => setImvdbApiKey(e.target.value)} />
+        </div>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label>Naming format</label>
           <input value={namingFormat} onChange={(e) => setNamingFormat(e.target.value)} />
