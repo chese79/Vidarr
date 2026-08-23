@@ -1,0 +1,13 @@
+services:
+  vidarr:
+    build: .
+    container_name: vidarr
+    ports:
+      - "7878:7878"
+    volumes:
+      - vidarr-config:/config
+      - ./media:/media
+    restart: unless-stopped
+
+volumes:
+  vidarr-config:

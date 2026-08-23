@@ -1,0 +1,17 @@
+{
+  "name": "vidarr",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace apps/server",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspace packages/shared-types && npm run build --workspace apps/server && npm run build --workspace apps/web",
+    "prisma:generate": "npm run prisma:generate --workspace apps/server",
+    "prisma:migrate": "npm run prisma:migrate --workspace apps/server"
+  }
+}

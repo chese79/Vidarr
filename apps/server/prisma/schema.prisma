@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Artist {
+  id               Int          @id @default(autoincrement())
+  name             String
+  sortName         String
+  imvdbArtistId    String?      @unique
+  monitored        Boolean      @default(true)
+  rootFolderId     Int
+  rootFolder       RootFolder   @relation(fields: [rootFolderId], references: [id])
+  qualityProfileId Int
+  qualityProfile   QualityProfile @relation(fields: [qualityProfileId], references: [id])
+  posterUrl        String?
+  addedAt          DateTime     @default(now())
+
+  musicVideos   MusicVideo[]
+  youtubeSources YoutubeSource[]
+  tags          TagOnArtist[]
+}
+
+model MusicVideo {
+  id             Int      @id @default(autoincrement())
+  artistId       Int
+  artist         Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  title          String
+  normalizedTitle String
+  imvdbVideoId   String?  @unique
+  youtubeVideoId String?  @unique
+  releaseYear    Int?
+  director       String?
+  monitored      Boolean  @default(true)
+  hasFile        Boolean  @default(false)
+  thumbnailUrl   String?
+  addedAt        DateTime @default(now())
+
+  file           MusicVideoFile?
+  queueItems     DownloadQueueItem[]
+  history        History[]
+
+  @@unique([artistId, normalizedTitle])
+}
+
+model MusicVideoFile {
+  id           Int        @id @default(autoincrement())
+  musicVideoId Int        @unique
+  musicVideo   MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  path         String
+  qualityId    Int?
+  quality      Quality?   @relation(fields: [qualityId], references: [id])
+  sizeBytes    BigInt
+  mediaInfo    String? // JSON blob: codec/resolution/bitrate
+  originalFilename String
+  dateAdded    DateTime   @default(now())
+}
+
+model Quality {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  source     String // "web" | "youtube" | "unknown"
+  resolution Int?
+  weight     Int
+
+  profileItems   QualityProfileItem[]
+  files          MusicVideoFile[]
+}
+
+model QualityProfile {
+  id              Int    @id @default(autoincrement())
+  name            String @unique
+  cutoffQualityId Int
+
+  items   QualityProfileItem[]
+  artists Artist[]
+}
+
+model QualityProfileItem {
+  id               Int            @id @default(autoincrement())
+  qualityProfileId Int
+  qualityProfile   QualityProfile @relation(fields: [qualityProfileId], references: [id], onDelete: Cascade)
+  qualityId        Int
+  quality          Quality        @relation(fields: [qualityId], references: [id])
+  allowed          Boolean        @default(true)
+
+  @@unique([qualityProfileId, qualityId])
+}
+
+model RootFolder {
+  id             Int      @id @default(autoincrement())
+  path           String   @unique
+  freeSpaceBytes BigInt?
+  accessible     Boolean  @default(true)
+  lastCheckedAt  DateTime?
+
+  artists Artist[]
+}
+
+model Indexer {
+  id             Int     @id @default(autoincrement())
+  name           String
+  implementation String // "Torznab" | "Newznab"
+  baseUrl        String
+  apiKey         String?
+  categories     String // JSON-encoded int[]
+  enabled        Boolean @default(true)
+  priority       Int     @default(25)
+  supportsRss    Boolean @default(true)
+  supportsSearch Boolean @default(true)
+}
+
+model DownloadClient {
+  id             Int     @id @default(autoincrement())
+  name           String
+  implementation String // "qBittorrent" | "SABnzbd"
+  host           String
+  port           Int
+  username       String?
+  password       String?
+  apiKey         String?
+  category       String?
+  enabled        Boolean @default(true)
+  priority       Int     @default(25)
+
+  queueItems DownloadQueueItem[]
+}
+
+model YoutubeSource {
+  id             Int       @id @default(autoincrement())
+  type           String // "channel" | "playlist" | "single_video"
+  url            String
+  artistId       Int
+  artist         Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  monitored      Boolean   @default(true)
+  lastPolledAt   DateTime?
+  qualitySelector String   @default("bestvideo[height<=1080]+bestaudio")
+}
+
+model DownloadQueueItem {
+  id               Int             @id @default(autoincrement())
+  musicVideoId     Int
+  musicVideo       MusicVideo      @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  sourceType       String // "indexer" | "youtube"
+  sourceRef        String
+  downloadClientId Int?
+  downloadClient   DownloadClient? @relation(fields: [downloadClientId], references: [id])
+  status           String // "queued" | "downloading" | "importing" | "failed"
+  progress         Float           @default(0)
+  outputPath       String?
+  addedAt          DateTime        @default(now())
+}
+
+model History {
+  id           Int        @id @default(autoincrement())
+  musicVideoId Int
+  musicVideo   MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  eventType    String // "grabbed" | "downloadFolderImported" | "downloadFailed" | "deleted" | "renamed"
+  date         DateTime   @default(now())
+  data         String? // JSON blob
+}
+
+model ActivityLog {
+  id      Int      @id @default(autoincrement())
+  level   String // "info" | "warn" | "error"
+  source  String
+  message String
+  date    DateTime @default(now())
+}
+
+model ScheduledTask {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  intervalMs   Int
+  lastRunAt    DateTime?
+  lastResult   String? // "success" | "failed"
+  lastError    String?
+}
+
+model Settings {
+  id             Int    @id @default(1)
+  namingFormat   String @default("{Artist Name}/{Artist Name} - {Video Title} ({Year}) [{Quality}]")
+  transferMode   String @default("hardlink") // "hardlink" | "copy" | "move"
+  minFreeSpaceMb Int    @default(1024)
+}
+
+model Tag {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  artists TagOnArtist[]
+}
+
+model TagOnArtist {
+  artistId Int
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  tagId    Int
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([artistId, tagId])
+}
