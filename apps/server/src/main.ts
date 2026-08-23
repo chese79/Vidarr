@@ -13,6 +13,7 @@ import { libraryConnectorRoutes } from './api/libraryconnector.js';
 import { recommendationRoutes } from './api/recommendation.js';
 import { recommendationProviderRoutes } from './api/recommendationprovider.js';
 import { imvdbRoutes } from './api/imvdb.js';
+import { youtubeSourceRoutes } from './api/youtubesource.js';
 
 const app = Fastify({ logger: true });
 
@@ -38,6 +39,7 @@ await app.register(libraryConnectorRoutes);
 await app.register(recommendationRoutes);
 await app.register(recommendationProviderRoutes);
 await app.register(imvdbRoutes);
+await app.register(youtubeSourceRoutes);
 
 const webDistPath = process.env.WEB_DIST_PATH ?? path.resolve(process.cwd(), '../web/dist');
 if (existsSync(webDistPath)) {

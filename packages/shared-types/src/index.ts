@@ -227,3 +227,40 @@ export const ImvdbVideoCandidateSchema = z.object({
   thumbnailUrl: z.string().nullable(),
 });
 export type ImvdbVideoCandidate = z.infer<typeof ImvdbVideoCandidateSchema>;
+
+// --- YouTube source pipeline (M2) ---
+
+export const YoutubeSourceType = z.enum(['channel', 'playlist', 'single_video']);
+export type YoutubeSourceType = z.infer<typeof YoutubeSourceType>;
+
+export const YoutubeSourceSchema = z.object({
+  id: z.number().int(),
+  type: YoutubeSourceType,
+  url: z.string(),
+  artistId: z.number().int(),
+  monitored: z.boolean(),
+  lastPolledAt: z.string().nullable(),
+  qualitySelector: z.string(),
+});
+export type YoutubeSource = z.infer<typeof YoutubeSourceSchema>;
+
+export const CreateYoutubeSourceSchema = z.object({
+  type: YoutubeSourceType,
+  url: z.string().min(1),
+  artistId: z.number().int(),
+  monitored: z.boolean().default(true),
+});
+export type CreateYoutubeSource = z.infer<typeof CreateYoutubeSourceSchema>;
+
+export const YoutubeSourceSyncResultSchema = z.object({
+  matched: z.number().int(),
+  created: z.number().int(),
+});
+export type YoutubeSourceSyncResult = z.infer<typeof YoutubeSourceSyncResultSchema>;
+
+export const GrabResultSchema = z.object({
+  ok: z.boolean(),
+  path: z.string().optional(),
+  error: z.string().optional(),
+});
+export type GrabResult = z.infer<typeof GrabResultSchema>;

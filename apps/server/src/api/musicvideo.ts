@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { CreateMusicVideoSchema, UpdateMusicVideoSchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
+import { grabYoutubeVideo } from '../pipeline/grab.js';
 
 export async function musicVideoRoutes(app: FastifyInstance) {
   app.get('/api/v1/musicvideo', async (req) => {
@@ -43,5 +44,16 @@ export async function musicVideoRoutes(app: FastifyInstance) {
     const id = Number((req.params as { id: string }).id);
     await prisma.musicVideo.delete({ where: { id } });
     reply.code(204);
+  });
+
+  app.post('/api/v1/musicvideo/:id/grab', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    try {
+      const result = await grabYoutubeVideo(id);
+      return { ok: true, path: result.path };
+    } catch (err) {
+      reply.code(502);
+      return { ok: false, error: (err as Error).message };
+    }
   });
 }

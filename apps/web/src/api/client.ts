@@ -20,6 +20,10 @@ import type {
   UpdateRecommendationProviderConfig,
   ImvdbArtist,
   ImvdbVideoCandidate,
+  YoutubeSource,
+  CreateYoutubeSource,
+  YoutubeSourceSyncResult,
+  GrabResult,
 } from '@vidarr/shared-types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -49,6 +53,7 @@ export const api = {
     create: (data: CreateMusicVideo) =>
       request<MusicVideo>('/musicvideo', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/musicvideo/${id}`, { method: 'DELETE' }),
+    grab: (id: number) => request<GrabResult>(`/musicvideo/${id}/grab`, { method: 'POST' }),
   },
   qualityProfiles: {
     list: () => request<QualityProfile[]>('/qualityprofile'),
@@ -111,5 +116,14 @@ export const api = {
       request<ImvdbVideoCandidate[]>(
         `/imvdb/artist/${encodeURIComponent(slug)}/videos?name=${encodeURIComponent(name)}`,
       ),
+  },
+  youtubeSources: {
+    list: (artistId: number) =>
+      request<YoutubeSource[]>(`/youtubesource?artistId=${artistId}`),
+    create: (data: CreateYoutubeSource) =>
+      request<YoutubeSource>('/youtubesource', { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id: number) => request<void>(`/youtubesource/${id}`, { method: 'DELETE' }),
+    sync: (id: number) =>
+      request<YoutubeSourceSyncResult>(`/youtubesource/${id}/sync`, { method: 'POST' }),
   },
 };

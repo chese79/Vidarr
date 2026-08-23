@@ -137,3 +137,8 @@ REST routes are 1:1 with the domain model above, under `/api/v1/...`.
 - After M2: adding a real IMVDb-matched artist plus a YouTube channel URL results in an actual downloaded, renamed, correctly-placed file in the configured root folder within one polling interval; adding a real indexer + qBittorrent instance results in a manual search successfully grabbing and importing a release end-to-end.
 - After M3: Activity Queue shows live progress during an active grab; History records the event; a scheduled job's "last run" timestamp updates on its own without manual triggering.
 - After M4: forcing a lower-quality file to exist, then finding a higher-quality release, triggers an automatic upgrade-and-replace; naming-pattern preview in Settings matches the actual output filename produced by a subsequent import.
+
+## Backlog / future ideas (not scheduled to a milestone yet)
+
+- **VEVO channel handling**: most official music videos live on VEVO-branded YouTube channels rather than an artist's own channel — worth a pass on making YouTube-source setup (and matching) work smoothly against VEVO channels specifically, since that's the de facto official-video source for most major-label artists.
+- **Curated list import**: bulk-add artists/videos from a named list rather than one at a time — e.g. VMA nominees by year, Grammy Award winners by year. Would need a source for the list data itself (no obvious API; likely hand-curated or scraped) and a bulk "add all matched artists" flow reusing the existing Add Artist (IMVDb-search) pipeline.
