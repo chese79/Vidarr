@@ -128,10 +128,11 @@ REST routes are 1:1 with the domain model above, under `/api/v1/...`.
 - Missing/Wanted Backlog Search auto-picks the best result (highest allowed quality, then seeders) and grabs it automatically — no user selection step, unlike the manual per-video Search panel from M2.
 - **Added, not originally scoped**: content validation before any import accepts a file — checks (via ffprobe) that it actually has a video stream at a real resolution, and (via ffmpeg's freezedetect filter) that it has actual motion, not just album art held static for the whole song. Catches audio-only rips and static-image "videos" that would otherwise pass every earlier check. Applies to both grab pipelines.
 
-**M4 — Quality upgrades, polish, hardening**
-- Quality-profile cutoff/upgrade logic (re-grab better quality, replace existing file).
-- Naming-pattern live preview, transfer-mode setting, disk-space pre-checks.
-- Retry/backoff on provider failures, log rotation, optional notification webhooks (Discord/Plex-refresh) if wanted later.
+**M4 — Quality upgrades, polish, hardening — done**
+- Quality-profile cutoff/upgrade logic: scheduled job (12h) re-grabs a better allowed quality for any owned file below its profile's cutoff, reusing the backlog-search grab machinery with a minimum-quality floor. The shared import pipeline deletes the old file and logs the previous path once a replacement lands.
+- Naming-pattern live preview in Settings, backed by the same renderer the server uses for real imports (moved into `packages/shared-types` so there's one implementation, not two). Transfer-mode setting already existed since M1.
+- Disk-space pre-check before any import, using the free-space figure the M3 health-check job maintains.
+- Retry-with-backoff on qBittorrent/SABnzbd calls, a daily Log Cleanup job (90-day retention on ActivityLog/History). Notification webhooks (Discord/Plex-refresh) remain deferred/optional, not built — no request for them yet.
 
 ## Verification
 
