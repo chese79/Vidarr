@@ -7,7 +7,7 @@ export default function QueuePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
 
-  const queue = useQuery({ queryKey: ['queue'], queryFn: api.queue.list });
+  const queue = useQuery({ queryKey: ['queue'], queryFn: api.queue.list, refetchInterval: 3000 });
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -23,10 +23,14 @@ export default function QueuePage() {
       <div className="page-header">
         <h2>Queue</h2>
         <button onClick={handleRefresh} disabled={refreshing}>
-          {refreshing ? 'Refreshing…' : 'Refresh Queue'}
+          {refreshing ? 'Refreshing…' : 'Refresh Now'}
         </button>
       </div>
 
+      <p className="empty-state">
+        The queue monitor runs automatically in the background — this list updates on its own
+        every few seconds. "Refresh Now" forces an immediate check instead of waiting.
+      </p>
       {summary && <p className="empty-state">{summary}</p>}
 
       {queue.data?.length ? (

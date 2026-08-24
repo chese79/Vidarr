@@ -31,6 +31,9 @@ import type {
   ConnectionTestResult,
   IndexerSearchResult,
   QueueRefreshResult,
+  ScheduledTask,
+  HistoryEntry,
+  CalendarItem,
 } from '@vidarr/shared-types';
 
 export interface QueueItem {
@@ -45,8 +48,12 @@ export interface QueueItem {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only declare a JSON content-type when there's actually a body — Fastify's
+  // default JSON parser rejects Content-Type: application/json paired with an
+  // empty body (FST_ERR_CTP_EMPTY_JSON_BODY), which every bodyless POST here
+  // (test/sync/refresh/grab/run) would otherwise hit.
   const res = await fetch(`/api/v1${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
     ...init,
   });
   if (!res.ok) {
@@ -174,5 +181,16 @@ export const api = {
   queue: {
     list: () => request<QueueItem[]>('/queue'),
     refresh: () => request<QueueRefreshResult>('/queue/refresh', { method: 'POST' }),
+  },
+  system: {
+    tasks: () => request<ScheduledTask[]>('/system/task'),
+    runTask: (name: string) =>
+      request<{ ok: boolean }>(`/system/task/${encodeURIComponent(name)}/run`, { method: 'POST' }),
+  },
+  history: {
+    list: () => request<HistoryEntry[]>('/history'),
+  },
+  calendar: {
+    list: () => request<CalendarItem[]>('/calendar'),
   },
 };

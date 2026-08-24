@@ -12,12 +12,24 @@ export interface YoutubeVideoListing {
   title: string;
 }
 
-function runYtDlp(args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+const PROGRESS_LINE = /\[download\]\s+(\d+(?:\.\d+)?)%/;
+
+function runYtDlp(
+  args: string[],
+  onProgress?: (fraction: number) => void,
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
     const child = spawn(YTDLP_PATH, args);
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => (stdout += d.toString()));
+    child.stdout.on('data', (d) => {
+      const chunk = d.toString();
+      stdout += chunk;
+      if (onProgress) {
+        const match = PROGRESS_LINE.exec(chunk);
+        if (match) onProgress(Number(match[1]) / 100);
+      }
+    });
     child.stderr.on('data', (d) => (stderr += d.toString()));
     child.on('error', reject);
     child.on('close', (code) => resolve({ stdout, stderr, code: code ?? -1 }));
@@ -42,6 +54,7 @@ export async function downloadVideo(
   youtubeVideoId: string,
   destDir: string,
   formatSelector: string = DEFAULT_FORMAT,
+  onProgress?: (fraction: number) => void,
 ): Promise<string> {
   const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
   const args = [
@@ -49,6 +62,7 @@ export async function downloadVideo(
     formatSelector,
     '--merge-output-format',
     'mp4',
+    '--newline', // one progress update per line — needed since stdout is piped, not a TTY
     '-P',
     destDir,
     '-o',
@@ -62,7 +76,7 @@ export async function downloadVideo(
     args.push('--ffmpeg-location', path.dirname(FFMPEG_PATH));
   }
   args.push(url);
-  const { stdout, stderr, code } = await runYtDlp(args);
+  const { stdout, stderr, code } = await runYtDlp(args, onProgress);
   if (code !== 0) {
     throw new Error(`yt-dlp download failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
   }

@@ -6,6 +6,7 @@ import { downloadVideo } from '../providers/youtube/ytdlp.js';
 import { getDownloadClientProvider } from '../providers/downloadclient/index.js';
 import { importDownloadedFile, type ImportResult } from './import.js';
 import { locateVideoFile } from './locateVideoFile.js';
+import { assertIsRealMusicVideo } from './validateVideoFile.js';
 
 const STAGING_DIR = process.env.STAGING_DIR ?? path.join(os.tmpdir(), 'vidarr-staging');
 
@@ -24,14 +25,25 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     },
   });
 
+  let downloadedPath: string | undefined;
   try {
     await fs.mkdir(STAGING_DIR, { recursive: true });
-    const downloadedPath = await downloadVideo(musicVideo.youtubeVideoId, STAGING_DIR);
+    let lastProgressWrite = 0;
+    downloadedPath = await downloadVideo(musicVideo.youtubeVideoId, STAGING_DIR, undefined, (fraction) => {
+      const now = Date.now();
+      if (now - lastProgressWrite < 1000) return; // throttle DB writes
+      lastProgressWrite = now;
+      prisma.downloadQueueItem
+        .update({ where: { id: queueItem.id }, data: { progress: fraction } })
+        .catch(() => {});
+    });
+    await assertIsRealMusicVideo(downloadedPath);
     const result = await importDownloadedFile(musicVideoId, downloadedPath, 'YouTube');
     await fs.unlink(downloadedPath).catch(() => {});
     await prisma.downloadQueueItem.delete({ where: { id: queueItem.id } });
     return result;
   } catch (err) {
+    if (downloadedPath) await fs.unlink(downloadedPath).catch(() => {});
     await prisma.downloadQueueItem.update({
       where: { id: queueItem.id },
       data: { status: 'failed' },
@@ -48,9 +60,8 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
 }
 
 // Sends a grabbed release to a download client and records the queue item —
-// the actual import happens later, once refreshQueue() sees it complete
-// (there's no scheduler yet, so that's a manual "Refresh Queue" trigger for
-// now; see docs/plan.md's M3 note on this being a deliberate v1 simplification).
+// the actual import happens later, once refreshQueue() sees it complete (the
+// scheduled "Download Queue Monitor" job calls this periodically).
 export async function grabFromIndexer(
   musicVideoId: number,
   downloadClientId: number,
@@ -105,26 +116,34 @@ export async function refreshQueue(): Promise<{ completed: number; failed: numbe
           data: { progress: status.progress },
         });
         pending++;
-      } else if (status.status === 'completed' && status.contentPath) {
-        const videoPath = await locateVideoFile(status.contentPath);
-        await importDownloadedFile(item.musicVideoId, videoPath, item.quality ?? 'SD');
-        await prisma.downloadQueueItem.delete({ where: { id: item.id } });
-        completed++;
-      } else {
-        await prisma.downloadQueueItem.update({
-          where: { id: item.id },
-          data: { status: 'failed' },
-        });
-        await prisma.history.create({
-          data: {
-            musicVideoId: item.musicVideoId,
-            eventType: 'downloadFailed',
-            data: JSON.stringify({ error: status.error }),
-          },
-        });
-        failed++;
+        continue;
       }
+
+      if (status.status === 'completed' && status.contentPath) {
+        try {
+          const videoPath = await locateVideoFile(status.contentPath);
+          await assertIsRealMusicVideo(videoPath);
+          await importDownloadedFile(item.musicVideoId, videoPath, item.quality ?? 'SD');
+          await prisma.downloadQueueItem.delete({ where: { id: item.id } });
+          completed++;
+          continue;
+        } catch (err) {
+          status.error = (err as Error).message; // fall through to the shared failure handling below
+        }
+      }
+
+      await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'failed' } });
+      await prisma.history.create({
+        data: {
+          musicVideoId: item.musicVideoId,
+          eventType: 'downloadFailed',
+          data: JSON.stringify({ error: status.error }),
+        },
+      });
+      failed++;
     } catch (err) {
+      // getStatus() itself failed (e.g. transient network error) — leave the
+      // item as-is so the next monitor pass retries, rather than failing it.
       await prisma.activityLog.create({
         data: { level: 'error', source: 'queue', message: (err as Error).message },
       });

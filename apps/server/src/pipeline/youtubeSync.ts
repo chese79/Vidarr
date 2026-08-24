@@ -1,10 +1,12 @@
 import { prisma } from '../db/client.js';
 import { normalizeTitle } from './normalize.js';
 import { listChannelVideos } from '../providers/youtube/ytdlp.js';
+import { grabYoutubeVideo } from './grab.js';
 
 export interface YoutubeSyncResult {
   matched: number;
   created: number;
+  affectedMusicVideoIds: number[];
 }
 
 // Enumerates a channel/playlist's videos and links them into the artist's
@@ -20,6 +22,7 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
 
   let matched = 0;
   let created = 0;
+  const affectedMusicVideoIds: number[] = [];
 
   for (const video of videos) {
     if (byYoutubeId.has(video.youtubeVideoId)) continue;
@@ -31,9 +34,10 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
         where: { id: existingMatch.id },
         data: { youtubeVideoId: video.youtubeVideoId },
       });
+      affectedMusicVideoIds.push(existingMatch.id);
       matched++;
     } else {
-      await prisma.musicVideo.create({
+      const createdVideo = await prisma.musicVideo.create({
         data: {
           artistId: source.artistId,
           title: video.title,
@@ -42,11 +46,40 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
           monitored: true,
         },
       });
+      affectedMusicVideoIds.push(createdVideo.id);
       created++;
     }
   }
 
   await prisma.youtubeSource.update({ where: { id: sourceId }, data: { lastPolledAt: new Date() } });
 
-  return { matched, created };
+  return { matched, created, affectedMusicVideoIds };
+}
+
+// Used by the scheduled YouTube poll job: sync, then immediately grab any
+// newly-linked video that's still missing a file — the "automatically find
+// and grab new music videos from YouTube" behavior. Manual sync via the UI
+// intentionally does NOT auto-grab (the user reviews first via the Grab
+// button), only the scheduled poll does.
+export async function pollAndGrabYoutubeSource(
+  sourceId: number,
+): Promise<YoutubeSyncResult & { grabbed: number }> {
+  const result = await syncYoutubeSource(sourceId);
+  const candidates = await prisma.musicVideo.findMany({
+    where: { id: { in: result.affectedMusicVideoIds }, hasFile: false, monitored: true },
+  });
+
+  let grabbed = 0;
+  for (const video of candidates) {
+    try {
+      await grabYoutubeVideo(video.id);
+      grabbed++;
+    } catch (err) {
+      await prisma.activityLog.create({
+        data: { level: 'warn', source: 'youtube-poll', message: (err as Error).message },
+      });
+    }
+  }
+
+  return { ...result, grabbed };
 }

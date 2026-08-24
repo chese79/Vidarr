@@ -346,3 +346,45 @@ export const QueueRefreshResultSchema = z.object({
   pending: z.number().int(),
 });
 export type QueueRefreshResult = z.infer<typeof QueueRefreshResultSchema>;
+
+// --- Scheduler / History / Calendar (M3) ---
+
+export const ScheduledTaskSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  intervalMs: z.number().int(),
+  lastRunAt: z.string().nullable(),
+  nextRunAt: z.string().nullable(),
+  lastResult: z.string().nullable(),
+  lastError: z.string().nullable(),
+});
+export type ScheduledTask = z.infer<typeof ScheduledTaskSchema>;
+
+export const ActivityLogEntrySchema = z.object({
+  id: z.number().int(),
+  level: z.enum(['info', 'warn', 'error']),
+  source: z.string(),
+  message: z.string(),
+  date: z.string(),
+});
+export type ActivityLogEntry = z.infer<typeof ActivityLogEntrySchema>;
+
+export const HistoryEntrySchema = z.object({
+  id: z.number().int(),
+  musicVideoId: z.number().int(),
+  eventType: z.string(),
+  date: z.string(),
+  data: z.string().nullable(),
+  musicVideo: z.object({ title: z.string(), artist: z.object({ name: z.string() }) }),
+});
+export type HistoryEntry = z.infer<typeof HistoryEntrySchema>;
+
+export const CalendarItemSchema = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  releaseYear: z.number().int().nullable(),
+  hasFile: z.boolean(),
+  addedAt: z.string(),
+  artist: z.object({ name: z.string() }),
+});
+export type CalendarItem = z.infer<typeof CalendarItemSchema>;

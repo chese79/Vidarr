@@ -17,6 +17,19 @@ import { youtubeSourceRoutes } from './api/youtubesource.js';
 import { indexerRoutes } from './api/indexer.js';
 import { downloadClientRoutes } from './api/downloadclient.js';
 import { queueRoutes } from './api/queue.js';
+import { systemRoutes } from './api/system.js';
+import { historyRoutes } from './api/history.js';
+import { calendarRoutes } from './api/calendar.js';
+import { startScheduler } from './scheduler/index.js';
+
+// Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
+// MusicVideoFile.sizeBytes); JSON.stringify can't serialize BigInt natively.
+// Byte counts here are nowhere near Number.MAX_SAFE_INTEGER (9 PB), so a plain
+// Number conversion is safe — simplest fix, applied once globally rather than
+// per-route.
+(BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
+  return Number(this);
+};
 
 const app = Fastify({ logger: true });
 
@@ -46,6 +59,9 @@ await app.register(youtubeSourceRoutes);
 await app.register(indexerRoutes);
 await app.register(downloadClientRoutes);
 await app.register(queueRoutes);
+await app.register(systemRoutes);
+await app.register(historyRoutes);
+await app.register(calendarRoutes);
 
 const webDistPath = process.env.WEB_DIST_PATH ?? path.resolve(process.cwd(), '../web/dist');
 if (existsSync(webDistPath)) {
@@ -64,3 +80,5 @@ app.listen({ port, host: '0.0.0.0' }).catch((err) => {
   app.log.error(err);
   process.exit(1);
 });
+
+await startScheduler();
