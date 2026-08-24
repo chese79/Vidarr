@@ -1,11 +1,17 @@
+// Shared by the server (actual file placement) and the web UI (live settings
+// preview) so the preview can never drift from what an import will actually do.
 export function sanitizeForPath(segment: string): string {
   return segment.replace(/[<>:"/\\|?*]/g, '').trim();
 }
 
-export function renderNamingFormat(
-  format: string,
-  tokens: { artistName: string; videoTitle: string; year: number | null; quality: string },
-): string {
+export interface NamingTokens {
+  artistName: string;
+  videoTitle: string;
+  year: number | null;
+  quality: string;
+}
+
+export function renderNamingFormat(format: string, tokens: NamingTokens): string {
   return format
     .split('/')
     .map((segment) =>

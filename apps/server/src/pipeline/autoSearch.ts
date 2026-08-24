@@ -8,12 +8,17 @@ export interface AutoSearchOutcome {
   reason: string;
 }
 
-// Picks the best release for a wanted video and grabs it automatically — the
-// "missing/wanted backlog search" behavior. "Best" = highest quality allowed by
-// the artist's quality profile, then most seeders. No download client
-// configured, or no result in an allowed quality, is a normal outcome here,
-// not an error.
-export async function autoSearchAndGrab(musicVideoId: number): Promise<AutoSearchOutcome> {
+// Picks the best release for a video and grabs it automatically. "Best" =
+// highest quality allowed by the artist's quality profile, then most seeders.
+// `minWeight` (default: none) restricts results to strictly better than a
+// given quality weight — used by the quality-upgrade job so it never
+// "upgrades" to something no better than what's already on disk. No download
+// client configured, or no qualifying result, is a normal outcome, not an
+// error.
+export async function autoSearchAndGrab(
+  musicVideoId: number,
+  minWeight = -1,
+): Promise<AutoSearchOutcome> {
   const musicVideo = await prisma.musicVideo.findUniqueOrThrow({
     where: { id: musicVideoId },
     include: {
@@ -33,7 +38,7 @@ export async function autoSearchAndGrab(musicVideoId: number): Promise<AutoSearc
 
   const allowedQualities = new Map(
     musicVideo.artist.qualityProfile.items
-      .filter((i) => i.allowed)
+      .filter((i) => i.allowed && i.quality.weight > minWeight)
       .map((i) => [i.quality.name, i.quality.weight]),
   );
   if (!allowedQualities.size) {
@@ -77,4 +82,53 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
     }
   }
   return { grabbed, skipped };
+}
+
+// "Upgrade until cutoff": an owned file below its profile's cutoff quality is
+// eligible for a better release. Once a video reaches (or already exceeds)
+// the cutoff, it stops being searched — matches Sonarr/Radarr's own upgrade
+// semantics (the cutoff is a ceiling on ongoing upgrade effort, not just a
+// floor for the initial grab).
+export async function runQualityUpgradeSearch(): Promise<{ upgraded: number; skipped: number }> {
+  const filesBelowCutoff = await prisma.musicVideoFile.findMany({
+    include: {
+      quality: true,
+      musicVideo: {
+        include: { artist: { include: { qualityProfile: true } } },
+      },
+    },
+  });
+
+  let upgraded = 0;
+  let skipped = 0;
+  const cutoffWeightByProfile = new Map<number, number | undefined>();
+
+  for (const file of filesBelowCutoff) {
+    const profileId = file.musicVideo.artist.qualityProfile.id;
+    if (!cutoffWeightByProfile.has(profileId)) {
+      const cutoffQuality = await prisma.quality.findUnique({
+        where: { id: file.musicVideo.artist.qualityProfile.cutoffQualityId },
+      });
+      cutoffWeightByProfile.set(profileId, cutoffQuality?.weight);
+    }
+    const cutoffWeight = cutoffWeightByProfile.get(profileId);
+    const currentWeight = file.quality?.weight ?? 0;
+    if (cutoffWeight === undefined || currentWeight >= cutoffWeight) {
+      skipped++;
+      continue;
+    }
+
+    try {
+      const outcome = await autoSearchAndGrab(file.musicVideoId, currentWeight);
+      if (outcome.grabbed) upgraded++;
+      else skipped++;
+    } catch (err) {
+      skipped++;
+      await prisma.activityLog.create({
+        data: { level: 'warn', source: 'quality-upgrade', message: (err as Error).message },
+      });
+    }
+  }
+
+  return { upgraded, skipped };
 }

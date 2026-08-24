@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { prisma } from '../db/client.js';
-import { renderNamingFormat } from './naming.js';
+import { renderNamingFormat } from '@vidarr/shared-types';
 import { placeFile, type TransferMode } from './transfer.js';
 
 export interface ImportResult {
@@ -9,8 +9,10 @@ export interface ImportResult {
   sizeBytes: bigint;
 }
 
-// Shared by every source (YouTube today; indexer/download-client grabs later) —
-// once a source's grab produces a file on disk, it's imported the same way.
+export class InsufficientDiskSpaceError extends Error {}
+
+// Shared by every source (YouTube, indexer/download-client, and quality
+// upgrades) — once a grab produces a file on disk, it's imported the same way.
 export async function importDownloadedFile(
   musicVideoId: number,
   sourcePath: string,
@@ -21,6 +23,19 @@ export async function importDownloadedFile(
     include: { artist: { include: { rootFolder: true } } },
   });
   const settings = await prisma.settings.findUniqueOrThrow({ where: { id: 1 } });
+  const existingFile = await prisma.musicVideoFile.findUnique({ where: { musicVideoId } });
+
+  const sourceStat = await fs.stat(sourcePath);
+  const rootFolder = musicVideo.artist.rootFolder;
+  if (rootFolder.freeSpaceBytes !== null) {
+    const minFreeBytes = BigInt(settings.minFreeSpaceMb) * 1024n * 1024n;
+    const remainingAfter = rootFolder.freeSpaceBytes - BigInt(sourceStat.size);
+    if (remainingAfter < minFreeBytes) {
+      throw new InsufficientDiskSpaceError(
+        `Importing this file would leave ${rootFolder.path} below the configured minimum free space (${settings.minFreeSpaceMb} MB).`,
+      );
+    }
+  }
 
   const relativePath = renderNamingFormat(settings.namingFormat, {
     artistName: musicVideo.artist.name,
@@ -28,13 +43,16 @@ export async function importDownloadedFile(
     year: musicVideo.releaseYear,
     quality: qualityName,
   });
-  const destPath = path.join(
-    musicVideo.artist.rootFolder.path,
-    `${relativePath}${path.extname(sourcePath)}`,
-  );
+  const destPath = path.join(rootFolder.path, `${relativePath}${path.extname(sourcePath)}`);
 
   await placeFile(sourcePath, destPath, settings.transferMode as TransferMode);
   const stat = await fs.stat(destPath);
+
+  // A quality upgrade renames to a different filename (the {Quality} token
+  // changes) — the old file is now an orphan once the new one is in place.
+  if (existingFile && existingFile.path !== destPath) {
+    await fs.unlink(existingFile.path).catch(() => {});
+  }
 
   const quality = await prisma.quality.findUnique({ where: { name: qualityName } });
 
@@ -60,7 +78,11 @@ export async function importDownloadedFile(
     data: {
       musicVideoId,
       eventType: 'downloadFolderImported',
-      data: JSON.stringify({ path: destPath, quality: qualityName }),
+      data: JSON.stringify({
+        path: destPath,
+        quality: qualityName,
+        upgradedFrom: existingFile && existingFile.path !== destPath ? existingFile.path : undefined,
+      }),
     },
   });
 

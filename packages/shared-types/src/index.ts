@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export * from './naming.js';
+
 // Shared DTOs/validators for requests and responses between apps/server and apps/web.
 // M1 covers Artist, MusicVideo, QualityProfile, RootFolder, Settings — the manual-entry
 // CRUD skeleton. Indexer/DownloadClient/YoutubeSource/queue/history types are added in M2/M3

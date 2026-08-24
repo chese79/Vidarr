@@ -1,24 +1,27 @@
 import type { DownloadClient } from '@prisma/client';
 import type { DownloadClientProvider, DownloadStatus, GrabHandle } from './types.js';
+import { withRetry } from '../../pipeline/retry.js';
 
 function baseUrl(client: DownloadClient): string {
   return `http://${client.host}:${client.port}`;
 }
 
 async function login(client: DownloadClient): Promise<string> {
-  const res = await fetch(`${baseUrl(client)}/api/v2/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      username: client.username ?? '',
-      password: client.password ?? '',
-    }),
+  return withRetry(async () => {
+    const res = await fetch(`${baseUrl(client)}/api/v2/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        username: client.username ?? '',
+        password: client.password ?? '',
+      }),
+    });
+    const cookie = res.headers.get('set-cookie');
+    if (!res.ok || !cookie) {
+      throw new Error(`qBittorrent login failed: ${res.status} ${res.statusText}`);
+    }
+    return cookie.split(';')[0];
   });
-  const cookie = res.headers.get('set-cookie');
-  if (!res.ok || !cookie) {
-    throw new Error(`qBittorrent login failed: ${res.status} ${res.statusText}`);
-  }
-  return cookie.split(';')[0];
 }
 
 const MAGNET_HASH = /urn:btih:([a-fA-F0-9]{40}|[A-Z2-7]{32})/;
@@ -66,13 +69,14 @@ export const qbittorrentProvider: DownloadClientProvider = {
   },
 
   async getStatus(client, externalRef): Promise<DownloadStatus> {
-    const cookie = await login(client);
-    const res = await fetch(
-      `${baseUrl(client)}/api/v2/torrents/info?hashes=${externalRef}`,
-      { headers: { Cookie: cookie } },
-    );
-    if (!res.ok) throw new Error(`qBittorrent status check failed: ${res.status}`);
-    const torrents = (await res.json()) as any[];
+    const torrents = await withRetry(async () => {
+      const cookie = await login(client);
+      const res = await fetch(`${baseUrl(client)}/api/v2/torrents/info?hashes=${externalRef}`, {
+        headers: { Cookie: cookie },
+      });
+      if (!res.ok) throw new Error(`qBittorrent status check failed: ${res.status}`);
+      return (await res.json()) as any[];
+    });
     const torrent = torrents[0];
     if (!torrent) return { status: 'failed', progress: 0, error: 'Torrent no longer in client' };
 

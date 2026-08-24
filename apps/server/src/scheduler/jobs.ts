@@ -1,6 +1,7 @@
 import { prisma } from '../db/client.js';
 import { refreshQueue } from '../pipeline/grab.js';
-import { runBacklogSearch } from '../pipeline/autoSearch.js';
+import { runBacklogSearch, runQualityUpgradeSearch } from '../pipeline/autoSearch.js';
+import { pruneOldLogs } from '../pipeline/logCleanup.js';
 import { pollAndGrabYoutubeSource } from '../pipeline/youtubeSync.js';
 import { checkRootFolders } from '../pipeline/rootFolderHealth.js';
 import { refreshImvdbMetadata } from '../pipeline/metadataRefresh.js';
@@ -62,6 +63,22 @@ export const JOBS: ScheduledJob[] = [
     run: async () => {
       const r = await refreshImvdbMetadata();
       return `${r.artistsChecked} artist(s) checked, ${r.videosAdded} video(s) added`;
+    },
+  },
+  {
+    name: 'Quality Upgrade Search',
+    defaultIntervalMs: 12 * 60 * 60_000,
+    run: async () => {
+      const r = await runQualityUpgradeSearch();
+      return `${r.upgraded} upgraded, ${r.skipped} skipped`;
+    },
+  },
+  {
+    name: 'Log Cleanup',
+    defaultIntervalMs: 24 * 60 * 60_000,
+    run: async () => {
+      const r = await pruneOldLogs();
+      return `${r.activityLogDeleted} activity log entries, ${r.historyDeleted} history entries pruned`;
     },
   },
 ];

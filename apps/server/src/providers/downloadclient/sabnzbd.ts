@@ -1,5 +1,6 @@
 import type { DownloadClient } from '@prisma/client';
 import type { DownloadClientProvider, DownloadStatus, GrabHandle } from './types.js';
+import { withRetry } from '../../pipeline/retry.js';
 
 function apiUrl(client: DownloadClient, params: Record<string, string>): string {
   const url = new URL(`http://${client.host}:${client.port}/api`);
@@ -33,15 +34,21 @@ export const sabnzbdProvider: DownloadClientProvider = {
   },
 
   async getStatus(client, externalRef): Promise<DownloadStatus> {
-    const queueRes = await fetch(apiUrl(client, { mode: 'queue' }));
-    const queue = await queueRes.json();
+    const queue = await withRetry(async () => {
+      const res = await fetch(apiUrl(client, { mode: 'queue' }));
+      if (!res.ok) throw new Error(`SABnzbd queue check failed: ${res.status}`);
+      return res.json();
+    });
     const inQueue = queue?.queue?.slots?.find((s: any) => s.nzo_id === externalRef);
     if (inQueue) {
       return { status: 'downloading', progress: Number(inQueue.percentage ?? 0) / 100 };
     }
 
-    const historyRes = await fetch(apiUrl(client, { mode: 'history' }));
-    const history = await historyRes.json();
+    const history = await withRetry(async () => {
+      const res = await fetch(apiUrl(client, { mode: 'history' }));
+      if (!res.ok) throw new Error(`SABnzbd history check failed: ${res.status}`);
+      return res.json();
+    });
     const inHistory = history?.history?.slots?.find((s: any) => s.nzo_id === externalRef);
     if (!inHistory) {
       return { status: 'failed', progress: 0, error: 'Download no longer in client' };

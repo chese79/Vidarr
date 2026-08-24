@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { renderNamingFormat } from '@vidarr/shared-types';
 import type { RecommendationProviderConfig, TransferMode } from '@vidarr/shared-types';
+
+const NAMING_PREVIEW_TOKENS = {
+  artistName: 'Sample Artist',
+  videoTitle: 'Sample Video Title',
+  year: 2024,
+  quality: '1080p',
+};
 
 const PROVIDER_LABEL: Record<string, string> = {
   lastfm: 'Last.fm',
@@ -119,6 +127,10 @@ export default function SettingsPage() {
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label>Naming format</label>
           <input value={namingFormat} onChange={(e) => setNamingFormat(e.target.value)} />
+          <span className="empty-state" style={{ padding: '4px 0 0' }}>
+            Preview: {renderNamingFormat(namingFormat, NAMING_PREVIEW_TOKENS)}
+            {'.mp4'}
+          </span>
         </div>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label>Transfer mode</label>
