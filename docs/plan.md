@@ -121,10 +121,12 @@ REST routes are 1:1 with the domain model above, under `/api/v1/...`.
 - Shared import/rename/organize pipeline (§ above) consuming both sources.
 - Download queue monitor job wired to both download clients and yt-dlp processes.
 
-**M3 — Scheduler, live UI, calendar/history**
-- Full job registry (RSS sync, YouTube poll, queue monitor, backlog search, health check, metadata refresh) + System/Tasks screen.
-- Activity Queue with SSE live progress, History screen, Calendar screen.
-- Missing/wanted backlog search (manual trigger + scheduled).
+**M3 — Scheduler, live UI, calendar/history — done**
+- Job registry (queue monitor 20s, YouTube poll 45m, backlog search 6h, root folder health 1h, metadata refresh 24h) + System/Tasks screen with per-job Run Now. Plain `setInterval` per job, not the originally-proposed `croner` — these are all fixed-interval jobs, not calendar-cron schedules, so a cron-string library added nothing.
+- Queue page live-updates via polling (`refetchInterval`) rather than SSE — simpler, and sufficient given the queue monitor itself only ticks every 20s; true push-based streaming wasn't worth the added plumbing here.
+- History and Calendar screens. Calendar is deliberately scoped to "recently added, still wanted" (newest first) rather than a real release calendar — vidarr only has a release *year* (IMVDb/YouTube don't reliably give day-level music-video dates), so a day-by-day calendar isn't honestly buildable on this data.
+- Missing/Wanted Backlog Search auto-picks the best result (highest allowed quality, then seeders) and grabs it automatically — no user selection step, unlike the manual per-video Search panel from M2.
+- **Added, not originally scoped**: content validation before any import accepts a file — checks (via ffprobe) that it actually has a video stream at a real resolution, and (via ffmpeg's freezedetect filter) that it has actual motion, not just album art held static for the whole song. Catches audio-only rips and static-image "videos" that would otherwise pass every earlier check. Applies to both grab pipelines.
 
 **M4 — Quality upgrades, polish, hardening**
 - Quality-profile cutoff/upgrade logic (re-grab better quality, replace existing file).
