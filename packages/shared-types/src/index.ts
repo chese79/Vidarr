@@ -264,3 +264,85 @@ export const GrabResultSchema = z.object({
   error: z.string().optional(),
 });
 export type GrabResult = z.infer<typeof GrabResultSchema>;
+
+// --- Indexer / DownloadClient pipeline (M2) ---
+
+export const IndexerImplementation = z.enum(['Torznab', 'Newznab']);
+export type IndexerImplementation = z.infer<typeof IndexerImplementation>;
+
+export const IndexerSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  implementation: IndexerImplementation,
+  baseUrl: z.string(),
+  apiKey: z.string().nullable(),
+  categories: z.string(), // JSON-encoded int[]
+  enabled: z.boolean(),
+  priority: z.number().int(),
+});
+export type Indexer = z.infer<typeof IndexerSchema>;
+
+export const CreateIndexerSchema = z.object({
+  name: z.string().min(1),
+  implementation: IndexerImplementation,
+  baseUrl: z.string().min(1),
+  apiKey: z.string().nullable().optional(),
+  categories: z.array(z.number().int()).default([]),
+  enabled: z.boolean().default(true),
+  priority: z.number().int().default(25),
+});
+export type CreateIndexer = z.infer<typeof CreateIndexerSchema>;
+
+export const DownloadClientImplementation = z.enum(['qBittorrent', 'SABnzbd']);
+export type DownloadClientImplementation = z.infer<typeof DownloadClientImplementation>;
+
+export const DownloadClientSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  implementation: DownloadClientImplementation,
+  host: z.string(),
+  port: z.number().int(),
+  username: z.string().nullable(),
+  category: z.string().nullable(),
+  enabled: z.boolean(),
+  priority: z.number().int(),
+});
+export type DownloadClient = z.infer<typeof DownloadClientSchema>;
+
+export const CreateDownloadClientSchema = z.object({
+  name: z.string().min(1),
+  implementation: DownloadClientImplementation,
+  host: z.string().min(1),
+  port: z.number().int(),
+  username: z.string().nullable().optional(),
+  password: z.string().nullable().optional(),
+  apiKey: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+  enabled: z.boolean().default(true),
+});
+export type CreateDownloadClient = z.infer<typeof CreateDownloadClientSchema>;
+
+export const ConnectionTestResultSchema = z.object({
+  ok: z.boolean(),
+  message: z.string().optional(),
+});
+export type ConnectionTestResult = z.infer<typeof ConnectionTestResultSchema>;
+
+export const IndexerSearchResultSchema = z.object({
+  indexerId: z.number().int(),
+  indexerName: z.string(),
+  title: z.string(),
+  quality: z.string(),
+  sizeBytes: z.number().nullable(),
+  seeders: z.number().nullable(),
+  downloadUrl: z.string(),
+  publishDate: z.string().nullable(),
+});
+export type IndexerSearchResult = z.infer<typeof IndexerSearchResultSchema>;
+
+export const QueueRefreshResultSchema = z.object({
+  completed: z.number().int(),
+  failed: z.number().int(),
+  pending: z.number().int(),
+});
+export type QueueRefreshResult = z.infer<typeof QueueRefreshResultSchema>;

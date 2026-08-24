@@ -24,7 +24,25 @@ import type {
   CreateYoutubeSource,
   YoutubeSourceSyncResult,
   GrabResult,
+  Indexer,
+  CreateIndexer,
+  DownloadClient,
+  CreateDownloadClient,
+  ConnectionTestResult,
+  IndexerSearchResult,
+  QueueRefreshResult,
 } from '@vidarr/shared-types';
+
+export interface QueueItem {
+  id: number;
+  musicVideoId: number;
+  sourceType: string;
+  status: string;
+  progress: number;
+  quality: string | null;
+  addedAt: string;
+  musicVideo: { title: string; artist: { name: string } };
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
@@ -125,5 +143,36 @@ export const api = {
     remove: (id: number) => request<void>(`/youtubesource/${id}`, { method: 'DELETE' }),
     sync: (id: number) =>
       request<YoutubeSourceSyncResult>(`/youtubesource/${id}/sync`, { method: 'POST' }),
+  },
+  indexers: {
+    list: () => request<Indexer[]>('/indexer'),
+    create: (data: CreateIndexer) =>
+      request<Indexer>('/indexer', { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id: number) => request<void>(`/indexer/${id}`, { method: 'DELETE' }),
+    test: (id: number) => request<ConnectionTestResult>(`/indexer/${id}/test`, { method: 'POST' }),
+  },
+  downloadClients: {
+    list: () => request<DownloadClient[]>('/downloadclient'),
+    create: (data: CreateDownloadClient) =>
+      request<DownloadClient>('/downloadclient', { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id: number) => request<void>(`/downloadclient/${id}`, { method: 'DELETE' }),
+    test: (id: number) =>
+      request<ConnectionTestResult>(`/downloadclient/${id}/test`, { method: 'POST' }),
+  },
+  search: {
+    forVideo: (musicVideoId: number) =>
+      request<IndexerSearchResult[]>(`/musicvideo/${musicVideoId}/search`),
+    grabRelease: (
+      musicVideoId: number,
+      data: { downloadClientId: number; downloadUrl: string; quality: string },
+    ) =>
+      request<GrabResult>(`/musicvideo/${musicVideoId}/grab-release`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+  queue: {
+    list: () => request<QueueItem[]>('/queue'),
+    refresh: () => request<QueueRefreshResult>('/queue/refresh', { method: 'POST' }),
   },
 };

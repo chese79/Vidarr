@@ -1,8 +1,98 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { YoutubeSourceType } from '@vidarr/shared-types';
+import type { YoutubeSourceType, IndexerSearchResult, MusicVideo } from '@vidarr/shared-types';
+
+function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [results, setResults] = useState<IndexerSearchResult[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [grabbing, setGrabbing] = useState<number | null>(null);
+  const [grabMessage, setGrabMessage] = useState<string | null>(null);
+
+  const downloadClients = useQuery({
+    queryKey: ['downloadClients'],
+    queryFn: api.downloadClients.list,
+  });
+
+  useEffect(() => {
+    api.search
+      .forVideo(video.id)
+      .then(setResults)
+      .catch((err) => setError((err as Error).message))
+      .finally(() => setLoading(false));
+  }, [video.id]);
+
+  async function handleGrab(result: IndexerSearchResult, index: number) {
+    if (!downloadClients.data?.length) return;
+    setGrabbing(index);
+    setGrabMessage(null);
+    const outcome = await api.search.grabRelease(video.id, {
+      downloadClientId: downloadClients.data[0].id,
+      downloadUrl: result.downloadUrl,
+      quality: result.quality,
+    });
+    setGrabMessage(outcome.ok ? 'Sent to download client' : `Failed: ${outcome.error}`);
+    setGrabbing(null);
+    queryClient.invalidateQueries({ queryKey: ['queue'] });
+  }
+
+  return (
+    <div className="card">
+      <div className="page-header" style={{ marginBottom: 8 }}>
+        <h3 style={{ margin: 0 }}>Search results — {video.title}</h3>
+        <button className="secondary" onClick={onClose}>
+          Close
+        </button>
+      </div>
+
+      {!downloadClients.data?.length && (
+        <p className="empty-state">Add a download client before grabbing a release.</p>
+      )}
+      {loading && <p className="empty-state">Searching…</p>}
+      {error && <p className="empty-state">{error}</p>}
+      {grabMessage && <p className="empty-state">{grabMessage}</p>}
+
+      {results?.length ? (
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Indexer</th>
+              <th>Quality</th>
+              <th>Size</th>
+              <th>Seeders</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((r, i) => (
+              <tr key={i}>
+                <td>{r.title}</td>
+                <td>{r.indexerName}</td>
+                <td>{r.quality}</td>
+                <td>{r.sizeBytes ? `${(r.sizeBytes / 1_000_000_000).toFixed(2)} GB` : '—'}</td>
+                <td>{r.seeders ?? '—'}</td>
+                <td>
+                  <button
+                    disabled={!downloadClients.data?.length || grabbing === i}
+                    onClick={() => handleGrab(r, i)}
+                  >
+                    {grabbing === i ? 'Grabbing…' : 'Grab'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        !loading && !error && <p className="empty-state">No results.</p>
+      )}
+    </div>
+  );
+}
 
 function YoutubeSourcesSection({ artistId }: { artistId: number }) {
   const queryClient = useQueryClient();
@@ -116,6 +206,7 @@ export default function ArtistDetailPage() {
   const [title, setTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
   const [grabStatus, setGrabStatus] = useState<Record<number, string>>({});
+  const [searchingVideo, setSearchingVideo] = useState<MusicVideo | null>(null);
 
   const artist = useQuery({
     queryKey: ['artist', artistId],
@@ -201,14 +292,18 @@ export default function ArtistDetailPage() {
                 <td>{mv.releaseYear ?? '—'}</td>
                 <td>{mv.monitored ? 'Yes' : 'No'}</td>
                 <td>{mv.hasFile ? 'Yes' : 'No'}</td>
-                <td>
-                  {grabStatus[mv.id] ? (
-                    grabStatus[mv.id]
-                  ) : !mv.hasFile && mv.youtubeVideoId ? (
+                <td style={{ display: 'flex', gap: 6 }}>
+                  {grabStatus[mv.id] && <span>{grabStatus[mv.id]}</span>}
+                  {!mv.hasFile && mv.youtubeVideoId && (
                     <button className="secondary" onClick={() => handleGrab(mv.id)}>
                       Grab
                     </button>
-                  ) : null}
+                  )}
+                  {!mv.hasFile && (
+                    <button className="secondary" onClick={() => setSearchingVideo(mv)}>
+                      Search
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -216,6 +311,10 @@ export default function ArtistDetailPage() {
         </table>
       ) : (
         <p className="empty-state">No music videos yet.</p>
+      )}
+
+      {searchingVideo && (
+        <ReleaseSearchPanel video={searchingVideo} onClose={() => setSearchingVideo(null)} />
       )}
 
       <YoutubeSourcesSection artistId={artistId} />

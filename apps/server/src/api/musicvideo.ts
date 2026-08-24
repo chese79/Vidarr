@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { CreateMusicVideoSchema, UpdateMusicVideoSchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
-import { grabYoutubeVideo } from '../pipeline/grab.js';
+import { grabYoutubeVideo, grabFromIndexer } from '../pipeline/grab.js';
+import { searchAllIndexers } from '../pipeline/search.js';
 
 export async function musicVideoRoutes(app: FastifyInstance) {
   app.get('/api/v1/musicvideo', async (req) => {
@@ -51,6 +52,28 @@ export async function musicVideoRoutes(app: FastifyInstance) {
     try {
       const result = await grabYoutubeVideo(id);
       return { ok: true, path: result.path };
+    } catch (err) {
+      reply.code(502);
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  app.get('/api/v1/musicvideo/:id/search', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const musicVideo = await prisma.musicVideo.findUnique({
+      where: { id },
+      include: { artist: true },
+    });
+    if (!musicVideo) return reply.code(404).send({ error: 'Music video not found' });
+    return searchAllIndexers(`${musicVideo.artist.name} ${musicVideo.title}`);
+  });
+
+  app.post('/api/v1/musicvideo/:id/grab-release', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const body = req.body as { downloadClientId: number; downloadUrl: string; quality: string };
+    try {
+      await grabFromIndexer(id, body.downloadClientId, body.downloadUrl, body.quality);
+      return { ok: true };
     } catch (err) {
       reply.code(502);
       return { ok: false, error: (err as Error).message };
