@@ -22,19 +22,29 @@ export async function refreshArtistMetadata(artistId: number): Promise<{ videosA
   let videosAdded = 0;
   for (const video of videos) {
     if (existingImvdbIds.has(video.imvdbVideoId)) continue;
-    await prisma.musicVideo.create({
-      data: {
-        artistId,
-        title: video.title,
-        normalizedTitle: normalizeTitle(video.title),
-        imvdbVideoId: video.imvdbVideoId,
-        releaseYear: video.year,
-        thumbnailUrl: video.thumbnailUrl,
-        director: video.director,
-        monitored: true,
-      },
-    });
-    videosAdded++;
+    try {
+      await prisma.musicVideo.create({
+        data: {
+          artistId,
+          title: video.title,
+          normalizedTitle: normalizeTitle(video.title),
+          imvdbVideoId: video.imvdbVideoId,
+          releaseYear: video.year,
+          thumbnailUrl: video.thumbnailUrl,
+          director: video.director,
+          // youtubeVideoId is unique — a collision (e.g. the same official
+          // video already linked via a YoutubeSource sync) shouldn't abort
+          // the rest of this artist's videos, just skip stamping it here.
+          youtubeVideoId: video.youtubeVideoId,
+          monitored: true,
+        },
+      });
+      videosAdded++;
+    } catch (err) {
+      await prisma.activityLog.create({
+        data: { level: 'warn', source: 'metadata-refresh', message: (err as Error).message },
+      });
+    }
   }
 
   return { videosAdded };

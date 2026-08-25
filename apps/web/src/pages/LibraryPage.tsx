@@ -63,15 +63,22 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
       qualityProfileId: Number(qualityProfileId),
     });
     for (const video of candidateVideos) {
-      await api.musicVideos.create({
-        artistId: artist.id,
-        title: video.title,
-        imvdbVideoId: video.imvdbVideoId,
-        releaseYear: video.year ?? undefined,
-        thumbnailUrl: video.thumbnailUrl ?? undefined,
-        director: video.director ?? undefined,
-        monitored: true,
-      });
+      try {
+        await api.musicVideos.create({
+          artistId: artist.id,
+          title: video.title,
+          imvdbVideoId: video.imvdbVideoId,
+          releaseYear: video.year ?? undefined,
+          thumbnailUrl: video.thumbnailUrl ?? undefined,
+          director: video.director ?? undefined,
+          // youtubeVideoId is unique — a rare collision shouldn't stop the
+          // rest of the artist's videos from being added.
+          youtubeVideoId: video.youtubeVideoId ?? undefined,
+          monitored: true,
+        });
+      } catch {
+        // skip this one video (e.g. a rare youtubeVideoId collision) and keep going
+      }
     }
     queryClient.invalidateQueries({ queryKey: ['artists'] });
     setAdding(false);

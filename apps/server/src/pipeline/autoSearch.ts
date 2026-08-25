@@ -43,7 +43,27 @@ export async function autoSearchAndGrab(
     return { musicVideoId, grabbed: false, reason: 'Quality profile allows no qualities' };
   }
 
-  if (allowedQualities.has('YouTube') && !musicVideo.youtubeVideoId) {
+  if (allowedQualities.has('YouTube')) {
+    // An IMVDb-sourced youtubeVideoId (see providers/metadata/imvdb.ts
+    // getVideoDetails) is an editor-curated, exact match — a strictly better
+    // source than our own heuristic search, so grab it directly and skip the
+    // search entirely when we already have it.
+    if (musicVideo.youtubeVideoId) {
+      try {
+        await grabYoutubeVideo(musicVideoId);
+        return {
+          musicVideoId,
+          grabbed: true,
+          reason: `Grabbed via IMVDb-sourced YouTube link (${musicVideo.title})`,
+        };
+      } catch (err) {
+        await prisma.activityLog.create({
+          data: { level: 'warn', source: 'auto-search-youtube', message: (err as Error).message },
+        });
+        // fall through to heuristic search / indexer search below
+      }
+    }
+
     try {
       const match = await findYoutubeMatch(musicVideo.artist.name, musicVideo.title);
       if (match) {

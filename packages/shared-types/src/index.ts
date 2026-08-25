@@ -228,6 +228,7 @@ export const ImvdbVideoCandidateSchema = z.object({
   year: z.number().int().nullable(),
   thumbnailUrl: z.string().nullable(),
   director: z.string().nullable(),
+  youtubeVideoId: z.string().nullable(),
 });
 export type ImvdbVideoCandidate = z.infer<typeof ImvdbVideoCandidateSchema>;
 
