@@ -10,6 +10,7 @@ export interface ImvdbVideoCandidate {
   title: string;
   year: number | null;
   thumbnailUrl: string | null;
+  director: string | null;
 }
 
 // IMVDb's nginx rejects requests with no/non-browser User-Agent with a bare 400
@@ -43,7 +44,22 @@ function toCandidate(v: any): ImvdbVideoCandidate {
     title: v.song_title as string,
     year: v.year ?? null,
     thumbnailUrl: v.image?.b ?? v.image?.l ?? null,
+    director: null, // not present on search results — fetched separately, see getVideoDirector
   };
+}
+
+// Director isn't included in /search/videos results, only on the single-video
+// detail endpoint — one extra call per video. Best-effort: a failure here
+// (IMVDb's backend is flaky, see imvdbGet above) just leaves director unknown
+// rather than failing the whole video-list fetch.
+export async function getVideoDirector(apiKey: string, imvdbVideoId: string): Promise<string | null> {
+  try {
+    const body = await imvdbGet(apiKey, `/video/${imvdbVideoId}?include=credits`);
+    const director = body?.directors?.[0]?.entity_name;
+    return director ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // IMVDb has no dedicated "search artists by name" endpoint, only search/videos.
@@ -96,6 +112,16 @@ export async function getArtistVideos(
       }
     }
     if (page >= (body?.total_pages ?? 1)) break;
+  }
+
+  // Director requires one extra IMVDb call per video (no batch endpoint) — run
+  // a bounded number concurrently so a large catalog doesn't serialize into a
+  // very long wait, without hammering IMVDb's already-flaky backend at once.
+  const CONCURRENCY = 4;
+  for (let i = 0; i < videos.length; i += CONCURRENCY) {
+    const batch = videos.slice(i, i + CONCURRENCY);
+    const directors = await Promise.all(batch.map((v) => getVideoDirector(apiKey, v.imvdbVideoId)));
+    batch.forEach((v, j) => (v.director = directors[j]));
   }
 
   return videos;

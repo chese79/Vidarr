@@ -343,50 +343,55 @@ export default function ArtistDetailPage() {
       )}
 
       {artist.data.musicVideos.length ? (
-        <table>
-          <thead>
-            <tr>
-              <th></th>
-              <th>Title</th>
-              <th>Year</th>
-              <th>Monitored</th>
-              <th>Has File</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {artist.data.musicVideos.map((mv) => (
-              <tr key={mv.id}>
-                <td>
-                  {!mv.hasFile && (
-                    <input
-                      type="checkbox"
-                      checked={selected.has(mv.id)}
-                      onChange={() => toggleOne(mv.id)}
-                    />
-                  )}
-                </td>
-                <td>{mv.title}</td>
-                <td>{mv.releaseYear ?? '—'}</td>
-                <td>{mv.monitored ? 'Yes' : 'No'}</td>
-                <td>{mv.hasFile ? 'Yes' : 'No'}</td>
-                <td style={{ display: 'flex', gap: 6 }}>
-                  {grabStatus[mv.id] && <span>{grabStatus[mv.id]}</span>}
-                  {!mv.hasFile && mv.youtubeVideoId && (
-                    <button className="secondary" onClick={() => handleGrab(mv.id)}>
-                      Grab
-                    </button>
-                  )}
-                  {!mv.hasFile && (
-                    <button className="secondary" onClick={() => setSearchingVideo(mv)}>
-                      Search
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="video-list">
+          {artist.data.musicVideos.map((mv) => (
+            <div className="video-row" key={mv.id}>
+              {!mv.hasFile && (
+                <input
+                  type="checkbox"
+                  checked={selected.has(mv.id)}
+                  onChange={() => toggleOne(mv.id)}
+                />
+              )}
+              <div className="video-thumb">
+                {mv.thumbnailUrl ? (
+                  <img src={mv.thumbnailUrl} alt="" />
+                ) : (
+                  <div className="video-thumb-placeholder" />
+                )}
+              </div>
+              <div className="video-info">
+                <div>
+                  <strong>{mv.title}</strong>{' '}
+                  <span className="empty-state" style={{ padding: 0 }}>
+                    ({mv.releaseYear ?? 'year unknown'})
+                  </span>
+                </div>
+                {mv.director && (
+                  <div className="empty-state" style={{ padding: 0 }}>
+                    Director: {mv.director}
+                  </div>
+                )}
+                <div className="empty-state" style={{ padding: 0 }}>
+                  {mv.monitored ? 'Monitored' : 'Not monitored'} · {mv.hasFile ? 'Downloaded' : 'Wanted'}
+                </div>
+              </div>
+              <div className="video-actions">
+                {grabStatus[mv.id] && <span>{grabStatus[mv.id]}</span>}
+                {!mv.hasFile && mv.youtubeVideoId && (
+                  <button className="secondary" onClick={() => handleGrab(mv.id)}>
+                    Grab
+                  </button>
+                )}
+                {!mv.hasFile && (
+                  <button className="secondary" onClick={() => setSearchingVideo(mv)}>
+                    Search
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <p className="empty-state">No music videos yet.</p>
       )}

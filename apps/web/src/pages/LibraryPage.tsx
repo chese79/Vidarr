@@ -69,6 +69,7 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
         imvdbVideoId: video.imvdbVideoId,
         releaseYear: video.year ?? undefined,
         thumbnailUrl: video.thumbnailUrl ?? undefined,
+        director: video.director ?? undefined,
         monitored: true,
       });
     }

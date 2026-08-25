@@ -27,8 +27,12 @@ function isPlausibleMatch(candidate: YoutubeSearchCandidate, artistName: string,
   return hasSongPhrase && hasArtist;
 }
 
-// Priority order per user: (1) the artist's own official channel/page, then
-// (2) videos explicitly labeled "Official" — channel authority outranks title
+function isVevo(candidate: YoutubeSearchCandidate): boolean {
+  return squash(candidate.channel).includes('vevo');
+}
+
+// Within a tier, still prefer the artist's own/exact channel and "Official"-
+// labeled titles over a looser match — channel authority outranks title
 // wording, since a random reuploader can put "Official Video" in a title too.
 function score(candidate: YoutubeSearchCandidate, artistName: string): number {
   const titleLower = candidate.title.toLowerCase();
@@ -37,7 +41,6 @@ function score(candidate: YoutubeSearchCandidate, artistName: string): number {
 
   let s = 0;
   if (artistSquash.length > 0 && channelSquash === artistSquash) s += 6; // artist's own channel, exact
-  else if (channelSquash.includes('vevo')) s += 5; // official VEVO distribution channel
   else if (artistSquash.length > 0 && channelSquash.includes(artistSquash)) s += 3; // e.g. "remhq"
 
   if (titleLower.includes('official music video')) s += 2;
@@ -48,17 +51,28 @@ function score(candidate: YoutubeSearchCandidate, artistName: string): number {
   return s;
 }
 
-// Returns the best plausible YouTube match for an artist/song, or null if
-// nothing in the search results can be confidently tied to both the artist
-// and the song — callers should fall back to another source in that case,
-// not guess.
+export interface YoutubeMatchResult {
+  candidate: YoutubeSearchCandidate;
+  tier: 'vevo' | 'youtube';
+}
+
+// Search priority per user: (1) VEVO specifically — the official cross-label
+// distribution channel, usually the highest-bitrate canonical upload — then
+// (2) any other plausible YouTube match (which still ranks the artist's own
+// channel and "Official"-labeled videos highest via score()), before a caller
+// falls back to a non-YouTube source. One search call covers both tiers.
 export async function findYoutubeMatch(
   artistName: string,
   title: string,
-): Promise<YoutubeSearchCandidate | null> {
+): Promise<YoutubeMatchResult | null> {
   const candidates = await searchYoutube(`${artistName} ${title} official video`);
   const plausible = candidates.filter((c) => isPlausibleMatch(c, artistName, title));
   if (!plausible.length) return null;
 
-  return plausible.sort((a, b) => score(b, artistName) - score(a, artistName))[0];
+  const vevoCandidates = plausible.filter(isVevo);
+  if (vevoCandidates.length) {
+    return { candidate: vevoCandidates.sort((a, b) => score(b, artistName) - score(a, artistName))[0], tier: 'vevo' };
+  }
+
+  return { candidate: plausible.sort((a, b) => score(b, artistName) - score(a, artistName))[0], tier: 'youtube' };
 }

@@ -49,10 +49,15 @@ export async function autoSearchAndGrab(
       if (match) {
         await prisma.musicVideo.update({
           where: { id: musicVideoId },
-          data: { youtubeVideoId: match.youtubeVideoId },
+          data: { youtubeVideoId: match.candidate.youtubeVideoId },
         });
         await grabYoutubeVideo(musicVideoId);
-        return { musicVideoId, grabbed: true, reason: `Grabbed via YouTube (${match.title})` };
+        const sourceLabel = match.tier === 'vevo' ? 'VEVO' : 'YouTube';
+        return {
+          musicVideoId,
+          grabbed: true,
+          reason: `Grabbed via ${sourceLabel} (${match.candidate.title})`,
+        };
       }
     } catch (err) {
       await prisma.activityLog.create({

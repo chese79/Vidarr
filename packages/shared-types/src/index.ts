@@ -227,6 +227,7 @@ export const ImvdbVideoCandidateSchema = z.object({
   title: z.string(),
   year: z.number().int().nullable(),
   thumbnailUrl: z.string().nullable(),
+  director: z.string().nullable(),
 });
 export type ImvdbVideoCandidate = z.infer<typeof ImvdbVideoCandidateSchema>;
 

@@ -30,6 +30,7 @@ export async function refreshArtistMetadata(artistId: number): Promise<{ videosA
         imvdbVideoId: video.imvdbVideoId,
         releaseYear: video.year,
         thumbnailUrl: video.thumbnailUrl,
+        director: video.director,
         monitored: true,
       },
     });
