@@ -1,6 +1,7 @@
 import { prisma } from '../db/client.js';
 import { searchAllIndexers } from './search.js';
-import { grabFromIndexer } from './grab.js';
+import { grabFromIndexer, grabYoutubeVideo } from './grab.js';
+import { findYoutubeMatch } from './youtubeMatch.js';
 
 export interface AutoSearchOutcome {
   musicVideoId: number;
@@ -8,13 +9,18 @@ export interface AutoSearchOutcome {
   reason: string;
 }
 
-// Picks the best release for a video and grabs it automatically. "Best" =
-// highest quality allowed by the artist's quality profile, then most seeders.
-// `minWeight` (default: none) restricts results to strictly better than a
-// given quality weight — used by the quality-upgrade job so it never
-// "upgrades" to something no better than what's already on disk. No download
-// client configured, or no qualifying result, is a normal outcome, not an
-// error.
+// Picks the best release for a video and grabs it automatically. YouTube is
+// tried first when allowed by the quality profile: official/VEVO uploads are
+// far more reliably *the right specific video* than a Newznab text search,
+// which for short/common song titles ("Stand", "Blue") will always have
+// precision problems even scoped to the right category (see
+// pipeline/youtubeMatch.ts for the matching heuristic). Indexer search is the
+// fallback when YouTube has no confident match, or when the profile doesn't
+// allow the YouTube quality tier at all. `minWeight` (default: none)
+// restricts results to strictly better than a given quality weight — used by
+// the quality-upgrade job so it never "upgrades" to something no better than
+// what's already on disk. No qualifying result anywhere is a normal outcome,
+// not an error.
 export async function autoSearchAndGrab(
   musicVideoId: number,
   minWeight = -1,
@@ -28,14 +34,6 @@ export async function autoSearchAndGrab(
     },
   });
 
-  const downloadClient = await prisma.downloadClient.findFirst({
-    where: { enabled: true },
-    orderBy: { priority: 'asc' },
-  });
-  if (!downloadClient) {
-    return { musicVideoId, grabbed: false, reason: 'No enabled download client configured' };
-  }
-
   const allowedQualities = new Map(
     musicVideo.artist.qualityProfile.items
       .filter((i) => i.allowed && i.quality.weight > minWeight)
@@ -43,6 +41,33 @@ export async function autoSearchAndGrab(
   );
   if (!allowedQualities.size) {
     return { musicVideoId, grabbed: false, reason: 'Quality profile allows no qualities' };
+  }
+
+  if (allowedQualities.has('YouTube') && !musicVideo.youtubeVideoId) {
+    try {
+      const match = await findYoutubeMatch(musicVideo.artist.name, musicVideo.title);
+      if (match) {
+        await prisma.musicVideo.update({
+          where: { id: musicVideoId },
+          data: { youtubeVideoId: match.youtubeVideoId },
+        });
+        await grabYoutubeVideo(musicVideoId);
+        return { musicVideoId, grabbed: true, reason: `Grabbed via YouTube (${match.title})` };
+      }
+    } catch (err) {
+      await prisma.activityLog.create({
+        data: { level: 'warn', source: 'auto-search-youtube', message: (err as Error).message },
+      });
+      // fall through to indexer search below
+    }
+  }
+
+  const downloadClient = await prisma.downloadClient.findFirst({
+    where: { enabled: true },
+    orderBy: { priority: 'asc' },
+  });
+  if (!downloadClient) {
+    return { musicVideoId, grabbed: false, reason: 'No YouTube match and no download client configured' };
   }
 
   const results = await searchAllIndexers(`${musicVideo.artist.name} ${musicVideo.title}`);

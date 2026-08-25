@@ -48,6 +48,34 @@ export async function listChannelVideos(sourceUrl: string): Promise<YoutubeVideo
     .map((entry) => ({ youtubeVideoId: String(entry.id), title: entry.title as string }));
 }
 
+export interface YoutubeSearchCandidate {
+  youtubeVideoId: string;
+  title: string;
+  channel: string;
+}
+
+const SEARCH_RESULT_COUNT = 8;
+
+export async function searchYoutube(query: string): Promise<YoutubeSearchCandidate[]> {
+  const { stdout, stderr, code } = await runYtDlp([
+    '--flat-playlist',
+    '--dump-json',
+    `ytsearch${SEARCH_RESULT_COUNT}:${query}`,
+  ]);
+  if (code !== 0) {
+    throw new Error(`yt-dlp search failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+  }
+  return stdout
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line))
+    .map((entry) => ({
+      youtubeVideoId: String(entry.id),
+      title: entry.title as string,
+      channel: (entry.channel || entry.uploader || '') as string,
+    }));
+}
+
 const DEFAULT_FORMAT = 'bestvideo[height<=1080]+bestaudio/best';
 
 export async function downloadVideo(
