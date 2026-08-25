@@ -1,32 +1,56 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { PlaylistImportCandidate, ImportSelection } from '@vidarr/shared-types';
+import type { PlaylistImportCandidate, ImportArtistGroup } from '@vidarr/shared-types';
 
-type RowAction = 'skip' | 'assign' | 'create';
-interface RowState {
-  action: RowAction;
-  artistId?: number;
+function squash(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function initialRowState(candidate: PlaylistImportCandidate): RowState {
-  if (candidate.alreadyInLibrary) return { action: 'skip' };
-  if (candidate.matchedArtistId) return { action: 'assign', artistId: candidate.matchedArtistId };
-  return { action: 'create' };
+interface GroupState {
+  key: string;
+  artistId: number | null;
+  artistName: string;
+  monitor: boolean;
+  videos: { youtubeVideoId: string; title: string; include: boolean; alreadyInLibrary: boolean }[];
+}
+
+// Groups the flat candidate list by resolved artist (matched existing, or the
+// parsed suggested name) so the review UI shows one watch-list checkbox per
+// performer instead of repeating it on every video row.
+function groupCandidates(candidates: PlaylistImportCandidate[]): GroupState[] {
+  const groups = new Map<string, GroupState>();
+  for (const c of candidates) {
+    const key = c.matchedArtistId ? `id:${c.matchedArtistId}` : `new:${squash(c.suggestedArtistName)}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        artistId: c.matchedArtistId,
+        artistName: c.matchedArtistName ?? c.suggestedArtistName,
+        monitor: false,
+        videos: [],
+      });
+    }
+    groups.get(key)!.videos.push({
+      youtubeVideoId: c.youtubeVideoId,
+      title: c.title,
+      include: !c.alreadyInLibrary,
+      alreadyInLibrary: c.alreadyInLibrary,
+    });
+  }
+  return [...groups.values()];
 }
 
 export default function ImportPage() {
   const [url, setUrl] = useState('');
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<PlaylistImportCandidate[] | null>(null);
-  const [rows, setRows] = useState<Record<string, RowState>>({});
+  const [groups, setGroups] = useState<GroupState[] | null>(null);
   const [rootFolderId, setRootFolderId] = useState<number | ''>('');
   const [qualityProfileId, setQualityProfileId] = useState<number | ''>('');
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
   const rootFolders = useQuery({ queryKey: ['rootFolders'], queryFn: api.rootFolders.list });
   const qualityProfiles = useQuery({
     queryKey: ['qualityProfiles'],
@@ -41,43 +65,49 @@ export default function ImportPage() {
     setResult(null);
     try {
       const found = await api.bulkImport.previewYoutubePlaylist(url.trim());
-      setCandidates(found);
-      const initial: Record<string, RowState> = {};
-      found.forEach((c) => (initial[c.youtubeVideoId] = initialRowState(c)));
-      setRows(initial);
+      setGroups(groupCandidates(found));
     } catch (err) {
       setPreviewError((err as Error).message);
     }
     setPreviewing(false);
   }
 
-  function updateRow(id: string, next: RowState) {
-    setRows((r) => ({ ...r, [id]: next }));
+  function updateGroup(key: string, patch: Partial<GroupState>) {
+    setGroups((gs) => gs && gs.map((g) => (g.key === key ? { ...g, ...patch } : g)));
+  }
+
+  function updateVideo(groupKey: string, youtubeVideoId: string, include: boolean) {
+    setGroups(
+      (gs) =>
+        gs &&
+        gs.map((g) =>
+          g.key !== groupKey
+            ? g
+            : { ...g, videos: g.videos.map((v) => (v.youtubeVideoId === youtubeVideoId ? { ...v, include } : v)) },
+        ),
+    );
   }
 
   async function handleImport() {
-    if (!candidates || rootFolderId === '' || qualityProfileId === '') return;
+    if (!groups || rootFolderId === '' || qualityProfileId === '') return;
     setImporting(true);
     setResult(null);
-    const selections: ImportSelection[] = candidates.map((c) => {
-      const row = rows[c.youtubeVideoId];
-      const base = { youtubeVideoId: c.youtubeVideoId, title: c.title, suggestedArtistName: c.suggestedArtistName };
-      if (row.action === 'assign' && row.artistId) {
-        return { ...base, action: 'assign', artistId: row.artistId };
-      }
-      if (row.action === 'create') return { ...base, action: 'create' };
-      return { ...base, action: 'skip' };
-    });
+    const payload: ImportArtistGroup[] = groups.map((g) => ({
+      artistId: g.artistId,
+      artistName: g.artistName,
+      monitor: g.monitor,
+      videos: g.videos.map((v) => ({ youtubeVideoId: v.youtubeVideoId, title: v.title, include: v.include })),
+    }));
     try {
       const outcome = await api.bulkImport.commitYoutubePlaylist(
-        selections,
+        payload,
         Number(rootFolderId),
         Number(qualityProfileId),
       );
       setResult(
         `Added ${outcome.videosAdded} video(s), created ${outcome.artistsCreated} new artist(s), skipped ${outcome.skipped}.`,
       );
-      setCandidates(null);
+      setGroups(null);
       setUrl('');
     } catch (err) {
       setResult(`Failed: ${(err as Error).message}`);
@@ -86,6 +116,8 @@ export default function ImportPage() {
   }
 
   const canImport = rootFolderId !== '' && qualityProfileId !== '';
+  const totalVideos = groups?.reduce((n, g) => n + g.videos.length, 0) ?? 0;
+  const includedCount = groups?.reduce((n, g) => n + g.videos.filter((v) => v.include).length, 0) ?? 0;
 
   return (
     <div>
@@ -97,9 +129,8 @@ export default function ImportPage() {
         <p className="empty-state" style={{ padding: '0 0 10px' }}>
           Bulk-add videos from a YouTube playlist URL. Each video's artist is guessed from its
           title ("Artist - Title", falling back to the uploading channel when no such pattern is
-          found) and matched against your existing artists — review and adjust before importing.
-          Videos are added to the wanted list with their exact YouTube video already known, so the
-          next backlog search grabs them directly (no heuristic search needed).
+          found) and grouped below. Videos are included by default; check "Add to watch list" only
+          for artists you want vidarr to actively monitor going forward.
         </p>
         <form className="form-row" onSubmit={handlePreview}>
           <input
@@ -116,7 +147,7 @@ export default function ImportPage() {
         {previewError && <p className="empty-state">{previewError}</p>}
       </div>
 
-      {candidates && (
+      {groups && (
         <div className="card">
           <div className="form-row">
             <select value={rootFolderId} onChange={(e) => setRootFolderId(Number(e.target.value))} required>
@@ -140,50 +171,46 @@ export default function ImportPage() {
               ))}
             </select>
             <button onClick={handleImport} disabled={!canImport || importing}>
-              {importing ? 'Importing…' : `Import Selected (${candidates.length})`}
+              {importing ? 'Importing…' : `Import Selected (${includedCount}/${totalVideos})`}
             </button>
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Suggested Artist</th>
-                <th>Channel</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {candidates.map((c) => {
-                const row = rows[c.youtubeVideoId];
-                return (
-                  <tr key={c.youtubeVideoId}>
-                    <td>{c.title}</td>
-                    <td>{c.suggestedArtistName}</td>
-                    <td>{c.channel}</td>
-                    <td>
-                      <select
-                        value={row.action === 'assign' ? `assign:${row.artistId}` : row.action}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === 'skip' || v === 'create') updateRow(c.youtubeVideoId, { action: v });
-                          else updateRow(c.youtubeVideoId, { action: 'assign', artistId: Number(v.split(':')[1]) });
-                        }}
-                      >
-                        <option value="skip">Skip{c.alreadyInLibrary ? ' (already in library)' : ''}</option>
-                        <option value="create">Create new artist "{c.suggestedArtistName}"</option>
-                        {artists.data?.map((a) => (
-                          <option key={a.id} value={`assign:${a.id}`}>
-                            Assign to {a.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {groups.map((g) => (
+            <div key={g.key} className="card" style={{ background: 'var(--bg)' }}>
+              <div className="form-row" style={{ alignItems: 'center', marginBottom: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={g.monitor}
+                    onChange={(e) => updateGroup(g.key, { monitor: e.target.checked })}
+                  />
+                  Add to watch list
+                </label>
+                <strong>{g.artistName}</strong>
+                <span className="empty-state" style={{ padding: 0 }}>
+                  {g.artistId ? '(existing artist)' : '(new artist)'}
+                </span>
+              </div>
+
+              <table>
+                <tbody>
+                  {g.videos.map((v) => (
+                    <tr key={v.youtubeVideoId}>
+                      <td style={{ width: 24 }}>
+                        <input
+                          type="checkbox"
+                          checked={v.include}
+                          onChange={(e) => updateVideo(g.key, v.youtubeVideoId, e.target.checked)}
+                        />
+                      </td>
+                      <td>{v.title}</td>
+                      {v.alreadyInLibrary && <td className="empty-state">already in library</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </div>
       )}
 

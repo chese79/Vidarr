@@ -19,7 +19,7 @@ import type {
   CreatePlaylist,
   PlaylistPushResult,
   PlaylistImportCandidate,
-  ImportSelection,
+  ImportArtistGroup,
   ImportCommitResult,
   Recommendation,
   RecommendationRefreshResult,
@@ -161,13 +161,13 @@ export const api = {
         body: JSON.stringify({ url }),
       }),
     commitYoutubePlaylist: (
-      selections: ImportSelection[],
+      groups: ImportArtistGroup[],
       rootFolderId: number,
       qualityProfileId: number,
     ) =>
       request<ImportCommitResult>('/bulkimport/youtube-playlist/commit', {
         method: 'POST',
-        body: JSON.stringify({ selections, rootFolderId, qualityProfileId }),
+        body: JSON.stringify({ groups, rootFolderId, qualityProfileId }),
       }),
   },
   recommendations: {

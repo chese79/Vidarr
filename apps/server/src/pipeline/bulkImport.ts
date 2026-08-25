@@ -68,10 +68,18 @@ export async function previewYoutubePlaylistImport(url: string): Promise<Playlis
   });
 }
 
-export type ImportSelection =
-  | { youtubeVideoId: string; title: string; suggestedArtistName: string; action: 'skip' }
-  | { youtubeVideoId: string; title: string; suggestedArtistName: string; action: 'assign'; artistId: number }
-  | { youtubeVideoId: string; title: string; suggestedArtistName: string; action: 'create' };
+export interface ImportVideoSelection {
+  youtubeVideoId: string;
+  title: string;
+  include: boolean;
+}
+
+export interface ImportArtistGroup {
+  artistId: number | null; // set => assign to this existing artist; null => create one named artistName
+  artistName: string;
+  monitor: boolean; // the "add to watch list" checkbox — independent of whether a video is included
+  videos: ImportVideoSelection[];
+}
 
 export interface CommitResult {
   artistsCreated: number;
@@ -79,70 +87,70 @@ export interface CommitResult {
   skipped: number;
 }
 
-// 'create' actions are grouped by the parsed artist name (not the raw
-// channel — see parseArtistAndTitle) so a multi-artist playlist makes one new
-// Artist per distinct performer, not one per uploading channel/label.
+// One group per distinct performer (grouped client-side by the same parsed
+// artist name preview used — see parseArtistAndTitle) so a multi-artist
+// playlist makes one new Artist per performer, not one per uploading
+// channel/label. A group with no included videos needs no artist row at all.
 // youtubeVideoId is already known exactly (it came straight from the
-// playlist listing), so these videos skip search entirely — same
+// playlist listing), so included videos skip search entirely — same
 // top-priority path an IMVDb curated source takes (see pipeline/autoSearch.ts)
 // — and the next backlog search / scheduled poll grabs them directly.
 export async function commitYoutubePlaylistImport(
-  selections: ImportSelection[],
+  groups: ImportArtistGroup[],
   rootFolderId: number,
   qualityProfileId: number,
 ): Promise<CommitResult> {
-  const createdArtistIdByName = new Map<string, number>();
   let artistsCreated = 0;
   let videosAdded = 0;
   let skipped = 0;
 
-  for (const selection of selections) {
-    if (selection.action === 'skip') {
-      skipped++;
-      continue;
-    }
+  for (const group of groups) {
+    const included = group.videos.filter((v) => v.include);
+    skipped += group.videos.length - included.length;
+    if (!included.length) continue;
 
     let artistId: number;
-    if (selection.action === 'assign') {
-      artistId = selection.artistId;
-    } else {
-      const key = squash(selection.suggestedArtistName);
-      const existing = createdArtistIdByName.get(key);
-      if (existing) {
-        artistId = existing;
-      } else {
-        const created = await prisma.artist.create({
-          data: {
-            name: selection.suggestedArtistName,
-            sortName: sortNameFor(selection.suggestedArtistName),
-            rootFolderId,
-            qualityProfileId,
-          },
-        });
-        createdArtistIdByName.set(key, created.id);
-        artistId = created.id;
-        artistsCreated++;
+    if (group.artistId) {
+      artistId = group.artistId;
+      // Only ever turns monitoring ON — an unchecked box leaves an existing
+      // artist's monitored status untouched rather than silently disabling it.
+      if (group.monitor) {
+        await prisma.artist.update({ where: { id: artistId }, data: { monitored: true } });
       }
-    }
-
-    try {
-      await prisma.musicVideo.create({
+    } else {
+      const created = await prisma.artist.create({
         data: {
-          artistId,
-          title: selection.title,
-          normalizedTitle: normalizeTitle(selection.title),
-          youtubeVideoId: selection.youtubeVideoId,
-          monitored: true,
+          name: group.artistName,
+          sortName: sortNameFor(group.artistName),
+          rootFolderId,
+          qualityProfileId,
+          monitored: group.monitor,
         },
       });
-      videosAdded++;
-    } catch (err) {
-      // artistId+normalizedTitle or youtubeVideoId collision — same video
-      // already tracked for this artist. Not an error worth surfacing.
-      skipped++;
-      await prisma.activityLog.create({
-        data: { level: 'info', source: 'playlist-import', message: (err as Error).message },
-      });
+      artistId = created.id;
+      artistsCreated++;
+    }
+
+    for (const video of included) {
+      try {
+        await prisma.musicVideo.create({
+          data: {
+            artistId,
+            title: video.title,
+            normalizedTitle: normalizeTitle(video.title),
+            youtubeVideoId: video.youtubeVideoId,
+            monitored: true,
+          },
+        });
+        videosAdded++;
+      } catch (err) {
+        // artistId+normalizedTitle or youtubeVideoId collision — same video
+        // already tracked for this artist. Not an error worth surfacing.
+        skipped++;
+        await prisma.activityLog.create({
+          data: { level: 'info', source: 'playlist-import', message: (err as Error).message },
+        });
+      }
     }
   }
 

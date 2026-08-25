@@ -473,28 +473,24 @@ export const PlaylistImportCandidateSchema = z.object({
 });
 export type PlaylistImportCandidate = z.infer<typeof PlaylistImportCandidateSchema>;
 
-export const ImportSelectionSchema = z.discriminatedUnion('action', [
-  z.object({
-    youtubeVideoId: z.string(),
-    title: z.string(),
-    suggestedArtistName: z.string(),
-    action: z.literal('skip'),
-  }),
-  z.object({
-    youtubeVideoId: z.string(),
-    title: z.string(),
-    suggestedArtistName: z.string(),
-    action: z.literal('assign'),
-    artistId: z.number().int(),
-  }),
-  z.object({
-    youtubeVideoId: z.string(),
-    title: z.string(),
-    suggestedArtistName: z.string(),
-    action: z.literal('create'),
-  }),
-]);
-export type ImportSelection = z.infer<typeof ImportSelectionSchema>;
+// Videos are checked (include) by default; the artist-level watchlist
+// checkbox (monitor) is unchecked by default — importing a video doesn't
+// imply you want vidarr to actively track that performer going forward,
+// especially for a "various artists" playlist with many one-off performers.
+export const ImportVideoSelectionSchema = z.object({
+  youtubeVideoId: z.string(),
+  title: z.string(),
+  include: z.boolean(),
+});
+export type ImportVideoSelection = z.infer<typeof ImportVideoSelectionSchema>;
+
+export const ImportArtistGroupSchema = z.object({
+  artistId: z.number().int().nullable(), // set => assign to this existing artist; null => create one named artistName
+  artistName: z.string(),
+  monitor: z.boolean(),
+  videos: z.array(ImportVideoSelectionSchema),
+});
+export type ImportArtistGroup = z.infer<typeof ImportArtistGroupSchema>;
 
 export const ImportCommitResultSchema = z.object({
   artistsCreated: z.number().int(),
