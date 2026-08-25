@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../db/client.js';
 import { runJobByName } from '../scheduler/index.js';
+import { regenerateAllLibraryMetadata } from '../pipeline/libraryConvention.js';
 
 export async function systemRoutes(app: FastifyInstance) {
   app.get('/api/v1/system/task', async () => {
@@ -19,6 +20,10 @@ export async function systemRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(404).send({ ok: false, error: (err as Error).message });
     }
+  });
+
+  app.post('/api/v1/system/regenerate-library-metadata', async () => {
+    return regenerateAllLibraryMetadata();
   });
 
   app.get('/api/v1/log', async (req) => {

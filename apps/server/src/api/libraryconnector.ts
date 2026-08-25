@@ -19,11 +19,29 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         authToken: body.authToken ?? null,
         username: body.username ?? null,
         password: body.password ?? null,
+        videoLibraryId: body.videoLibraryId ?? null,
         enabled: body.enabled,
       },
     });
     reply.code(201);
     return created;
+  });
+
+  // Lists the connector's library sections so the UI can offer a picker for
+  // videoLibraryId — the section holding vidarr's own downloaded videos,
+  // which is deliberately never guessed (see providers/library/plex.ts).
+  app.get('/api/v1/libraryconnector/:id/sections', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const connector = await prisma.libraryConnector.findUnique({ where: { id } });
+    if (!connector) return reply.code(404).send({ error: 'Connector not found' });
+
+    const provider = getLibraryConnectorProvider(connector.type);
+    if (!provider.listSections) return [];
+    try {
+      return await provider.listSections(connector);
+    } catch (err) {
+      return reply.code(502).send({ error: (err as Error).message });
+    }
   });
 
   app.put('/api/v1/libraryconnector/:id', async (req) => {

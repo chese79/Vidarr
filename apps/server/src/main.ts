@@ -20,6 +20,7 @@ import { queueRoutes } from './api/queue.js';
 import { systemRoutes } from './api/system.js';
 import { historyRoutes } from './api/history.js';
 import { calendarRoutes } from './api/calendar.js';
+import { playlistRoutes } from './api/playlist.js';
 import { startScheduler } from './scheduler/index.js';
 
 // Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
@@ -62,6 +63,7 @@ await app.register(queueRoutes);
 await app.register(systemRoutes);
 await app.register(historyRoutes);
 await app.register(calendarRoutes);
+await app.register(playlistRoutes);
 
 const webDistPath = process.env.WEB_DIST_PATH ?? path.resolve(process.cwd(), '../web/dist');
 if (existsSync(webDistPath)) {

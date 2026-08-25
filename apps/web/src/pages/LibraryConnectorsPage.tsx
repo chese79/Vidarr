@@ -1,7 +1,65 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { LibraryConnectorType } from '@vidarr/shared-types';
+import type { LibraryConnector, LibraryConnectorType, LibrarySection } from '@vidarr/shared-types';
+
+// Video library picker — separate from the music-library section used to read
+// listened-to artists. This is where the connector will look for vidarr's own
+// downloaded music videos when pushing a playlist (see playlist push).
+function VideoLibraryPicker({ connector }: { connector: LibraryConnector }) {
+  const queryClient = useQueryClient();
+  const [sections, setSections] = useState<LibrarySection[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateConnector = useMutation({
+    mutationFn: (videoLibraryId: string) => api.libraryConnectors.update(connector.id, { videoLibraryId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['libraryConnectors'] }),
+  });
+
+  async function loadSections() {
+    setLoading(true);
+    setError(null);
+    try {
+      setSections(await api.libraryConnectors.sections(connector.id));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (connector.type === 'subsonic') return <span className="empty-state">n/a</span>;
+
+  if (!sections) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <button className="secondary" onClick={loadSections} disabled={loading}>
+          {loading ? 'Loading…' : connector.videoLibraryId ? `Library #${connector.videoLibraryId}` : 'Choose…'}
+        </button>
+        {error && (
+          <span className="empty-state" style={{ padding: 0 }} title={error}>
+            Failed to load libraries
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={connector.videoLibraryId ?? ''}
+      onChange={(e) => updateConnector.mutate(e.target.value)}
+    >
+      <option value="">Select video library…</option>
+      {sections.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.title} ({s.type})
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export default function LibraryConnectorsPage() {
   const queryClient = useQueryClient();
@@ -126,6 +184,7 @@ export default function LibraryConnectorsPage() {
               <th>Type</th>
               <th>Host</th>
               <th>Status</th>
+              <th>Video library</th>
               <th></th>
             </tr>
           </thead>
@@ -136,6 +195,9 @@ export default function LibraryConnectorsPage() {
                 <td>{c.type}</td>
                 <td>{c.host}</td>
                 <td>{status[c.id] ?? c.lastSyncStatus ?? '—'}</td>
+                <td>
+                  <VideoLibraryPicker connector={c} />
+                </td>
                 <td style={{ display: 'flex', gap: 6 }}>
                   <button className="secondary" onClick={() => handleTest(c.id)}>
                     Test

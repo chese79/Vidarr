@@ -3,6 +3,7 @@ import path from 'node:path';
 import { prisma } from '../db/client.js';
 import { renderNamingFormat } from '@vidarr/shared-types';
 import { placeFile, type TransferMode } from './transfer.js';
+import { writeLibraryMetadata } from './libraryConvention.js';
 
 export interface ImportResult {
   path: string;
@@ -47,6 +48,14 @@ export async function importDownloadedFile(
 
   await placeFile(sourcePath, destPath, settings.transferMode as TransferMode);
   const stat = await fs.stat(destPath);
+
+  await writeLibraryMetadata(destPath, {
+    artistName: musicVideo.artist.name,
+    title: musicVideo.title,
+    year: musicVideo.releaseYear,
+    director: musicVideo.director,
+    thumbnailUrl: musicVideo.thumbnailUrl,
+  });
 
   // A quality upgrade renames to a different filename (the {Quality} token
   // changes) — the old file is now an orphan once the new one is in place.

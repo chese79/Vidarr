@@ -14,6 +14,10 @@ import type {
   CreateLibraryConnector,
   UpdateLibraryConnector,
   LibraryConnectorTestResult,
+  LibrarySection,
+  Playlist,
+  CreatePlaylist,
+  PlaylistPushResult,
   Recommendation,
   RecommendationRefreshResult,
   RecommendationProviderConfig,
@@ -80,8 +84,13 @@ export const api = {
     remove: (id: number) => request<void>(`/artist/${id}`, { method: 'DELETE' }),
   },
   musicVideos: {
-    list: (artistId?: number) =>
-      request<MusicVideo[]>(`/musicvideo${artistId ? `?artistId=${artistId}` : ''}`),
+    list: (opts?: { artistId?: number; hasFile?: boolean }) => {
+      const params = new URLSearchParams();
+      if (opts?.artistId !== undefined) params.set('artistId', String(opts.artistId));
+      if (opts?.hasFile !== undefined) params.set('hasFile', String(opts.hasFile));
+      const qs = params.toString();
+      return request<(MusicVideo & { artist: { name: string } })[]>(`/musicvideo${qs ? `?${qs}` : ''}`);
+    },
     create: (data: CreateMusicVideo) =>
       request<MusicVideo>('/musicvideo', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/musicvideo/${id}`, { method: 'DELETE' }),
@@ -128,6 +137,19 @@ export const api = {
       request<{ ok: boolean; artistCount: number }>(`/libraryconnector/${id}/sync`, {
         method: 'POST',
       }),
+    sections: (id: number) => request<LibrarySection[]>(`/libraryconnector/${id}/sections`),
+  },
+  playlists: {
+    list: () => request<Playlist[]>('/playlist'),
+    create: (data: CreatePlaylist) =>
+      request<Playlist>('/playlist', { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id: number) => request<void>(`/playlist/${id}`, { method: 'DELETE' }),
+    addItem: (id: number, musicVideoId: number) =>
+      request<void>(`/playlist/${id}/items`, { method: 'POST', body: JSON.stringify({ musicVideoId }) }),
+    removeItem: (id: number, musicVideoId: number) =>
+      request<void>(`/playlist/${id}/items/${musicVideoId}`, { method: 'DELETE' }),
+    push: (id: number, connectorId: number) =>
+      request<PlaylistPushResult>(`/playlist/${id}/push/${connectorId}`, { method: 'POST' }),
   },
   recommendations: {
     list: () => request<Recommendation[]>('/recommendation'),
@@ -200,6 +222,10 @@ export const api = {
     tasks: () => request<ScheduledTask[]>('/system/task'),
     runTask: (name: string) =>
       request<{ ok: boolean }>(`/system/task/${encodeURIComponent(name)}/run`, { method: 'POST' }),
+    regenerateLibraryMetadata: () =>
+      request<{ written: number; failed: number }>('/system/regenerate-library-metadata', {
+        method: 'POST',
+      }),
   },
   history: {
     list: () => request<HistoryEntry[]>('/history'),

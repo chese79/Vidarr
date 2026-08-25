@@ -129,6 +129,7 @@ export const LibraryConnectorSchema = z.object({
   authToken: z.string().nullable(),
   username: z.string().nullable(),
   musicLibraryId: z.string().nullable(),
+  videoLibraryId: z.string().nullable(),
   enabled: z.boolean(),
   lastSyncedAt: z.string().nullable(),
   lastSyncStatus: z.string().nullable(),
@@ -143,6 +144,7 @@ export const CreateLibraryConnectorSchema = z.object({
   authToken: z.string().nullable().optional(),
   username: z.string().nullable().optional(),
   password: z.string().nullable().optional(),
+  videoLibraryId: z.string().nullable().optional(),
   enabled: z.boolean().default(true),
 });
 export type CreateLibraryConnector = z.infer<typeof CreateLibraryConnectorSchema>;
@@ -155,6 +157,13 @@ export const LibraryConnectorTestResultSchema = z.object({
   message: z.string().optional(),
 });
 export type LibraryConnectorTestResult = z.infer<typeof LibraryConnectorTestResultSchema>;
+
+export const LibrarySectionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  type: z.string(),
+});
+export type LibrarySection = z.infer<typeof LibrarySectionSchema>;
 
 export const LibraryArtistSchema = z.object({
   id: z.number().int(),
@@ -399,3 +408,54 @@ export const CalendarItemSchema = z.object({
   artist: z.object({ name: z.string() }),
 });
 export type CalendarItem = z.infer<typeof CalendarItemSchema>;
+
+// --- Playlists: build from downloaded videos, push to Plex/Jellyfin ---
+
+export const PlaylistSyncSchema = z.object({
+  id: z.number().int(),
+  connectorId: z.number().int(),
+  connectorName: z.string(),
+  connectorType: LibraryConnectorType,
+  remotePlaylistId: z.string().nullable(),
+  lastPushedAt: z.string().nullable(),
+  lastPushStatus: z.string().nullable(),
+  lastPushError: z.string().nullable(),
+  unmatchedCount: z.number().int().nullable(),
+});
+export type PlaylistSync = z.infer<typeof PlaylistSyncSchema>;
+
+export const PlaylistItemSchema = z.object({
+  id: z.number().int(),
+  musicVideoId: z.number().int(),
+  sortOrder: z.number().int(),
+  musicVideo: z.object({
+    title: z.string(),
+    thumbnailUrl: z.string().nullable(),
+    hasFile: z.boolean(),
+    artist: z.object({ name: z.string() }),
+  }),
+});
+export type PlaylistItem = z.infer<typeof PlaylistItemSchema>;
+
+export const PlaylistSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  createdAt: z.string(),
+  items: z.array(PlaylistItemSchema),
+  syncs: z.array(PlaylistSyncSchema),
+});
+export type Playlist = z.infer<typeof PlaylistSchema>;
+
+export const CreatePlaylistSchema = z.object({
+  name: z.string().min(1),
+});
+export type CreatePlaylist = z.infer<typeof CreatePlaylistSchema>;
+
+export const PlaylistPushResultSchema = z.object({
+  ok: z.boolean(),
+  remotePlaylistId: z.string().nullable(),
+  matchedCount: z.number().int(),
+  unmatchedTitles: z.array(z.string()),
+  error: z.string().optional(),
+});
+export type PlaylistPushResult = z.infer<typeof PlaylistPushResultSchema>;

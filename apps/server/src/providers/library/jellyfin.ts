@@ -1,5 +1,13 @@
 import type { LibraryConnector } from '@prisma/client';
-import type { FetchedLibraryArtist, LibraryConnectorProvider, LibraryConnectorTestResult } from './types.js';
+import { normalizeTitle } from '../../pipeline/normalize.js';
+import type {
+  FetchedLibraryArtist,
+  LibraryConnectorProvider,
+  LibraryConnectorTestResult,
+  LibrarySection,
+  PlaylistPushItem,
+  PlaylistPushResult,
+} from './types.js';
 
 function baseUrl(host: string): string {
   return host.replace(/\/+$/, '');
@@ -16,6 +24,45 @@ async function jellyfinGet(config: LibraryConnector, path: string): Promise<any>
     throw new Error(`Jellyfin request failed: ${res.status} ${res.statusText}`);
   }
   return res.json();
+}
+
+async function jellyfinSend(config: LibraryConnector, method: string, path: string): Promise<any> {
+  const res = await fetch(`${baseUrl(config.host)}${path}`, {
+    method,
+    headers: { Accept: 'application/json', 'X-Emby-Token': config.authToken ?? '' },
+  });
+  if (!res.ok) {
+    throw new Error(`Jellyfin request failed: ${res.status} ${res.statusText}`);
+  }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// One item per music video in the target library, matched by normalized
+// title + artist (Jellyfin's MusicVideo items carry an Artists array). Exact
+// normalized match only — good enough as long as vidarr's own naming
+// convention (see pipeline/libraryConvention.ts) is what populated Jellyfin's
+// scan in the first place.
+async function findMusicVideoItem(
+  config: LibraryConnector,
+  userId: string,
+  item: PlaylistPushItem,
+): Promise<string | null> {
+  const body = await jellyfinGet(
+    config,
+    `/Users/${userId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&SearchTerm=${encodeURIComponent(item.title)}&ParentId=${encodeURIComponent(config.videoLibraryId ?? '')}&Fields=Artists`,
+  );
+  const candidates: any[] = body?.Items ?? [];
+  const wantTitle = normalizeTitle(item.title);
+  const wantArtist = normalizeTitle(item.artistName);
+  const match = candidates.find((c) => {
+    const titleMatches = normalizeTitle(c.Name ?? '') === wantTitle;
+    const artists: string[] = c.Artists ?? [];
+    const artistMatches = artists.some((a) => normalizeTitle(a) === wantArtist);
+    return titleMatches && artistMatches;
+  });
+  return match?.Id ?? null;
 }
 
 export const jellyfinProvider: LibraryConnectorProvider = {
@@ -50,5 +97,53 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       genre: Array.isArray(item.Genres) && item.Genres.length ? item.Genres.join(', ') : undefined,
       playCount: item.UserData?.PlayCount as number | undefined,
     }));
+  },
+
+  async listSections(config): Promise<LibrarySection[]> {
+    const folders: any[] = await jellyfinGet(config, '/Library/VirtualFolders');
+    return folders.map((f) => ({
+      id: f.ItemId as string,
+      title: f.Name as string,
+      type: f.CollectionType ?? 'unknown',
+    }));
+  },
+
+  async pushPlaylist(config, { name, items, existingRemoteId }): Promise<PlaylistPushResult> {
+    if (!config.musicLibraryId) {
+      throw new Error('Jellyfin connector has no resolved user id; run Test first.');
+    }
+    if (!config.videoLibraryId) {
+      throw new Error('No video library selected for this Jellyfin connector.');
+    }
+    const userId = config.musicLibraryId;
+
+    const matchedIds: string[] = [];
+    const unmatchedTitles: string[] = [];
+    for (const item of items) {
+      const id = await findMusicVideoItem(config, userId, item);
+      if (id) matchedIds.push(id);
+      else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
+    }
+
+    // Full replace, not a diff — see PlaylistSync doc comment in schema.prisma.
+    if (existingRemoteId) {
+      await jellyfinSend(config, 'DELETE', `/Items/${existingRemoteId}`).catch(() => {});
+    }
+
+    const created = await fetch(`${baseUrl(config.host)}/Playlists`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-Emby-Token': config.authToken ?? '',
+      },
+      body: JSON.stringify({ Name: name, Ids: matchedIds, UserId: userId, MediaType: 'Video' }),
+    });
+    if (!created.ok) {
+      throw new Error(`Jellyfin playlist creation failed: ${created.status} ${created.statusText}`);
+    }
+    const body = await created.json();
+
+    return { remotePlaylistId: body.Id as string, matchedCount: matchedIds.length, unmatchedTitles };
   },
 };

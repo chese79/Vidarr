@@ -43,6 +43,7 @@ model MusicVideo {
   file           MusicVideoFile?
   queueItems     DownloadQueueItem[]
   history        History[]
+  playlistItems  PlaylistItem[]
 
   @@unique([artistId, normalizedTitle])
 }
@@ -214,13 +215,55 @@ model LibraryConnector {
   authToken      String? // Plex X-Plex-Token, or Jellyfin API key
   username       String? // Jellyfin / Subsonic
   password       String? // Subsonic only (salted-MD5 auth requires it server-side)
-  musicLibraryId String? // cached: Plex section key, or Jellyfin userId
+  musicLibraryId String? // cached: Plex section key, or Jellyfin userId — used to read artists (LibraryArtist sync)
+  videoLibraryId String? // section/library holding vidarr's own downloaded music videos — used for playlist push; a different library than musicLibraryId, picked by the user from listSections()
   enabled        Boolean   @default(true)
   lastSyncedAt   DateTime?
   lastSyncStatus String? // "success" | "failed"
   lastSyncError  String?
 
   libraryArtists LibraryArtist[]
+  playlistSyncs  PlaylistSync[]
+}
+
+model Playlist {
+  id        Int      @id @default(autoincrement())
+  name      String
+  createdAt DateTime @default(now())
+
+  items PlaylistItem[]
+  syncs PlaylistSync[]
+}
+
+model PlaylistItem {
+  id           Int        @id @default(autoincrement())
+  playlistId   Int
+  playlist     Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  musicVideoId Int
+  musicVideo   MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  sortOrder    Int
+
+  @@unique([playlistId, musicVideoId])
+}
+
+// Per-connector push state for a playlist. Push is a full replace (delete
+// remote playlist, recreate) rather than a diff — matches this codebase's
+// existing "manual buttons, no incremental sync" pattern for connectors
+// (see LibraryConnector sync), and avoids drift between vidarr's item order
+// and whatever partial add/remove state a diff could leave behind.
+model PlaylistSync {
+  id               Int              @id @default(autoincrement())
+  playlistId       Int
+  playlist         Playlist         @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  connectorId      Int
+  connector        LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  remotePlaylistId String?
+  lastPushedAt     DateTime?
+  lastPushStatus   String? // "success" | "failed" | "partial"
+  lastPushError    String?
+  unmatchedCount   Int?
+
+  @@unique([playlistId, connectorId])
 }
 
 model LibraryArtist {

@@ -6,6 +6,7 @@ import RootFoldersPage from './pages/RootFoldersPage';
 import SettingsPage from './pages/SettingsPage';
 import DiscoverPage from './pages/DiscoverPage';
 import LibraryConnectorsPage from './pages/LibraryConnectorsPage';
+import PlaylistsPage from './pages/PlaylistsPage';
 import IndexersPage from './pages/IndexersPage';
 import DownloadClientsPage from './pages/DownloadClientsPage';
 import QueuePage from './pages/QueuePage';
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
   { to: '/calendar', label: 'Calendar' },
   { to: '/discover', label: 'Discover' },
+  { to: '/playlists', label: 'Playlists' },
   { to: '/queue', label: 'Queue' },
   { to: '/history', label: 'History' },
   { to: '/quality-profiles', label: 'Quality Profiles' },
@@ -48,6 +50,7 @@ export default function App() {
           <Route path="/quality-profiles" element={<QualityProfilesPage />} />
           <Route path="/root-folders" element={<RootFoldersPage />} />
           <Route path="/discover" element={<DiscoverPage />} />
+          <Route path="/playlists" element={<PlaylistsPage />} />
           <Route path="/connectors" element={<LibraryConnectorsPage />} />
           <Route path="/indexers" element={<IndexersPage />} />
           <Route path="/download-clients" element={<DownloadClientsPage />} />
