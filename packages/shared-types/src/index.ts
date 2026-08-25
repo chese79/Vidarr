@@ -257,6 +257,7 @@ export type CreateYoutubeSource = z.infer<typeof CreateYoutubeSourceSchema>;
 export const YoutubeSourceSyncResultSchema = z.object({
   matched: z.number().int(),
   created: z.number().int(),
+  isInitialSync: z.boolean(),
 });
 export type YoutubeSourceSyncResult = z.infer<typeof YoutubeSourceSyncResultSchema>;
 

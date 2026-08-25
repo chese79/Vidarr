@@ -127,9 +127,12 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
     setStatus((s) => ({ ...s, [id]: 'Syncing…' }));
     try {
       const result = await api.youtubeSources.sync(id);
+      const suffix = result.isInitialSync
+        ? ' (added as baseline, not auto-downloaded — grab manually if wanted)'
+        : ' (new uploads, will be auto-grabbed)';
       setStatus((s) => ({
         ...s,
-        [id]: `${result.matched} matched, ${result.created} new`,
+        [id]: `${result.matched} matched, ${result.created} new${result.created ? suffix : ''}`,
       }));
     } catch (err) {
       setStatus((s) => ({ ...s, [id]: `Failed: ${(err as Error).message}` }));
