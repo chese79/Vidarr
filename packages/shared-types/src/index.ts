@@ -459,3 +459,46 @@ export const PlaylistPushResultSchema = z.object({
   error: z.string().optional(),
 });
 export type PlaylistPushResult = z.infer<typeof PlaylistPushResultSchema>;
+
+// --- Bulk import: pull many videos in at once from a YouTube playlist URL ---
+
+export const PlaylistImportCandidateSchema = z.object({
+  youtubeVideoId: z.string(),
+  title: z.string(),
+  channel: z.string(),
+  suggestedArtistName: z.string(),
+  matchedArtistId: z.number().int().nullable(),
+  matchedArtistName: z.string().nullable(),
+  alreadyInLibrary: z.boolean(),
+});
+export type PlaylistImportCandidate = z.infer<typeof PlaylistImportCandidateSchema>;
+
+export const ImportSelectionSchema = z.discriminatedUnion('action', [
+  z.object({
+    youtubeVideoId: z.string(),
+    title: z.string(),
+    suggestedArtistName: z.string(),
+    action: z.literal('skip'),
+  }),
+  z.object({
+    youtubeVideoId: z.string(),
+    title: z.string(),
+    suggestedArtistName: z.string(),
+    action: z.literal('assign'),
+    artistId: z.number().int(),
+  }),
+  z.object({
+    youtubeVideoId: z.string(),
+    title: z.string(),
+    suggestedArtistName: z.string(),
+    action: z.literal('create'),
+  }),
+]);
+export type ImportSelection = z.infer<typeof ImportSelectionSchema>;
+
+export const ImportCommitResultSchema = z.object({
+  artistsCreated: z.number().int(),
+  videosAdded: z.number().int(),
+  skipped: z.number().int(),
+});
+export type ImportCommitResult = z.infer<typeof ImportCommitResultSchema>;

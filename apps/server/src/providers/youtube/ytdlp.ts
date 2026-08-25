@@ -54,6 +54,30 @@ export interface YoutubeSearchCandidate {
   channel: string;
 }
 
+// A playlist (unlike a single artist's channel/playlist source, see
+// listChannelVideos) can span many different artists/channels — bulk-import
+// needs the per-video channel to guess which artist each video belongs to.
+// Confirmed live: a channel's "Videos" listing doesn't populate the
+// per-entry channel/uploader fields at all (only playlist_channel/
+// playlist_uploader, which describe the listing itself) — a genuine curated
+// playlist does populate channel/uploader per entry instead. Falling back
+// through both pairs covers both shapes.
+export async function listPlaylistVideos(url: string): Promise<YoutubeSearchCandidate[]> {
+  const { stdout, stderr, code } = await runYtDlp(['--flat-playlist', '--dump-json', url]);
+  if (code !== 0) {
+    throw new Error(`yt-dlp playlist listing failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+  }
+  return stdout
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line))
+    .map((entry) => ({
+      youtubeVideoId: String(entry.id),
+      title: entry.title as string,
+      channel: (entry.channel || entry.uploader || entry.playlist_channel || entry.playlist_uploader || '') as string,
+    }));
+}
+
 const SEARCH_RESULT_COUNT = 8;
 
 export async function searchYoutube(query: string): Promise<YoutubeSearchCandidate[]> {

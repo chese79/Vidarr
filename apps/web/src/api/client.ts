@@ -18,6 +18,9 @@ import type {
   Playlist,
   CreatePlaylist,
   PlaylistPushResult,
+  PlaylistImportCandidate,
+  ImportSelection,
+  ImportCommitResult,
   Recommendation,
   RecommendationRefreshResult,
   RecommendationProviderConfig,
@@ -150,6 +153,22 @@ export const api = {
       request<void>(`/playlist/${id}/items/${musicVideoId}`, { method: 'DELETE' }),
     push: (id: number, connectorId: number) =>
       request<PlaylistPushResult>(`/playlist/${id}/push/${connectorId}`, { method: 'POST' }),
+  },
+  bulkImport: {
+    previewYoutubePlaylist: (url: string) =>
+      request<PlaylistImportCandidate[]>('/bulkimport/youtube-playlist/preview', {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+      }),
+    commitYoutubePlaylist: (
+      selections: ImportSelection[],
+      rootFolderId: number,
+      qualityProfileId: number,
+    ) =>
+      request<ImportCommitResult>('/bulkimport/youtube-playlist/commit', {
+        method: 'POST',
+        body: JSON.stringify({ selections, rootFolderId, qualityProfileId }),
+      }),
   },
   recommendations: {
     list: () => request<Recommendation[]>('/recommendation'),

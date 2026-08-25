@@ -36,7 +36,8 @@ not-yet-started ideas (concert videos, web-series content types, curated list im
    category, plus a result-level filter) against your configured indexer(s) and download client
    (qBittorrent or SABnzbd).
 - You can also subscribe to a YouTube channel/playlist directly (`YoutubeSource`) instead of relying
-  on search.
+  on search, or bulk-add many videos at once from the **Import** page by pasting any YouTube
+  playlist URL — each video's artist is guessed from its title, reviewable before committing.
 - Every downloaded file is validated before it's accepted: `ffprobe` confirms it actually has a
   video stream, and `ffmpeg`'s `freezedetect` filter confirms there's real motion — catching
   audio-only rips and static-album-art "videos" that would otherwise slip through.

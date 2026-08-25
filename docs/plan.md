@@ -178,6 +178,19 @@ REST routes are 1:1 with the domain model above, under `/api/v1/...`.
   real server before relying on it.
 - Subsonic/Navidrome has no playlist-push support — no music-video concept in that protocol; it
   remains read-only (artist sync for Discover) as originally scoped.
+- **YouTube playlist bulk import**: a new Import page — paste any YouTube playlist (or channel
+  "Videos" tab) URL and bulk-add its videos to the wanted list, instead of adding one artist at a
+  time. Per-video artist is guessed from the title's own "Artist - Title" convention, NOT the
+  uploading channel — confirmed live against a real "Various Artists" label playlist where every
+  video reported the same channel ("Builders Music") despite each one being a different performer;
+  channel name is only a fallback for listings with no such title pattern (e.g. an official
+  per-artist channel like R.E.M.'s, whose titles are bare song titles). Also fixed a real yt-dlp
+  quirk found via the same live test: a channel's "Videos" listing doesn't populate the per-entry
+  `channel`/`uploader` fields at all, only `playlist_channel`/`playlist_uploader` (a genuine
+  multi-uploader playlist populates the former instead) — `listPlaylistVideos` now falls back
+  through both pairs. Every row is reviewable/overridable before committing, since title-parsing
+  this heuristic is inherently imperfect (same fundamental problem as Sonarr/Radarr's own
+  release-title parsing) — manual review is the safety net, not perfect regex.
 
 ## Verification
 
@@ -192,5 +205,5 @@ REST routes are 1:1 with the domain model above, under `/api/v1/...`.
 
 ## Backlog / future ideas (not scheduled to a milestone yet)
 
-- **Curated list import**: bulk-add artists/videos from a named list rather than one at a time — e.g. VMA nominees by year, Grammy Award winners by year. Would need a source for the list data itself (no obvious API; likely hand-curated or scraped) and a bulk "add all matched artists" flow reusing the existing Add Artist (IMVDb-search) pipeline.
+- **Curated list import (YouTube playlist done; IMVDb list source still open)**: bulk-add videos from a named list rather than one at a time. The YouTube-playlist half is built — see "YouTube playlist bulk import" below. An IMVDb-sourced equivalent (e.g. a "best of the year" list/chart page) remains unbuilt: IMVDb's API has no documented "lists" endpoint (only per-artist video catalogs and text search, see providers/metadata/imvdb.ts), so this needs a specific real IMVDb URL to inspect before assuming any such data is even available.
 - **Additional content types — explicitly on hold until music videos are solid**: concert videos (Newznab indexers surface a lot of these already, per real search results — worth a dedicated content type/category rather than treating them as noise), and web series like NPR's Tiny Desk Concerts (recurring episodic content, closer to a YouTube-playlist-as-series model than a single music video). Would need their own MusicVideo-equivalent type or a `contentType` field, separate matching rules, and probably separate quality/naming handling. User's explicit instruction: don't start this until the core music-video pipeline (search precision, YouTube-first matching) is dialed in.
