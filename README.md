@@ -10,7 +10,7 @@ vidarr is purely an orchestrator, like Sonarr/Radarr/Lidarr — it doesn't host,
 distribute content itself. It automates whatever indexers, download clients, YouTube sources, and
 media-server connectors you configure it to use.
 
-Licensed under GPL-3.0-or-later — see [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md) (vidarr's
+Licensed under AGPL-3.0-or-later — see [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md) (vidarr's
 domain model and some logic are adapted from the GPL-3.0-licensed Sonarr/Radarr/Lidarr projects).
 
 ## Status
