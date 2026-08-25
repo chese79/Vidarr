@@ -1,7 +1,38 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { IndexerImplementation } from '@vidarr/shared-types';
+import type { Indexer, IndexerImplementation } from '@vidarr/shared-types';
+
+function parseCategories(input: string): number[] {
+  return input
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+function CategoriesCell({ indexer }: { indexer: Indexer }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(JSON.parse(indexer.categories || '[]').join(', '));
+
+  const update = useMutation({
+    mutationFn: () => api.indexers.updateCategories(indexer.id, parseCategories(value)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+  });
+
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="3020"
+        style={{ width: 90 }}
+      />
+      <button className="secondary" onClick={() => update.mutate()}>
+        Save
+      </button>
+    </div>
+  );
+}
 
 export default function IndexersPage() {
   const queryClient = useQueryClient();
@@ -9,6 +40,7 @@ export default function IndexersPage() {
   const [implementation, setImplementation] = useState<IndexerImplementation>('Torznab');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [categories, setCategories] = useState('3020');
   const [status, setStatus] = useState<Record<number, string>>({});
 
   const indexers = useQuery({ queryKey: ['indexers'], queryFn: api.indexers.list });
@@ -41,6 +73,13 @@ export default function IndexersPage() {
         <h2>Indexers</h2>
       </div>
 
+      <p className="empty-state">
+        Category 3020 (the standard Newznab/Torznab "Audio &gt; Video" category) is used by
+        default so searches only match music videos, not unrelated TV/movie releases that happen
+        to share words with a song title. Only change this if you know your indexer categorizes
+        music videos differently.
+      </p>
+
       <form
         className="card"
         onSubmit={(e) => {
@@ -51,7 +90,7 @@ export default function IndexersPage() {
             implementation,
             baseUrl,
             apiKey: apiKey || undefined,
-            categories: [],
+            categories: parseCategories(categories),
             enabled: true,
             priority: 25,
           });
@@ -74,6 +113,12 @@ export default function IndexersPage() {
             required
           />
           <input placeholder="API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+          <input
+            placeholder="Categories"
+            value={categories}
+            onChange={(e) => setCategories(e.target.value)}
+            style={{ width: 90 }}
+          />
           <button type="submit">Add</button>
         </div>
       </form>
@@ -84,6 +129,7 @@ export default function IndexersPage() {
             <tr>
               <th>Name</th>
               <th>Implementation</th>
+              <th>Categories</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -93,6 +139,9 @@ export default function IndexersPage() {
               <tr key={idx.id}>
                 <td>{idx.name}</td>
                 <td>{idx.implementation}</td>
+                <td>
+                  <CategoriesCell indexer={idx} />
+                </td>
                 <td>{status[idx.id] ?? '—'}</td>
                 <td style={{ display: 'flex', gap: 6 }}>
                   <button className="secondary" onClick={() => handleTest(idx.id)}>

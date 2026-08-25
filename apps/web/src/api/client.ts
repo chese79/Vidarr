@@ -167,6 +167,8 @@ export const api = {
     list: () => request<Indexer[]>('/indexer'),
     create: (data: CreateIndexer) =>
       request<Indexer>('/indexer', { method: 'POST', body: JSON.stringify(data) }),
+    updateCategories: (id: number, categories: number[]) =>
+      request<Indexer>(`/indexer/${id}`, { method: 'PUT', body: JSON.stringify({ categories }) }),
     remove: (id: number) => request<void>(`/indexer/${id}`, { method: 'DELETE' }),
     test: (id: number) => request<ConnectionTestResult>(`/indexer/${id}/test`, { method: 'POST' }),
   },

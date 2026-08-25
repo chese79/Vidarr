@@ -25,6 +25,19 @@ export async function indexerRoutes(app: FastifyInstance) {
     return created;
   });
 
+  app.put('/api/v1/indexer/:id', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    const body = req.body as Partial<{ categories: number[]; enabled: boolean; priority: number }>;
+    return prisma.indexer.update({
+      where: { id },
+      data: {
+        ...(body.categories !== undefined && { categories: JSON.stringify(body.categories) }),
+        ...(body.enabled !== undefined && { enabled: body.enabled }),
+        ...(body.priority !== undefined && { priority: body.priority }),
+      },
+    });
+  });
+
   app.delete('/api/v1/indexer/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     await prisma.indexer.delete({ where: { id } });
