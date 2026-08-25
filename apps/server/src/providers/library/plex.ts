@@ -1,12 +1,11 @@
-import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
 import { createAuthedFetcher } from './util.js';
 import type {
   FetchedLibraryArtist,
   LibraryConnectorProvider,
   LibraryConnectorTestResult,
+  LibraryItemMatch,
   LibrarySection,
-  PlaylistPushItem,
   PlaylistPushResult,
 } from './types.js';
 
@@ -16,11 +15,13 @@ const { get: plexGet, send: plexSend } = createAuthedFetcher('Plex', 'X-Plex-Tok
 // whatever Plex section (Movies / Home Videos / Other Videos) the user points
 // it at. Without a native Artist field on those item types, matching falls
 // back to an exact normalized-title text search within that one section.
+// `viewCount` (absent = never played) comes free on the same search
+// response, so playlist push and play-count sync share this one lookup.
 // UNVERIFIED against a real Plex server (none was available while building
 // this) — confirm against your own instance before relying on it, and expect
-// to adjust the `type=1` (movie) filter or the field used for artist matching
-// once you see real item shapes.
-async function findVideoItem(config: LibraryConnector, item: PlaylistPushItem): Promise<string | null> {
+// to adjust the `type=1` (movie) filter or the fields used for artist
+// matching/play count once you see real item shapes.
+const findLibraryItem: LibraryConnectorProvider['findLibraryItem'] = async (config, item) => {
   const body = await plexGet(
     config,
     `/library/sections/${config.videoLibraryId}/all?type=1&title=${encodeURIComponent(item.title)}`,
@@ -28,8 +29,10 @@ async function findVideoItem(config: LibraryConnector, item: PlaylistPushItem): 
   const candidates: any[] = body?.MediaContainer?.Metadata ?? [];
   const wantTitle = normalizeTitle(item.title);
   const match = candidates.find((c) => normalizeTitle(c.title ?? '') === wantTitle);
-  return match ? String(match.ratingKey) : null;
-}
+  if (!match) return null;
+  const result: LibraryItemMatch = { id: String(match.ratingKey), playCount: match.viewCount ?? null };
+  return result;
+};
 
 export const plexProvider: LibraryConnectorProvider = {
   async testConnection(config): Promise<LibraryConnectorTestResult> {
@@ -75,8 +78,8 @@ export const plexProvider: LibraryConnectorProvider = {
     const matchedKeys: string[] = [];
     const unmatchedTitles: string[] = [];
     for (const item of items) {
-      const key = await findVideoItem(config, item);
-      if (key) matchedKeys.push(key);
+      const match = await findLibraryItem(config, item);
+      if (match) matchedKeys.push(match.id);
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
 
@@ -97,4 +100,6 @@ export const plexProvider: LibraryConnectorProvider = {
 
     return { remotePlaylistId, matchedCount: matchedKeys.length, unmatchedTitles };
   },
+
+  findLibraryItem,
 };

@@ -3,6 +3,7 @@ import { CreateArtistSchema, UpdateArtistSchema } from '@vidarr/shared-types';
 import { prisma, logActivity } from '../db/client.js';
 import { sortNameFor } from '../pipeline/normalize.js';
 import { refreshArtistMetadata } from '../pipeline/metadataRefresh.js';
+import { matchStandardGenre } from '../pipeline/genreMatch.js';
 
 export async function artistRoutes(app: FastifyInstance) {
   app.get('/api/v1/artist', async () => {
@@ -32,6 +33,7 @@ export async function artistRoutes(app: FastifyInstance) {
         rootFolderId: body.rootFolderId,
         qualityProfileId: body.qualityProfileId,
         posterUrl: body.posterUrl ?? null,
+        genre: body.genre ?? null,
       },
     });
     reply.code(201);
@@ -67,5 +69,20 @@ export async function artistRoutes(app: FastifyInstance) {
     const id = Number((req.params as { id: string }).id);
     await prisma.artist.delete({ where: { id } });
     reply.code(204);
+  });
+
+  // "Standard" genre match — looks up a controlled-vocabulary genre from an
+  // enabled recommendation provider (currently only Spotify has real genre
+  // data) and stamps it onto the artist. Always overwrites: this is an
+  // explicit user action ("re-match"), not a background best-effort fill.
+  app.post('/api/v1/artist/:id/match-genre', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const artist = await prisma.artist.findUniqueOrThrow({ where: { id } });
+    const match = await matchStandardGenre(artist.name);
+    if (!match) {
+      return reply.code(404).send({ error: 'No standard genre match found — enable Spotify in Settings.' });
+    }
+    await prisma.artist.update({ where: { id }, data: { genre: match.genre } });
+    return match;
   });
 }

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { CreatePlaylistSchema } from '@vidarr/shared-types';
+import { CreatePlaylistSchema, GeneratePlaylistBodySchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
+import { generatePlaylistFromFilters } from '../pipeline/playlistGenerator.js';
 
 const playlistInclude = {
   items: {
@@ -42,6 +43,16 @@ export async function playlistRoutes(app: FastifyInstance) {
     });
     reply.code(201);
     return { ...created, syncs: serializeSyncs(created.syncs) };
+  });
+
+  app.post('/api/v1/playlist/generate', async (req, reply) => {
+    const body = GeneratePlaylistBodySchema.parse(req.body);
+    try {
+      return await generatePlaylistFromFilters(body.name, body.filters, body.matchMode);
+    } catch (err) {
+      reply.code(502);
+      return { error: (err as Error).message };
+    }
   });
 
   app.delete('/api/v1/playlist/:id', async (req, reply) => {

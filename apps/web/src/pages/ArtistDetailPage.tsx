@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -206,6 +206,9 @@ export default function ArtistDetailPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
+  const [videoGenre, setVideoGenre] = useState('');
+  const [genreInput, setGenreInput] = useState('');
+  const [genreMessage, setGenreMessage] = useState<string | null>(null);
   const [grabStatus, setGrabStatus] = useState<Record<number, string>>({});
   const [searchingVideo, setSearchingVideo] = useState<MusicVideo | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -216,6 +219,24 @@ export default function ArtistDetailPage() {
   const artist = useQuery({
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
+  });
+
+  useEffect(() => {
+    if (artist.data) setGenreInput(artist.data.genre ?? '');
+  }, [artist.data?.genre]);
+
+  const updateGenre = useMutation({
+    mutationFn: (genre: string) => api.artists.update(artistId, { genre: genre || null }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+  });
+
+  const matchGenre = useMutation({
+    mutationFn: () => api.artists.matchGenre(artistId),
+    onSuccess: (result) => {
+      setGenreMessage(`Matched "${result.genre}" via ${result.source}`);
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    },
+    onError: (err) => setGenreMessage((err as Error).message),
   });
 
   const updateArtist = useMutation({
@@ -239,6 +260,7 @@ export default function ArtistDetailPage() {
       setShowAdd(false);
       setTitle('');
       setReleaseYear('');
+      setVideoGenre('');
     },
   });
 
@@ -250,6 +272,7 @@ export default function ArtistDetailPage() {
       title,
       monitored: true,
       releaseYear: releaseYear ? Number(releaseYear) : undefined,
+      genre: videoGenre || undefined,
     });
   }
 
@@ -312,6 +335,28 @@ export default function ArtistDetailPage() {
 
       {monitorMessage && <p className="empty-state">{monitorMessage}</p>}
 
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <label htmlFor="artist-genre" className="empty-state" style={{ padding: 0 }}>
+          Genre
+        </label>
+        <input
+          id="artist-genre"
+          placeholder="e.g. Alternative Rock"
+          value={genreInput}
+          onChange={(e) => setGenreInput(e.target.value)}
+          onBlur={() => genreInput !== (artist.data.genre ?? '') && updateGenre.mutate(genreInput)}
+          style={{ minWidth: 200 }}
+        />
+        <button
+          className="secondary"
+          onClick={() => matchGenre.mutate()}
+          disabled={matchGenre.isPending}
+        >
+          {matchGenre.isPending ? 'Matching…' : 'Match Genre'}
+        </button>
+        {genreMessage && <span className="empty-state">{genreMessage}</span>}
+      </div>
+
       {showAdd && (
         <form className="card" onSubmit={handleSubmit}>
           <div className="form-row">
@@ -326,6 +371,11 @@ export default function ArtistDetailPage() {
               type="number"
               value={releaseYear}
               onChange={(e) => setReleaseYear(e.target.value)}
+            />
+            <input
+              placeholder="Genre (optional)"
+              value={videoGenre}
+              onChange={(e) => setVideoGenre(e.target.value)}
             />
             <button type="submit">Save</button>
           </div>

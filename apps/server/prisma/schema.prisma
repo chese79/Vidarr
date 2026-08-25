@@ -18,6 +18,7 @@ model Artist {
   qualityProfileId Int
   qualityProfile   QualityProfile @relation(fields: [qualityProfileId], references: [id])
   posterUrl        String?
+  genre            String? // user-editable; auto-fillable from a matched LibraryArtist (Jellyfin) or a "standard" external source (Spotify's controlled-vocabulary genres) — see pipeline/genreMatch.ts
   addedAt          DateTime     @default(now())
 
   musicVideos   MusicVideo[]
@@ -34,6 +35,7 @@ model MusicVideo {
   youtubeVideoId String?  @unique
   releaseYear    Int?
   director       String?
+  genre          String? // user-editable "song tag" — see Artist.genre
   monitored      Boolean  @default(true)
   hasFile        Boolean  @default(false)
   thumbnailUrl   String?
@@ -58,6 +60,8 @@ model MusicVideoFile {
   mediaInfo    String? // JSON blob: codec/resolution/bitrate
   originalFilename String
   dateAdded    DateTime   @default(now())
+  playCount        Int?      // synced from a Plex/Jellyfin library connector's watch stats for the matched item — see pipeline/playCountSync.ts
+  playCountSyncedAt DateTime?
 }
 
 model Quality {

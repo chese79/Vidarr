@@ -43,6 +43,11 @@ import type {
   CalendarItem,
   UpdateArtist,
   BulkSearchResult,
+  UpdateMusicVideo,
+  GeneratePlaylistBody,
+  GeneratePlaylistResult,
+  StandardGenreMatch,
+  PlayCountSyncResult,
 } from '@vidarr/shared-types';
 
 export interface QueueItem {
@@ -85,6 +90,8 @@ export const api = {
         body: JSON.stringify(data),
       }),
     remove: (id: number) => request<void>(`/artist/${id}`, { method: 'DELETE' }),
+    matchGenre: (id: number) =>
+      request<StandardGenreMatch>(`/artist/${id}/match-genre`, { method: 'POST' }),
   },
   musicVideos: {
     list: (opts?: { artistId?: number; hasFile?: boolean }) => {
@@ -96,6 +103,8 @@ export const api = {
     },
     create: (data: CreateMusicVideo) =>
       request<MusicVideo>('/musicvideo', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: UpdateMusicVideo) =>
+      request<MusicVideo>(`/musicvideo/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/musicvideo/${id}`, { method: 'DELETE' }),
     grab: (id: number) => request<GrabResult>(`/musicvideo/${id}/grab`, { method: 'POST' }),
     bulkSearch: (ids: number[]) =>
@@ -141,9 +150,13 @@ export const api = {
         method: 'POST',
       }),
     sections: (id: number) => request<LibrarySection[]>(`/libraryconnector/${id}/sections`),
+    syncPlayCounts: (id: number) =>
+      request<PlayCountSyncResult>(`/libraryconnector/${id}/sync-play-counts`, { method: 'POST' }),
   },
   playlists: {
     list: () => request<Playlist[]>('/playlist'),
+    generate: (data: GeneratePlaylistBody) =>
+      request<GeneratePlaylistResult>('/playlist/generate', { method: 'POST', body: JSON.stringify(data) }),
     create: (data: CreatePlaylist) =>
       request<Playlist>('/playlist', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/playlist/${id}`, { method: 'DELETE' }),

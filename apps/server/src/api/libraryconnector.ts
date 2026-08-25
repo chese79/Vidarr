@@ -3,6 +3,7 @@ import { CreateLibraryConnectorSchema, UpdateLibraryConnectorSchema } from '@vid
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
+import { syncPlayCounts } from '../pipeline/playCountSync.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
@@ -98,6 +99,25 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           },
         });
       }
+
+      // Backfill vidarr's own Artist.genre from this connector's synced data
+      // when we don't already have one — never overwrites a user-set or
+      // previously-matched genre. Matched by normalized name, same
+      // comparison used everywhere else in this codebase.
+      const genreByNormalizedName = new Map(
+        artists.filter((a) => a.genre).map((a) => [normalizeTitle(a.name), a.genre as string]),
+      );
+      if (genreByNormalizedName.size) {
+        const genrelessArtists = await prisma.artist.findMany({
+          where: { genre: null },
+          select: { id: true, name: true },
+        });
+        for (const a of genrelessArtists) {
+          const genre = genreByNormalizedName.get(normalizeTitle(a.name));
+          if (genre) await prisma.artist.update({ where: { id: a.id }, data: { genre } });
+        }
+      }
+
       await prisma.libraryConnector.update({
         where: { id },
         data: { lastSyncedAt: new Date(), lastSyncStatus: 'success', lastSyncError: null },
@@ -112,6 +132,15 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           lastSyncError: (err as Error).message,
         },
       });
+      return reply.code(502).send({ error: (err as Error).message });
+    }
+  });
+
+  app.post('/api/v1/libraryconnector/:id/sync-play-counts', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    try {
+      return await syncPlayCounts(id);
+    } catch (err) {
       return reply.code(502).send({ error: (err as Error).message });
     }
   });

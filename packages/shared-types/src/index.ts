@@ -59,6 +59,7 @@ export const ArtistSchema = z.object({
   rootFolderId: z.number().int(),
   qualityProfileId: z.number().int(),
   posterUrl: z.string().nullable(),
+  genre: z.string().nullable(),
   addedAt: z.string(),
 });
 export type Artist = z.infer<typeof ArtistSchema>;
@@ -70,6 +71,7 @@ export const CreateArtistSchema = z.object({
   rootFolderId: z.number().int(),
   qualityProfileId: z.number().int(),
   posterUrl: z.string().nullable().optional(),
+  genre: z.string().nullable().optional(),
 });
 export type CreateArtist = z.infer<typeof CreateArtistSchema>;
 
@@ -84,6 +86,7 @@ export const MusicVideoSchema = z.object({
   youtubeVideoId: z.string().nullable(),
   releaseYear: z.number().int().nullable(),
   director: z.string().nullable(),
+  genre: z.string().nullable(),
   monitored: z.boolean(),
   hasFile: z.boolean(),
   thumbnailUrl: z.string().nullable(),
@@ -98,6 +101,7 @@ export const CreateMusicVideoSchema = z.object({
   youtubeVideoId: z.string().nullable().optional(),
   releaseYear: z.number().int().nullable().optional(),
   director: z.string().nullable().optional(),
+  genre: z.string().nullable().optional(),
   monitored: z.boolean().default(true),
   thumbnailUrl: z.string().nullable().optional(),
 });
@@ -522,3 +526,45 @@ export const ImportCommitResultSchema = z.object({
   skipped: z.number().int(),
 });
 export type ImportCommitResult = z.infer<typeof ImportCommitResultSchema>;
+
+// --- Playlist generation: build a playlist from selectable filters ---
+
+export const MatchMode = z.enum(['all', 'any']);
+export type MatchMode = z.infer<typeof MatchMode>;
+
+// Every field is optional — only the filters the user actually enables are
+// applied, combined with `matchMode` (AND = "all", OR = "any").
+export const PlaylistFiltersSchema = z.object({
+  yearMin: z.number().int().optional(),
+  yearMax: z.number().int().optional(),
+  genre: z.string().min(1).optional(),
+  minPlayCount: z.number().int().min(0).optional(),
+  artistIds: z.array(z.number().int()).optional(),
+  musicVideoIds: z.array(z.number().int()).optional(),
+});
+export type PlaylistFilters = z.infer<typeof PlaylistFiltersSchema>;
+
+export const GeneratePlaylistBodySchema = z.object({
+  name: z.string().min(1),
+  filters: PlaylistFiltersSchema,
+  matchMode: MatchMode,
+});
+export type GeneratePlaylistBody = z.infer<typeof GeneratePlaylistBodySchema>;
+
+export const GeneratePlaylistResultSchema = z.object({
+  playlistId: z.number().int(),
+  matchedCount: z.number().int(),
+});
+export type GeneratePlaylistResult = z.infer<typeof GeneratePlaylistResultSchema>;
+
+export const StandardGenreMatchSchema = z.object({
+  genre: z.string(),
+  source: z.string(),
+});
+export type StandardGenreMatch = z.infer<typeof StandardGenreMatchSchema>;
+
+export const PlayCountSyncResultSchema = z.object({
+  matched: z.number().int(),
+  unmatched: z.number().int(),
+});
+export type PlayCountSyncResult = z.infer<typeof PlayCountSyncResultSchema>;

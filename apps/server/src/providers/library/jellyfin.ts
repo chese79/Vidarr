@@ -1,12 +1,11 @@
-import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
 import { createAuthedFetcher } from './util.js';
 import type {
   FetchedLibraryArtist,
   LibraryConnectorProvider,
   LibraryConnectorTestResult,
+  LibraryItemMatch,
   LibrarySection,
-  PlaylistPushItem,
   PlaylistPushResult,
 } from './types.js';
 
@@ -16,15 +15,15 @@ const { get: jellyfinGet, send: jellyfinSend } = createAuthedFetcher('Jellyfin',
 // title + artist (Jellyfin's MusicVideo items carry an Artists array). Exact
 // normalized match only — good enough as long as vidarr's own naming
 // convention (see pipeline/libraryConvention.ts) is what populated Jellyfin's
-// scan in the first place.
-async function findMusicVideoItem(
-  config: LibraryConnector,
-  userId: string,
-  item: PlaylistPushItem,
-): Promise<string | null> {
+// scan in the first place. UserData.PlayCount comes free on the same search
+// response, so playlist push and play-count sync share this one lookup.
+const findLibraryItem: LibraryConnectorProvider['findLibraryItem'] = async (config, item) => {
+  if (!config.musicLibraryId) {
+    throw new Error('Jellyfin connector has no resolved user id; run Test first.');
+  }
   const body = await jellyfinGet(
     config,
-    `/Users/${userId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&SearchTerm=${encodeURIComponent(item.title)}&ParentId=${encodeURIComponent(config.videoLibraryId ?? '')}&Fields=Artists`,
+    `/Users/${config.musicLibraryId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&SearchTerm=${encodeURIComponent(item.title)}&ParentId=${encodeURIComponent(config.videoLibraryId ?? '')}&Fields=Artists`,
   );
   const candidates: any[] = body?.Items ?? [];
   const wantTitle = normalizeTitle(item.title);
@@ -35,8 +34,10 @@ async function findMusicVideoItem(
     const artistMatches = artists.some((a) => normalizeTitle(a) === wantArtist);
     return titleMatches && artistMatches;
   });
-  return match?.Id ?? null;
-}
+  if (!match) return null;
+  const result: LibraryItemMatch = { id: match.Id as string, playCount: match.UserData?.PlayCount ?? null };
+  return result;
+};
 
 export const jellyfinProvider: LibraryConnectorProvider = {
   async testConnection(config): Promise<LibraryConnectorTestResult> {
@@ -88,13 +89,12 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     if (!config.videoLibraryId) {
       throw new Error('No video library selected for this Jellyfin connector.');
     }
-    const userId = config.musicLibraryId;
 
     const matchedIds: string[] = [];
     const unmatchedTitles: string[] = [];
     for (const item of items) {
-      const id = await findMusicVideoItem(config, userId, item);
-      if (id) matchedIds.push(id);
+      const match = await findLibraryItem(config, item);
+      if (match) matchedIds.push(match.id);
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
 
@@ -106,10 +106,12 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     const created = await jellyfinSend(config, 'POST', '/Playlists', {
       Name: name,
       Ids: matchedIds,
-      UserId: userId,
+      UserId: config.musicLibraryId,
       MediaType: 'Video',
     });
 
     return { remotePlaylistId: created.Id as string, matchedCount: matchedIds.length, unmatchedTitles };
   },
+
+  findLibraryItem,
 };

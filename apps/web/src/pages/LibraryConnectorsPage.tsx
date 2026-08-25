@@ -113,6 +113,16 @@ export default function LibraryConnectorsPage() {
     invalidate();
   }
 
+  async function handleSyncPlayCounts(id: number) {
+    setStatus((s) => ({ ...s, [id]: 'Syncing play counts…' }));
+    try {
+      const result = await api.libraryConnectors.syncPlayCounts(id);
+      setStatus((s) => ({ ...s, [id]: `Play counts: ${result.matched} matched, ${result.unmatched} unmatched` }));
+    } catch (err) {
+      setStatus((s) => ({ ...s, [id]: `Play-count sync failed: ${(err as Error).message}` }));
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name || !host) return;
@@ -205,6 +215,16 @@ export default function LibraryConnectorsPage() {
                   <button className="secondary" onClick={() => handleSync(c.id)}>
                     Sync
                   </button>
+                  {c.type !== 'subsonic' && (
+                    <button
+                      className="secondary"
+                      onClick={() => handleSyncPlayCounts(c.id)}
+                      disabled={!c.videoLibraryId}
+                      title={!c.videoLibraryId ? 'Pick a video library first' : undefined}
+                    >
+                      Sync Play Counts
+                    </button>
+                  )}
                   <button className="secondary" onClick={() => removeConnector.mutate(c.id)}>
                     Remove
                   </button>

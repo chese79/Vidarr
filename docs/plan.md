@@ -243,6 +243,32 @@ API layer, web frontend, docs) surfaced and fixed:
   `{...updated, videosAdded, metadataRefreshError}` instead of a strictly-typed response schema
   (deliberate — these are optional side-channel signals, not core record fields).
 
+**Filter-based playlist generation**: a "Generate from filters" panel on the Playlists page —
+selectable factors (year range, genre, minimum play count, artist, specific video), each with its
+own enable checkbox, combined via an AND/OR toggle (`matchMode: 'all' | 'any'`). One-time generation
+(picks matching videos into a normal static Playlist), not a live/recomputing smart playlist — a
+deliberate scope choice to reuse the existing Playlist model and push-to-Plex/Jellyfin flow as-is.
+- **Genre**: new `Artist.genre`/`MusicVideo.genre` fields, user-editable directly (ArtistDetailPage
+  header + Add Video form), auto-backfilled onto genre-less artists from a Jellyfin
+  `LibraryArtist.genre` sync when names match, or explicitly "standard-matched" via a new
+  `POST /artist/:id/match-genre` action that queries Spotify's real controlled-vocabulary
+  `artist.genres` (the only enabled recommendation-provider with structured genre data — Last.fm's
+  "tags" are free-text/user-submitted, MusicBrainz has none). Genre filtering does a substring match
+  against artist OR video genre (so a broad term like "rock" matches a stored "album rock").
+- **Play count**: real per-video sync against a connector's actual watch stats (`MusicVideoFile.
+  playCount`), not the pre-existing per-artist `LibraryArtist.playCount` (which only ever fed
+  recommendation-seed ranking). `LibraryConnectorProvider` gained `findLibraryItem()`, refactored out
+  of the existing playlist-push item-matching code (Jellyfin's `UserData.PlayCount` / Plex's
+  `viewCount` come free on the same search response used to resolve the item's id) — so playlist
+  push and `POST /libraryconnector/:id/sync-play-counts` share one matching implementation per
+  provider instead of two.
+- Verified live: manual genre set/read on both Artist and MusicVideo; genre-match endpoint correctly
+  404s with a clear message when no provider has structured genre data configured (Spotify wasn't
+  set up in this environment — the fetch call itself is unverified against real Spotify credentials);
+  six generation test cases against real data (year range in/out of bounds, genre substring match,
+  AND vs OR combining a passing and a failing filter, artist-id filter) — all produced exactly the
+  expected match/no-match result, confirmed via the actual created PlaylistItem rows, then cleaned up.
+
 ## Verification
 
 - After M1: `docker compose up` boots the app; can create an Artist/MusicVideo/QualityProfile/RootFolder manually through the UI and see them persisted (`docker compose down && up` retains data via the SQLite volume).

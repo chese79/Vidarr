@@ -30,6 +30,7 @@ export async function musicVideoRoutes(app: FastifyInstance) {
         youtubeVideoId: body.youtubeVideoId ?? null,
         releaseYear: body.releaseYear ?? null,
         director: body.director ?? null,
+        genre: body.genre ?? null,
         monitored: body.monitored,
         thumbnailUrl: body.thumbnailUrl ?? null,
       },

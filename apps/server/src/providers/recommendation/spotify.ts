@@ -74,5 +74,17 @@ export function createSpotifyProvider(
       }
       return hits;
     },
+
+    // Spotify's artist object carries a real controlled-vocabulary `genres`
+    // array (e.g. "album rock", "alternative rock") — already present on the
+    // same search response used above, no extra call needed.
+    async getArtistGenres(artistName: string): Promise<string[]> {
+      const searchBody = await spotifyGet(
+        `/search?q=${encodeURIComponent(artistName)}&type=artist&limit=1`,
+      );
+      const artist = searchBody?.artists?.items?.[0];
+      if (!artist || artist.name?.toLowerCase() !== artistName.toLowerCase()) return [];
+      return (artist.genres ?? []) as string[];
+    },
   };
 }

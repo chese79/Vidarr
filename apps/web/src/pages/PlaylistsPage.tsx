@@ -2,6 +2,232 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
+import type { MatchMode, PlaylistFilters } from '@vidarr/shared-types';
+
+function GeneratePlaylistPanel() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [matchMode, setMatchMode] = useState<MatchMode>('all');
+
+  const [enableYear, setEnableYear] = useState(false);
+  const [yearMin, setYearMin] = useState('');
+  const [yearMax, setYearMax] = useState('');
+
+  const [enableGenre, setEnableGenre] = useState(false);
+  const [genre, setGenre] = useState('');
+
+  const [enablePlayCount, setEnablePlayCount] = useState(false);
+  const [minPlayCount, setMinPlayCount] = useState('');
+
+  const [enableArtists, setEnableArtists] = useState(false);
+  const [artistIds, setArtistIds] = useState<number[]>([]);
+
+  const [enableVideos, setEnableVideos] = useState(false);
+  const [videoIds, setVideoIds] = useState<number[]>([]);
+
+  const [result, setResult] = useState<string | null>(null);
+
+  const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list, enabled: open });
+  const downloaded = useQuery({
+    queryKey: ['musicVideos', 'downloaded'],
+    queryFn: () => api.musicVideos.list({ hasFile: true }),
+    enabled: open,
+  });
+
+  const generate = useMutation({
+    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode }),
+    onSuccess: (r) => {
+      setResult(`Created "${name}" with ${r.matchedCount} video(s).`);
+      queryClient.invalidateQueries({ queryKey: ['playlists'] });
+      setName('');
+    },
+    onError: (err) => setResult(`Failed: ${(err as Error).message}`),
+  });
+
+  const anyEnabled = enableYear || enableGenre || enablePlayCount || enableArtists || enableVideos;
+
+  function handleGenerate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !anyEnabled) return;
+    const filters: PlaylistFilters = {};
+    if (enableYear) {
+      if (yearMin) filters.yearMin = Number(yearMin);
+      if (yearMax) filters.yearMax = Number(yearMax);
+    }
+    if (enableGenre && genre.trim()) filters.genre = genre.trim();
+    if (enablePlayCount && minPlayCount) filters.minPlayCount = Number(minPlayCount);
+    if (enableArtists && artistIds.length) filters.artistIds = artistIds;
+    if (enableVideos && videoIds.length) filters.musicVideoIds = videoIds;
+    generate.mutate(filters);
+  }
+
+  if (!open) {
+    return (
+      <button className="secondary" onClick={() => setOpen(true)}>
+        Generate from filters…
+      </button>
+    );
+  }
+
+  return (
+    <form className="card" onSubmit={handleGenerate}>
+      <div className="page-header" style={{ marginBottom: 8 }}>
+        <h3 style={{ margin: 0 }}>Generate playlist from filters</h3>
+        <button type="button" className="secondary" onClick={() => setOpen(false)}>
+          Close
+        </button>
+      </div>
+
+      <div className="form-row">
+        <input
+          placeholder="Playlist name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ minWidth: 220 }}
+          required
+        />
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="radio"
+            checked={matchMode === 'all'}
+            onChange={() => setMatchMode('all')}
+          />
+          Match ALL enabled filters (AND)
+        </label>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            type="radio"
+            checked={matchMode === 'any'}
+            onChange={() => setMatchMode('any')}
+          />
+          Match ANY enabled filter (OR)
+        </label>
+      </div>
+
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>
+          <input type="checkbox" checked={enableYear} onChange={(e) => setEnableYear(e.target.checked)} />
+          Year range
+        </label>
+        <input
+          type="number"
+          placeholder="Min year"
+          value={yearMin}
+          onChange={(e) => setYearMin(e.target.value)}
+          disabled={!enableYear}
+          style={{ width: 110 }}
+        />
+        <input
+          type="number"
+          placeholder="Max year"
+          value={yearMax}
+          onChange={(e) => setYearMax(e.target.value)}
+          disabled={!enableYear}
+          style={{ width: 110 }}
+        />
+      </div>
+
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>
+          <input type="checkbox" checked={enableGenre} onChange={(e) => setEnableGenre(e.target.checked)} />
+          Genre
+        </label>
+        <input
+          placeholder="e.g. Rock"
+          value={genre}
+          onChange={(e) => setGenre(e.target.value)}
+          disabled={!enableGenre}
+          style={{ minWidth: 180 }}
+        />
+        <span className="empty-state" style={{ padding: 0 }}>
+          matches artist or video genre, partial match
+        </span>
+      </div>
+
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>
+          <input
+            type="checkbox"
+            checked={enablePlayCount}
+            onChange={(e) => setEnablePlayCount(e.target.checked)}
+          />
+          Min play count
+        </label>
+        <input
+          type="number"
+          min={0}
+          placeholder="e.g. 5"
+          value={minPlayCount}
+          onChange={(e) => setMinPlayCount(e.target.value)}
+          disabled={!enablePlayCount}
+          style={{ width: 110 }}
+        />
+        <span className="empty-state" style={{ padding: 0 }}>
+          requires a library connector's "Sync Play Counts" to have run
+        </span>
+      </div>
+
+      <div className="form-row" style={{ alignItems: 'flex-start' }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140, marginTop: 6 }}>
+          <input
+            type="checkbox"
+            checked={enableArtists}
+            onChange={(e) => setEnableArtists(e.target.checked)}
+          />
+          Artist
+        </label>
+        <select
+          multiple
+          disabled={!enableArtists}
+          value={artistIds.map(String)}
+          onChange={(e) => setArtistIds([...e.target.selectedOptions].map((o) => Number(o.value)))}
+          style={{ minWidth: 220, height: 90 }}
+        >
+          {artists.data?.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="form-row" style={{ alignItems: 'flex-start' }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140, marginTop: 6 }}>
+          <input
+            type="checkbox"
+            checked={enableVideos}
+            onChange={(e) => setEnableVideos(e.target.checked)}
+          />
+          Specific video
+        </label>
+        <select
+          multiple
+          disabled={!enableVideos}
+          value={videoIds.map(String)}
+          onChange={(e) => setVideoIds([...e.target.selectedOptions].map((o) => Number(o.value)))}
+          style={{ minWidth: 280, height: 90 }}
+        >
+          {downloaded.data?.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.artist.name} - {v.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <button type="submit" disabled={!anyEnabled || generate.isPending}>
+        {generate.isPending ? 'Generating…' : 'Generate Playlist'}
+      </button>
+      {!anyEnabled && (
+        <span className="empty-state" style={{ marginLeft: 10 }}>
+          Enable at least one filter above.
+        </span>
+      )}
+      {result && <p className="empty-state">{result}</p>}
+    </form>
+  );
+}
 
 function PlaylistCard({ playlistId }: { playlistId: number }) {
   const queryClient = useQueryClient();
@@ -177,6 +403,10 @@ export default function PlaylistsPage() {
         />
         <button type="submit">Create Playlist</button>
       </form>
+
+      <div style={{ marginBottom: 16 }}>
+        <GeneratePlaylistPanel />
+      </div>
 
       {playlists.data?.length ? (
         playlists.data.map((p) => <PlaylistCard key={p.id} playlistId={p.id} />)

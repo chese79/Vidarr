@@ -68,7 +68,7 @@ function upsertPending(
   entry.hits.push(hit);
 }
 
-async function getEnabledProviders(): Promise<{ name: string; provider: RecommendationProvider }[]> {
+export async function getEnabledProviders(): Promise<{ name: string; provider: RecommendationProvider }[]> {
   const configs = await prisma.recommendationProviderConfig.findMany({ where: { enabled: true } });
   const providers: { name: string; provider: RecommendationProvider }[] = [];
 
