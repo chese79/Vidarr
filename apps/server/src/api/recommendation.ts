@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { AddRecommendationBodySchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { refreshRecommendations } from '../pipeline/recommendations.js';
 import { sortNameFor } from '../pipeline/normalize.js';
@@ -23,7 +24,7 @@ export async function recommendationRoutes(app: FastifyInstance) {
 
   app.post('/api/v1/recommendation/:id/add', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
-    const body = req.body as { rootFolderId: number; qualityProfileId: number };
+    const body = AddRecommendationBodySchema.parse(req.body);
     const recommendation = await prisma.recommendation.findUnique({ where: { id } });
     if (!recommendation) return reply.code(404).send({ error: 'Recommendation not found' });
 

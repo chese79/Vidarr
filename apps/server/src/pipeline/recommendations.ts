@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from './normalize.js';
 import { createLastFmProvider } from '../providers/recommendation/lastfm.js';
 import { createMusicBrainzProvider } from '../providers/recommendation/musicbrainz.js';
@@ -126,9 +126,7 @@ export async function refreshRecommendations(): Promise<{
     try {
       hits = await provider.getSimilarArtists(seedNames);
     } catch (err) {
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: `recommendation:${name}`, message: (err as Error).message },
-      });
+      await logActivity('warn', `recommendation:${name}`, err);
       continue;
     }
     for (const hit of hits) {

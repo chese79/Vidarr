@@ -93,9 +93,21 @@ Dedup rule: canonical identity is `(artistId, normalizedTitle)`; `imvdbVideoId`/
 | Root folder health check | hourly | Refresh free space, flag inaccessible paths |
 | Library metadata refresh | daily | Re-sync from IMVDb (new videos, corrected metadata) |
 
-## Web UI (React SPA, TanStack Query, SSE for live queue progress)
+## Web UI (React SPA, TanStack Query, polling for live queue progress)
 
-Library (Artists grid) · Artist detail (videos, monitor toggle, manual search) · Add Artist (IMVDb search / YouTube channel-playlist URL / manual) · Calendar · Activity Queue (live progress via SSE) · History · Indexer settings (CRUD + test-connection) · Download Client settings (CRUD + test-connection) · YouTube Sources settings · Quality Profiles · Root Folders · General/Media Management settings (naming pattern with live preview, transfer mode) · System/Tasks (job status, run-now, logs).
+Note: originally planned as SSE (see heading history) — M3 switched this to plain polling
+(`refetchInterval`) since the queue monitor job itself only ticks every 20s; true push-based
+streaming wasn't worth the added plumbing. See M3's entry below.
+
+Current nav (`apps/web/src/App.tsx`): Library (Artists grid) · Artist detail (videos, monitor
+toggle, manual search, per-artist YouTube Sources) · Add Artist (IMVDb search / manual — two modes,
+no separate YouTube-URL mode) · Calendar · Discover (Plex/Jellyfin/Navidrome + Last.fm/Spotify/
+MusicBrainz recommendations) · Import (bulk-add from a YouTube playlist URL) · Playlists (build
+from downloaded videos, push to Plex/Jellyfin) · Queue (live progress via polling) · History ·
+Quality Profiles · Root Folders · Library Connectors (Plex/Jellyfin/Navidrome CRUD + test/sync) ·
+Indexers (CRUD + test-connection) · Download Clients (CRUD + test-connection) · System/Tasks (job
+status, run-now, logs, "Regenerate library metadata files") · Settings (naming pattern with live
+preview, transfer mode, IMVDb key, min free space).
 
 REST routes are 1:1 with the domain model above, under `/api/v1/...`.
 
@@ -191,6 +203,45 @@ REST routes are 1:1 with the domain model above, under `/api/v1/...`.
   through both pairs. Every row is reviewable/overridable before committing, since title-parsing
   this heuristic is inherently imperfect (same fundamental problem as Sonarr/Radarr's own
   release-title parsing) — manual review is the safety net, not perfect regex.
+- **Import page review UI — grouped checkboxes, not a flat table**: candidates are grouped by
+  resolved artist (`groupCandidates` in `ImportPage.tsx`), each group showing one "Add to watch
+  list" checkbox (unchecked by default — importing a track doesn't imply you want that performer
+  actively monitored going forward) plus a per-video "include" checkbox (checked by default) and an
+  aggregate "Import Selected (n/total)" count. Backend mirrors this: `ImportArtistGroup` (one per
+  performer, holding its own videos) replaced the earlier flat per-video selection list, so the
+  watch-list flag is naturally per-artist rather than duplicated on every row.
+
+**Cleanup pass — code + docs review, no new features**: a full review of the codebase (pipeline,
+API layer, web frontend, docs) surfaced and fixed:
+- **Schema**: removed dead `Tag`/`TagOnArtist` models and `Indexer.supportsRss`/`supportsSearch`/
+  `DownloadQueueItem.outputPath` fields (never read or written anywhere); added `sourceRef` to
+  `RecommendationSourceHitSchema` and `lastCheckedAt` to `RootFolderSchema`, which the server was
+  already writing/returning but the shared type didn't describe.
+- **API consistency**: a global `Prisma.PrismaClientKnownRequestError` (P2025) handler in
+  `main.ts` now maps every PUT/DELETE-by-id route's "record not found" to a real 404 instead of a
+  bare 500 — one fix covering all resources, rather than a per-route existence check. Added
+  `UpdateIndexerSchema` and Zod validation to the two remaining routes that trusted a raw `as` cast
+  (`bulkimport.ts` commit, `recommendation.ts` add). `artist.ts`'s PUT now surfaces a failed
+  post-monitor metadata refresh to the caller (`metadataRefreshError`) instead of only logging it.
+- **Pipeline dedup**: extracted `providers/library/util.ts` (shared `baseUrl()` +
+  `createAuthedFetcher()`, since Plex/Jellyfin's HTTP handling differed only by header name) and
+  `db/client.ts`'s `logActivity()` helper (replacing ~14 duplicated `prisma.activityLog.create`
+  blocks). Fixed two ActivityLog severity/source inconsistencies (`grab.ts`'s recoverable
+  queue-monitor failure was logged at `'error'` like every other job logs at `'warn'`;
+  `metadataRefresh.ts`'s per-video and per-artist failures shared one indistinguishable source).
+- **Frontend**: fixed a real bug in `ArtistDetailPage.tsx`'s search-results table — grab state was
+  keyed by array index, which would mis-attribute "Grabbing…" to the wrong row if results ever
+  re-sorted; now keyed by the release's own `downloadUrl`. Extracted a shared `VideoThumb`
+  component (was duplicated in `ArtistDetailPage.tsx`/`PlaylistsPage.tsx`), converted
+  `ReleaseSearchPanel`'s hand-rolled fetch to `useQuery` and `SystemTasksPage`'s backfill handler to
+  `useMutation` (both now consistent with every other one-shot fetch/action in the app), added
+  `htmlFor`/`id` pairs to `SettingsPage.tsx`'s form labels, and replaced `DiscoverPage.tsx`'s
+  non-null assertions on `rootFolders.data![0]`/`qualityProfiles.data![0]` with a guarded error
+  instead of a potential runtime crash on a stale-cache race.
+- Deliberately left as-is: the `{ok:false}` vs bare `{error}` split on error responses (the web
+  client only ever reads `body.error`, so this is cosmetic, not a bug); `artist.ts`'s PUT returning
+  `{...updated, videosAdded, metadataRefreshError}` instead of a strictly-typed response schema
+  (deliberate — these are optional side-channel signals, not core record fields).
 
 ## Verification
 

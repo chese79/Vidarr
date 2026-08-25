@@ -22,7 +22,6 @@ model Artist {
 
   musicVideos   MusicVideo[]
   youtubeSources YoutubeSource[]
-  tags          TagOnArtist[]
 }
 
 model MusicVideo {
@@ -111,8 +110,6 @@ model Indexer {
   categories     String // JSON-encoded int[]
   enabled        Boolean @default(true)
   priority       Int     @default(25)
-  supportsRss    Boolean @default(true)
-  supportsSearch Boolean @default(true)
 }
 
 model DownloadClient {
@@ -152,7 +149,6 @@ model DownloadQueueItem {
   downloadClient   DownloadClient? @relation(fields: [downloadClientId], references: [id])
   status           String // "queued" | "downloading" | "importing" | "failed"
   progress         Float           @default(0)
-  outputPath       String?
   quality          String? // parsed at grab time; needed at import time since no file exists yet to read it from
   addedAt          DateTime        @default(now())
 }
@@ -189,22 +185,6 @@ model Settings {
   transferMode   String  @default("hardlink") // "hardlink" | "copy" | "move"
   minFreeSpaceMb Int     @default(1024)
   imvdbApiKey    String?
-}
-
-model Tag {
-  id   Int    @id @default(autoincrement())
-  name String @unique
-
-  artists TagOnArtist[]
-}
-
-model TagOnArtist {
-  artistId Int
-  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  tagId    Int
-  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([artistId, tagId])
 }
 
 model LibraryConnector {

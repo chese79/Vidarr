@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { CreateMusicVideoSchema, UpdateMusicVideoSchema } from '@vidarr/shared-types';
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
 import { grabYoutubeVideo, grabFromIndexer } from '../pipeline/grab.js';
 import { searchAllIndexers } from '../pipeline/search.js';
@@ -99,9 +99,7 @@ export async function musicVideoRoutes(app: FastifyInstance) {
         else skipped++;
       } catch (err) {
         skipped++;
-        await prisma.activityLog.create({
-          data: { level: 'warn', source: 'bulk-search', message: (err as Error).message },
-        });
+        await logActivity('warn', 'bulk-search', err);
       }
     }
     return { grabbed, skipped };

@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { JOBS } from './jobs.js';
 
 const running = new Set<string>();
@@ -12,17 +12,13 @@ async function runJob(job: (typeof JOBS)[number]): Promise<void> {
       where: { name: job.name },
       data: { lastRunAt: new Date(), lastResult: 'success', lastError: null },
     });
-    await prisma.activityLog.create({
-      data: { level: 'info', source: `job:${job.name}`, message },
-    });
+    await logActivity('info', `job:${job.name}`, message);
   } catch (err) {
     await prisma.scheduledTask.update({
       where: { name: job.name },
       data: { lastRunAt: new Date(), lastResult: 'failed', lastError: (err as Error).message },
     });
-    await prisma.activityLog.create({
-      data: { level: 'error', source: `job:${job.name}`, message: (err as Error).message },
-    });
+    await logActivity('error', `job:${job.name}`, err);
   } finally {
     running.delete(job.name);
   }

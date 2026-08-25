@@ -1,5 +1,6 @@
 import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
+import { createAuthedFetcher } from './util.js';
 import type {
   FetchedLibraryArtist,
   LibraryConnectorProvider,
@@ -9,35 +10,7 @@ import type {
   PlaylistPushResult,
 } from './types.js';
 
-function baseUrl(host: string): string {
-  return host.replace(/\/+$/, '');
-}
-
-async function jellyfinGet(config: LibraryConnector, path: string): Promise<any> {
-  const res = await fetch(`${baseUrl(config.host)}${path}`, {
-    headers: {
-      Accept: 'application/json',
-      'X-Emby-Token': config.authToken ?? '',
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Jellyfin request failed: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
-}
-
-async function jellyfinSend(config: LibraryConnector, method: string, path: string): Promise<any> {
-  const res = await fetch(`${baseUrl(config.host)}${path}`, {
-    method,
-    headers: { Accept: 'application/json', 'X-Emby-Token': config.authToken ?? '' },
-  });
-  if (!res.ok) {
-    throw new Error(`Jellyfin request failed: ${res.status} ${res.statusText}`);
-  }
-  if (res.status === 204) return null;
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-}
+const { get: jellyfinGet, send: jellyfinSend } = createAuthedFetcher('Jellyfin', 'X-Emby-Token');
 
 // One item per music video in the target library, matched by normalized
 // title + artist (Jellyfin's MusicVideo items carry an Artists array). Exact
@@ -130,20 +103,13 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       await jellyfinSend(config, 'DELETE', `/Items/${existingRemoteId}`).catch(() => {});
     }
 
-    const created = await fetch(`${baseUrl(config.host)}/Playlists`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-Emby-Token': config.authToken ?? '',
-      },
-      body: JSON.stringify({ Name: name, Ids: matchedIds, UserId: userId, MediaType: 'Video' }),
+    const created = await jellyfinSend(config, 'POST', '/Playlists', {
+      Name: name,
+      Ids: matchedIds,
+      UserId: userId,
+      MediaType: 'Video',
     });
-    if (!created.ok) {
-      throw new Error(`Jellyfin playlist creation failed: ${created.status} ${created.statusText}`);
-    }
-    const body = await created.json();
 
-    return { remotePlaylistId: body.Id as string, matchedCount: matchedIds.length, unmatchedTitles };
+    return { remotePlaylistId: created.Id as string, matchedCount: matchedIds.length, unmatchedTitles };
   },
 };

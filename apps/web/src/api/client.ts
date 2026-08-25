@@ -80,7 +80,7 @@ export const api = {
     create: (data: CreateArtist) =>
       request<Artist>('/artist', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: UpdateArtist) =>
-      request<Artist & { videosAdded?: number }>(`/artist/${id}`, {
+      request<Artist & { videosAdded?: number; metadataRefreshError?: string }>(`/artist/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),

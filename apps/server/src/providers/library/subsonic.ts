@@ -1,10 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { LibraryConnector } from '@prisma/client';
+import { baseUrl } from './util.js';
 import type { FetchedLibraryArtist, LibraryConnectorProvider, LibraryConnectorTestResult } from './types.js';
-
-function baseUrl(host: string): string {
-  return host.replace(/\/+$/, '');
-}
 
 function authParams(config: LibraryConnector): string {
   const salt = randomBytes(6).toString('hex');

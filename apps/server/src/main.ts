@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { ZodError } from 'zod';
+import { Prisma } from '@prisma/client';
 import { artistRoutes } from './api/artist.js';
 import { musicVideoRoutes } from './api/musicvideo.js';
 import { qualityProfileRoutes } from './api/qualityprofile.js';
@@ -38,6 +39,13 @@ const app = Fastify({ logger: true });
 app.setErrorHandler((err, _req, reply) => {
   if (err instanceof ZodError) {
     reply.code(400).send({ error: 'ValidationError', issues: err.issues });
+    return;
+  }
+  // P2025: "record to update/delete not found" — every PUT/DELETE-by-id route
+  // relies on this rather than each doing its own findUnique-then-404
+  // pre-check, so a bad id consistently reports 404, not a bare 500.
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+    reply.code(404).send({ error: 'Not found' });
     return;
   }
   app.log.error(err);

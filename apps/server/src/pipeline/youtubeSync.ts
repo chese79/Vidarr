@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from './normalize.js';
 import { listChannelVideos } from '../providers/youtube/ytdlp.js';
 import { grabYoutubeVideo } from './grab.js';
@@ -85,9 +85,7 @@ export async function pollAndGrabYoutubeSource(
       await grabYoutubeVideo(video.id);
       grabbed++;
     } catch (err) {
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: 'youtube-poll', message: (err as Error).message },
-      });
+      await logActivity('warn', 'youtube-poll', err);
     }
   }
 

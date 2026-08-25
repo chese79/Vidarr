@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { CreateArtistSchema, UpdateArtistSchema } from '@vidarr/shared-types';
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { sortNameFor } from '../pipeline/normalize.js';
 import { refreshArtistMetadata } from '../pipeline/metadataRefresh.js';
 
@@ -50,17 +50,17 @@ export async function artistRoutes(app: FastifyInstance) {
     // Turning monitoring on (re-)establishes the artist's full video list from
     // IMVDb immediately, rather than waiting for the next scheduled refresh.
     let videosAdded: number | undefined;
+    let metadataRefreshError: string | undefined;
     if (body.monitored === true && !before.monitored && updated.imvdbArtistId) {
       try {
         videosAdded = (await refreshArtistMetadata(id)).videosAdded;
       } catch (err) {
-        await prisma.activityLog.create({
-          data: { level: 'warn', source: 'metadata-refresh', message: (err as Error).message },
-        });
+        metadataRefreshError = (err as Error).message;
+        await logActivity('warn', 'metadata-refresh:manual', err);
       }
     }
 
-    return { ...updated, videosAdded };
+    return { ...updated, videosAdded, metadataRefreshError };
   });
 
   app.delete('/api/v1/artist/:id', async (req, reply) => {

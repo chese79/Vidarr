@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { CreateIndexerSchema } from '@vidarr/shared-types';
+import { CreateIndexerSchema, UpdateIndexerSchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { searchIndexer } from '../providers/indexer/torznab.js';
 
@@ -27,10 +27,14 @@ export async function indexerRoutes(app: FastifyInstance) {
 
   app.put('/api/v1/indexer/:id', async (req) => {
     const id = Number((req.params as { id: string }).id);
-    const body = req.body as Partial<{ categories: number[]; enabled: boolean; priority: number }>;
+    const body = UpdateIndexerSchema.parse(req.body);
     return prisma.indexer.update({
       where: { id },
       data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.implementation !== undefined && { implementation: body.implementation }),
+        ...(body.baseUrl !== undefined && { baseUrl: body.baseUrl }),
+        ...(body.apiKey !== undefined && { apiKey: body.apiKey }),
         ...(body.categories !== undefined && { categories: JSON.stringify(body.categories) }),
         ...(body.enabled !== undefined && { enabled: body.enabled }),
         ...(body.priority !== undefined && { priority: body.priority }),

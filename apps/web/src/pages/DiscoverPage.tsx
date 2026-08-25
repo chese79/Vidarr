@@ -30,11 +30,17 @@ export default function DiscoverPage() {
   });
 
   const add = useMutation({
-    mutationFn: ({ id }: { id: number }) =>
-      api.recommendations.add(id, {
-        rootFolderId: rootFolders.data![0].id,
-        qualityProfileId: qualityProfiles.data![0].id,
-      }),
+    mutationFn: ({ id }: { id: number }) => {
+      const rootFolder = rootFolders.data?.[0];
+      const qualityProfile = qualityProfiles.data?.[0];
+      if (!rootFolder || !qualityProfile) {
+        throw new Error('Add a root folder and a quality profile first.');
+      }
+      return api.recommendations.add(id, {
+        rootFolderId: rootFolder.id,
+        qualityProfileId: qualityProfile.id,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recommendations'] });
       queryClient.invalidateQueries({ queryKey: ['artists'] });

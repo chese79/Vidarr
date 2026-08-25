@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { downloadVideo } from '../providers/youtube/ytdlp.js';
 import { getDownloadClientProvider } from '../providers/downloadclient/index.js';
 import { importDownloadedFile, type ImportResult } from './import.js';
@@ -144,9 +144,7 @@ export async function refreshQueue(): Promise<{ completed: number; failed: numbe
     } catch (err) {
       // getStatus() itself failed (e.g. transient network error) — leave the
       // item as-is so the next monitor pass retries, rather than failing it.
-      await prisma.activityLog.create({
-        data: { level: 'error', source: 'queue', message: (err as Error).message },
-      });
+      await logActivity('warn', 'download-queue', err);
     }
   }
 

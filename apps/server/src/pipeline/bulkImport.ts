@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { listPlaylistVideos } from '../providers/youtube/ytdlp.js';
 import { normalizeTitle, squash, sortNameFor } from './normalize.js';
 
@@ -147,9 +147,7 @@ export async function commitYoutubePlaylistImport(
         // artistId+normalizedTitle or youtubeVideoId collision — same video
         // already tracked for this artist. Not an error worth surfacing.
         skipped++;
-        await prisma.activityLog.create({
-          data: { level: 'info', source: 'playlist-import', message: (err as Error).message },
-        });
+        await logActivity('info', 'playlist-import', err);
       }
     }
   }

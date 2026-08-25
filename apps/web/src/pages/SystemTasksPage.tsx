@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -10,7 +9,6 @@ function formatInterval(ms: number): string {
 
 export default function SystemTasksPage() {
   const queryClient = useQueryClient();
-  const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
   const tasks = useQuery({
     queryKey: ['systemTasks'],
     queryFn: api.system.tasks,
@@ -22,15 +20,9 @@ export default function SystemTasksPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['systemTasks'] }),
   });
 
-  async function handleBackfill() {
-    setBackfillStatus('Running…');
-    try {
-      const result = await api.system.regenerateLibraryMetadata();
-      setBackfillStatus(`Wrote ${result.written}, failed ${result.failed}`);
-    } catch (err) {
-      setBackfillStatus(`Failed: ${(err as Error).message}`);
-    }
-  }
+  const backfill = useMutation({
+    mutationFn: api.system.regenerateLibraryMetadata,
+  });
 
   return (
     <div>
@@ -40,12 +32,15 @@ export default function SystemTasksPage() {
 
       <div className="card">
         <div className="form-row" style={{ alignItems: 'center', marginBottom: 0 }}>
-          <button className="secondary" onClick={handleBackfill}>
-            Regenerate library metadata files
+          <button className="secondary" onClick={() => backfill.mutate()} disabled={backfill.isPending}>
+            {backfill.isPending ? 'Running…' : 'Regenerate library metadata files'}
           </button>
           <span className="empty-state" style={{ padding: 0 }}>
-            {backfillStatus ??
-              'Writes/updates the .nfo + thumbnail sidecar for every already-downloaded video (Plex/Jellyfin convention).'}
+            {backfill.isError
+              ? `Failed: ${(backfill.error as Error).message}`
+              : backfill.data
+                ? `Wrote ${backfill.data.written}, failed ${backfill.data.failed}`
+                : 'Writes/updates the .nfo + thumbnail sidecar for every already-downloaded video (Plex/Jellyfin convention).'}
           </span>
         </div>
       </div>

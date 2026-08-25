@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from './normalize.js';
 import { getArtistVideos } from '../providers/metadata/imvdb.js';
 
@@ -41,9 +41,7 @@ export async function refreshArtistMetadata(artistId: number): Promise<{ videosA
       });
       videosAdded++;
     } catch (err) {
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: 'metadata-refresh', message: (err as Error).message },
-      });
+      await logActivity('warn', 'metadata-refresh:video', err);
     }
   }
 
@@ -62,9 +60,7 @@ export async function refreshImvdbMetadata(): Promise<{ artistsChecked: number; 
       const result = await refreshArtistMetadata(artist.id);
       videosAdded += result.videosAdded;
     } catch (err) {
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: 'metadata-refresh', message: (err as Error).message },
-      });
+      await logActivity('warn', 'metadata-refresh:artist', err);
     }
   }
 

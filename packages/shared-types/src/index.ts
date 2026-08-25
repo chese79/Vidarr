@@ -41,6 +41,7 @@ export const RootFolderSchema = z.object({
   path: z.string().min(1),
   freeSpaceBytes: z.number().int().nullable(),
   accessible: z.boolean(),
+  lastCheckedAt: z.string().nullable(),
 });
 export type RootFolder = z.infer<typeof RootFolderSchema>;
 
@@ -201,6 +202,7 @@ export type UpdateRecommendationProviderConfig = z.infer<
 export const RecommendationSourceHitSchema = z.object({
   id: z.number().int(),
   source: z.enum(['library', 'lastfm', 'spotify', 'musicbrainz']),
+  sourceRef: z.string().nullable(),
   seedArtistName: z.string(),
   score: z.number(),
   reason: z.string(),
@@ -222,6 +224,12 @@ export const RecommendationRefreshResultSchema = z.object({
   newRecommendations: z.number().int(),
 });
 export type RecommendationRefreshResult = z.infer<typeof RecommendationRefreshResultSchema>;
+
+export const AddRecommendationBodySchema = z.object({
+  rootFolderId: z.number().int(),
+  qualityProfileId: z.number().int(),
+});
+export type AddRecommendationBody = z.infer<typeof AddRecommendationBodySchema>;
 
 // --- IMVDb metadata (M2) ---
 
@@ -307,6 +315,9 @@ export const CreateIndexerSchema = z.object({
 });
 export type CreateIndexer = z.infer<typeof CreateIndexerSchema>;
 
+export const UpdateIndexerSchema = CreateIndexerSchema.partial();
+export type UpdateIndexer = z.infer<typeof UpdateIndexerSchema>;
+
 export const DownloadClientImplementation = z.enum(['qBittorrent', 'SABnzbd']);
 export type DownloadClientImplementation = z.infer<typeof DownloadClientImplementation>;
 
@@ -336,10 +347,11 @@ export const CreateDownloadClientSchema = z.object({
 });
 export type CreateDownloadClient = z.infer<typeof CreateDownloadClientSchema>;
 
-export const ConnectionTestResultSchema = z.object({
-  ok: z.boolean(),
-  message: z.string().optional(),
-});
+// Identical shape to LibraryConnectorTestResultSchema — kept as a separate
+// export name since Indexer/DownloadClient test-connection responses are a
+// conceptually distinct resource from library connectors, but there's no
+// need for two independent schema definitions of the same {ok, message?}.
+export const ConnectionTestResultSchema = LibraryConnectorTestResultSchema;
 export type ConnectionTestResult = z.infer<typeof ConnectionTestResultSchema>;
 
 export const IndexerSearchResultSchema = z.object({
@@ -491,6 +503,18 @@ export const ImportArtistGroupSchema = z.object({
   videos: z.array(ImportVideoSelectionSchema),
 });
 export type ImportArtistGroup = z.infer<typeof ImportArtistGroupSchema>;
+
+export const PreviewYoutubePlaylistBodySchema = z.object({
+  url: z.string().min(1),
+});
+export type PreviewYoutubePlaylistBody = z.infer<typeof PreviewYoutubePlaylistBodySchema>;
+
+export const CommitYoutubePlaylistBodySchema = z.object({
+  groups: z.array(ImportArtistGroupSchema),
+  rootFolderId: z.number().int(),
+  qualityProfileId: z.number().int(),
+});
+export type CommitYoutubePlaylistBody = z.infer<typeof CommitYoutubePlaylistBodySchema>;
 
 export const ImportCommitResultSchema = z.object({
   artistsCreated: z.number().int(),

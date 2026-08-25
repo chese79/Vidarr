@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import VideoThumb from '../components/VideoThumb';
 import type { YoutubeSourceType, IndexerSearchResult, MusicVideo } from '@vidarr/shared-types';
 
 function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [results, setResults] = useState<IndexerSearchResult[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [grabbing, setGrabbing] = useState<number | null>(null);
+  // Keyed by downloadUrl (the release's real identity) rather than array
+  // index, so grab state stays attached to the right row if results ever
+  // re-sort.
+  const [grabbing, setGrabbing] = useState<string | null>(null);
   const [grabMessage, setGrabMessage] = useState<string | null>(null);
 
   const downloadClients = useQuery({
@@ -17,17 +18,14 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
     queryFn: api.downloadClients.list,
   });
 
-  useEffect(() => {
-    api.search
-      .forVideo(video.id)
-      .then(setResults)
-      .catch((err) => setError((err as Error).message))
-      .finally(() => setLoading(false));
-  }, [video.id]);
+  const results = useQuery({
+    queryKey: ['search', video.id],
+    queryFn: () => api.search.forVideo(video.id),
+  });
 
-  async function handleGrab(result: IndexerSearchResult, index: number) {
+  async function handleGrab(result: IndexerSearchResult) {
     if (!downloadClients.data?.length) return;
-    setGrabbing(index);
+    setGrabbing(result.downloadUrl);
     setGrabMessage(null);
     const outcome = await api.search.grabRelease(video.id, {
       downloadClientId: downloadClients.data[0].id,
@@ -51,11 +49,11 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
       {!downloadClients.data?.length && (
         <p className="empty-state">Add a download client before grabbing a release.</p>
       )}
-      {loading && <p className="empty-state">Searching…</p>}
-      {error && <p className="empty-state">{error}</p>}
+      {results.isLoading && <p className="empty-state">Searching…</p>}
+      {results.isError && <p className="empty-state">{(results.error as Error).message}</p>}
       {grabMessage && <p className="empty-state">{grabMessage}</p>}
 
-      {results?.length ? (
+      {results.data?.length ? (
         <table>
           <thead>
             <tr>
@@ -68,8 +66,8 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
             </tr>
           </thead>
           <tbody>
-            {results.map((r, i) => (
-              <tr key={i}>
+            {results.data.map((r) => (
+              <tr key={r.downloadUrl}>
                 <td>{r.title}</td>
                 <td>{r.indexerName}</td>
                 <td>{r.quality}</td>
@@ -77,10 +75,10 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
                 <td>{r.seeders ?? '—'}</td>
                 <td>
                   <button
-                    disabled={!downloadClients.data?.length || grabbing === i}
-                    onClick={() => handleGrab(r, i)}
+                    disabled={!downloadClients.data?.length || grabbing === r.downloadUrl}
+                    onClick={() => handleGrab(r)}
                   >
-                    {grabbing === i ? 'Grabbing…' : 'Grab'}
+                    {grabbing === r.downloadUrl ? 'Grabbing…' : 'Grab'}
                   </button>
                 </td>
               </tr>
@@ -88,7 +86,7 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
           </tbody>
         </table>
       ) : (
-        !loading && !error && <p className="empty-state">No results.</p>
+        !results.isLoading && !results.isError && <p className="empty-state">No results.</p>
       )}
     </div>
   );
@@ -224,9 +222,13 @@ export default function ArtistDetailPage() {
     mutationFn: (monitored: boolean) => api.artists.update(artistId, { monitored }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
-      setMonitorMessage(
-        result.videosAdded !== undefined ? `${result.videosAdded} video(s) added from IMVDb` : null,
-      );
+      if (result.metadataRefreshError) {
+        setMonitorMessage(`Video list refresh failed: ${result.metadataRefreshError}`);
+      } else {
+        setMonitorMessage(
+          result.videosAdded !== undefined ? `${result.videosAdded} video(s) added from IMVDb` : null,
+        );
+      }
     },
   });
 
@@ -353,13 +355,7 @@ export default function ArtistDetailPage() {
                   onChange={() => toggleOne(mv.id)}
                 />
               )}
-              <div className="video-thumb">
-                {mv.thumbnailUrl ? (
-                  <img src={mv.thumbnailUrl} alt="" />
-                ) : (
-                  <div className="video-thumb-placeholder" />
-                )}
-              </div>
+              <VideoThumb url={mv.thumbnailUrl} />
               <div className="video-info">
                 <div>
                   <strong>{mv.title}</strong>{' '}

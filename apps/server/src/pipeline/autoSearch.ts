@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { searchAllIndexers } from './search.js';
 import { grabFromIndexer, grabYoutubeVideo } from './grab.js';
 import { findYoutubeMatch } from './youtubeMatch.js';
@@ -57,9 +57,7 @@ export async function autoSearchAndGrab(
           reason: `Grabbed via IMVDb-sourced YouTube link (${musicVideo.title})`,
         };
       } catch (err) {
-        await prisma.activityLog.create({
-          data: { level: 'warn', source: 'auto-search-youtube', message: (err as Error).message },
-        });
+        await logActivity('warn', 'auto-search-youtube', err);
         // fall through to heuristic search / indexer search below
       }
     }
@@ -80,9 +78,7 @@ export async function autoSearchAndGrab(
         };
       }
     } catch (err) {
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: 'auto-search-youtube', message: (err as Error).message },
-      });
+      await logActivity('warn', 'auto-search-youtube', err);
       // fall through to indexer search below
     }
   }
@@ -126,9 +122,7 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
       else skipped++;
     } catch (err) {
       skipped++;
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: 'backlog-search', message: (err as Error).message },
-      });
+      await logActivity('warn', 'backlog-search', err);
     }
   }
   return { grabbed, skipped };
@@ -174,9 +168,7 @@ export async function runQualityUpgradeSearch(): Promise<{ upgraded: number; ski
       else skipped++;
     } catch (err) {
       skipped++;
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: 'quality-upgrade', message: (err as Error).message },
-      });
+      await logActivity('warn', 'quality-upgrade', err);
     }
   }
 

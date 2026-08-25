@@ -1,4 +1,4 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { searchIndexer } from '../providers/indexer/torznab.js';
 import type { IndexerSearchResult } from '../providers/indexer/types.js';
 
@@ -10,9 +10,7 @@ export async function searchAllIndexers(query: string): Promise<IndexerSearchRes
     try {
       results.push(...(await searchIndexer(indexer, query)));
     } catch (err) {
-      await prisma.activityLog.create({
-        data: { level: 'warn', source: `indexer:${indexer.name}`, message: (err as Error).message },
-      });
+      await logActivity('warn', `indexer:${indexer.name}`, err);
     }
   }
 

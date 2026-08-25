@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import VideoThumb from '../components/VideoThumb';
 
 function PlaylistCard({ playlistId }: { playlistId: number }) {
   const queryClient = useQueryClient();
@@ -71,13 +72,7 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
         <div className="video-list">
           {playlist.items.map((item) => (
             <div className="video-row" key={item.id}>
-              <div className="video-thumb">
-                {item.musicVideo.thumbnailUrl ? (
-                  <img src={item.musicVideo.thumbnailUrl} alt="" />
-                ) : (
-                  <div className="video-thumb-placeholder" />
-                )}
-              </div>
+              <VideoThumb url={item.musicVideo.thumbnailUrl} />
               <div className="video-info">
                 <strong>{item.musicVideo.title}</strong>
                 <span className="empty-state" style={{ padding: 0 }}>

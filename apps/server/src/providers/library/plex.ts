@@ -1,5 +1,6 @@
 import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
+import { createAuthedFetcher } from './util.js';
 import type {
   FetchedLibraryArtist,
   LibraryConnectorProvider,
@@ -9,35 +10,7 @@ import type {
   PlaylistPushResult,
 } from './types.js';
 
-function baseUrl(host: string): string {
-  return host.replace(/\/+$/, '');
-}
-
-async function plexGet(config: LibraryConnector, path: string): Promise<any> {
-  const res = await fetch(`${baseUrl(config.host)}${path}`, {
-    headers: {
-      Accept: 'application/json',
-      'X-Plex-Token': config.authToken ?? '',
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Plex request failed: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
-}
-
-async function plexSend(config: LibraryConnector, method: string, path: string): Promise<any> {
-  const res = await fetch(`${baseUrl(config.host)}${path}`, {
-    method,
-    headers: { Accept: 'application/json', 'X-Plex-Token': config.authToken ?? '' },
-  });
-  if (!res.ok) {
-    throw new Error(`Plex request failed: ${res.status} ${res.statusText}`);
-  }
-  if (res.status === 204) return null;
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-}
+const { get: plexGet, send: plexSend } = createAuthedFetcher('Plex', 'X-Plex-Token');
 
 // Plex has no first-class "music video" item type — vidarr's video library is
 // whatever Plex section (Movies / Home Videos / Other Videos) the user points

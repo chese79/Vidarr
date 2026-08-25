@@ -121,20 +121,21 @@ export default function SettingsPage() {
         }}
       >
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-          <label>IMVDb API key</label>
-          <input value={imvdbApiKey} onChange={(e) => setImvdbApiKey(e.target.value)} />
+          <label htmlFor="imvdb-api-key">IMVDb API key</label>
+          <input id="imvdb-api-key" value={imvdbApiKey} onChange={(e) => setImvdbApiKey(e.target.value)} />
         </div>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-          <label>Naming format</label>
-          <input value={namingFormat} onChange={(e) => setNamingFormat(e.target.value)} />
+          <label htmlFor="naming-format">Naming format</label>
+          <input id="naming-format" value={namingFormat} onChange={(e) => setNamingFormat(e.target.value)} />
           <span className="empty-state" style={{ padding: '4px 0 0' }}>
             Preview: {renderNamingFormat(namingFormat, NAMING_PREVIEW_TOKENS)}
             {'.mp4'}
           </span>
         </div>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-          <label>Transfer mode</label>
+          <label htmlFor="transfer-mode">Transfer mode</label>
           <select
+            id="transfer-mode"
             value={transferMode}
             onChange={(e) => setTransferMode(e.target.value as TransferMode)}
           >
@@ -144,8 +145,9 @@ export default function SettingsPage() {
           </select>
         </div>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-          <label>Minimum free space (MB)</label>
+          <label htmlFor="min-free-space">Minimum free space (MB)</label>
           <input
+            id="min-free-space"
             type="number"
             value={minFreeSpaceMb}
             onChange={(e) => setMinFreeSpaceMb(Number(e.target.value))}
