@@ -95,12 +95,20 @@ npm run dev:web      # http://localhost:5173 (proxies /api to the server)
 ```
 
 The server needs `yt-dlp` and `ffmpeg`/`ffprobe` on `PATH` for the YouTube pipeline and content
-validation. If they're installed somewhere not on `PATH` (common on Windows after a winget/pip
-install), point the server at them explicitly instead of relying on `PATH`:
+validation. On Linux, `apt`/`pip` installs normally land on `PATH` already, so **no configuration
+is needed** — same for Docker, which bundles both into the image. On Windows, a winget/pip install
+often lands somewhere not on `PATH`; if so, point the server at them explicitly instead:
 
 ```bash
+# Linux, if yt-dlp/ffmpeg aren't already on PATH:
+YTDLP_PATH=/usr/local/bin/yt-dlp FFMPEG_PATH=/usr/bin/ffmpeg npm run dev:server
+
+# Windows:
 YTDLP_PATH="C:\path\to\yt-dlp.exe" FFMPEG_PATH="C:\path\to\ffmpeg.exe" npm run dev:server
 ```
+
+`ffprobe` is assumed to live alongside `ffmpeg` (same directory) unless overridden separately via
+`FFPROBE_PATH` — true for both a standard apt/winget install and the Docker image.
 
 ### Configuration (Settings page + connector/indexer pages, not env vars)
 
