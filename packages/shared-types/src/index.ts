@@ -350,6 +350,12 @@ export const QueueRefreshResultSchema = z.object({
 });
 export type QueueRefreshResult = z.infer<typeof QueueRefreshResultSchema>;
 
+export const BulkSearchResultSchema = z.object({
+  grabbed: z.number().int(),
+  skipped: z.number().int(),
+});
+export type BulkSearchResult = z.infer<typeof BulkSearchResultSchema>;
+
 // --- Scheduler / History / Calendar (M3) ---
 
 export const ScheduledTaskSchema = z.object({

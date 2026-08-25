@@ -34,6 +34,8 @@ import type {
   ScheduledTask,
   HistoryEntry,
   CalendarItem,
+  UpdateArtist,
+  BulkSearchResult,
 } from '@vidarr/shared-types';
 
 export interface QueueItem {
@@ -70,6 +72,11 @@ export const api = {
     get: (id: number) => request<Artist & { musicVideos: MusicVideo[] }>(`/artist/${id}`),
     create: (data: CreateArtist) =>
       request<Artist>('/artist', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: UpdateArtist) =>
+      request<Artist & { videosAdded?: number }>(`/artist/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
     remove: (id: number) => request<void>(`/artist/${id}`, { method: 'DELETE' }),
   },
   musicVideos: {
@@ -79,6 +86,11 @@ export const api = {
       request<MusicVideo>('/musicvideo', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/musicvideo/${id}`, { method: 'DELETE' }),
     grab: (id: number) => request<GrabResult>(`/musicvideo/${id}/grab`, { method: 'POST' }),
+    bulkSearch: (ids: number[]) =>
+      request<BulkSearchResult>('/musicvideo/bulk-search', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
   },
   qualityProfiles: {
     list: () => request<QualityProfile[]>('/qualityprofile'),

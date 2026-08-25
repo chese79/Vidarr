@@ -210,10 +210,24 @@ export default function ArtistDetailPage() {
   const [releaseYear, setReleaseYear] = useState('');
   const [grabStatus, setGrabStatus] = useState<Record<number, string>>({});
   const [searchingVideo, setSearchingVideo] = useState<MusicVideo | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [monitorMessage, setMonitorMessage] = useState<string | null>(null);
+  const [bulkSearching, setBulkSearching] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   const artist = useQuery({
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
+  });
+
+  const updateArtist = useMutation({
+    mutationFn: (monitored: boolean) => api.artists.update(artistId, { monitored }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+      setMonitorMessage(
+        result.videosAdded !== undefined ? `${result.videosAdded} video(s) added from IMVDb` : null,
+      );
+    },
   });
 
   const createVideo = useMutation({
@@ -250,12 +264,51 @@ export default function ArtistDetailPage() {
   if (artist.isLoading) return <p>Loading…</p>;
   if (!artist.data) return <p>Artist not found.</p>;
 
+  const wantedVideos = artist.data.musicVideos.filter((mv) => !mv.hasFile);
+  const allSelected = wantedVideos.length > 0 && wantedVideos.every((mv) => selected.has(mv.id));
+
+  function toggleSelectAll() {
+    setSelected(allSelected ? new Set() : new Set(wantedVideos.map((mv) => mv.id)));
+  }
+
+  function toggleOne(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleBulkSearch() {
+    setBulkSearching(true);
+    setBulkMessage(null);
+    const result = await api.musicVideos.bulkSearch([...selected]);
+    setBulkMessage(`${result.grabbed} grabbed, ${result.skipped} skipped`);
+    setSelected(new Set());
+    setBulkSearching(false);
+    queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    queryClient.invalidateQueries({ queryKey: ['queue'] });
+  }
+
   return (
     <div>
       <div className="page-header">
         <h2>{artist.data.name}</h2>
-        <button onClick={() => setShowAdd((v) => !v)}>Add Video</button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
+            <input
+              type="checkbox"
+              checked={artist.data.monitored}
+              onChange={(e) => updateArtist.mutate(e.target.checked)}
+            />
+            Monitored
+          </label>
+          <button onClick={() => setShowAdd((v) => !v)}>Add Video</button>
+        </div>
       </div>
+
+      {monitorMessage && <p className="empty-state">{monitorMessage}</p>}
 
       {showAdd && (
         <form className="card" onSubmit={handleSubmit}>
@@ -277,10 +330,23 @@ export default function ArtistDetailPage() {
         </form>
       )}
 
+      {wantedVideos.length > 0 && (
+        <div className="form-row" style={{ alignItems: 'center' }}>
+          <button className="secondary" onClick={toggleSelectAll}>
+            {allSelected ? 'Deselect All' : 'Select All'}
+          </button>
+          <button disabled={!selected.size || bulkSearching} onClick={handleBulkSearch}>
+            {bulkSearching ? 'Searching…' : `Search Selected (${selected.size})`}
+          </button>
+          {bulkMessage && <span className="empty-state">{bulkMessage}</span>}
+        </div>
+      )}
+
       {artist.data.musicVideos.length ? (
         <table>
           <thead>
             <tr>
+              <th></th>
               <th>Title</th>
               <th>Year</th>
               <th>Monitored</th>
@@ -291,6 +357,15 @@ export default function ArtistDetailPage() {
           <tbody>
             {artist.data.musicVideos.map((mv) => (
               <tr key={mv.id}>
+                <td>
+                  {!mv.hasFile && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(mv.id)}
+                      onChange={() => toggleOne(mv.id)}
+                    />
+                  )}
+                </td>
                 <td>{mv.title}</td>
                 <td>{mv.releaseYear ?? '—'}</td>
                 <td>{mv.monitored ? 'Yes' : 'No'}</td>

@@ -4,6 +4,7 @@ import { prisma } from '../db/client.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
 import { grabYoutubeVideo, grabFromIndexer } from '../pipeline/grab.js';
 import { searchAllIndexers } from '../pipeline/search.js';
+import { autoSearchAndGrab } from '../pipeline/autoSearch.js';
 
 export async function musicVideoRoutes(app: FastifyInstance) {
   app.get('/api/v1/musicvideo', async (req) => {
@@ -78,5 +79,27 @@ export async function musicVideoRoutes(app: FastifyInstance) {
       reply.code(502);
       return { ok: false, error: (err as Error).message };
     }
+  });
+
+  // Bulk "search selected" from the Artist Detail page's video list — auto-picks
+  // the best allowed-quality result per video and grabs it, same logic the
+  // scheduled backlog search uses, just run on-demand for a chosen subset.
+  app.post('/api/v1/musicvideo/bulk-search', async (req) => {
+    const body = req.body as { ids: number[] };
+    let grabbed = 0;
+    let skipped = 0;
+    for (const id of body.ids) {
+      try {
+        const outcome = await autoSearchAndGrab(id);
+        if (outcome.grabbed) grabbed++;
+        else skipped++;
+      } catch (err) {
+        skipped++;
+        await prisma.activityLog.create({
+          data: { level: 'warn', source: 'bulk-search', message: (err as Error).message },
+        });
+      }
+    }
+    return { grabbed, skipped };
   });
 }
