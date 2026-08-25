@@ -90,7 +90,7 @@ npm install
 cp apps/server/.env.example apps/server/.env
 npm run prisma:migrate
 npm run --workspace apps/server prisma:seed
-npm run dev:server   # http://localhost:7878
+npm run dev:server   # http://localhost:3434
 npm run dev:web      # http://localhost:5173 (proxies /api to the server)
 ```
 
@@ -129,7 +129,7 @@ vars — matching Sonarr/Radarr's own model:
 docker compose up --build
 ```
 
-The app is served at `http://localhost:7878`. `yt-dlp` and `ffmpeg` are installed into the image at
+The app is served at `http://localhost:3434`. `yt-dlp` and `ffmpeg` are installed into the image at
 build time, so no host setup is needed. `/config` (a named volume) holds the SQLite database,
 `/media` (mounted from `./media` by default) is where organized files get written — point your
 Plex/Jellyfin media-video library at that same folder on the host.

@@ -41,12 +41,12 @@ COPY --from=build /app/apps/server/prisma apps/server/prisma
 COPY --from=build /app/apps/web/dist apps/web/dist
 
 ENV NODE_ENV=production
-ENV PORT=7878
+ENV PORT=3434
 ENV DATABASE_URL="file:/config/vidarr.db"
 ENV WEB_DIST_PATH=/app/apps/web/dist
 
 WORKDIR /app/apps/server
-EXPOSE 7878
+EXPOSE 3434
 VOLUME ["/config", "/media"]
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

@@ -3,7 +3,7 @@ services:
     build: .
     container_name: vidarr
     ports:
-      - "7878:7878"
+      - "3434:3434"
     volumes:
       - vidarr-config:/config
       - ./media:/media
