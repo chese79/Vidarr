@@ -19,10 +19,9 @@
   "dependencies": {
     "@prisma/client": "^5.20.0",
     "@vidarr/shared-types": "*",
-    "fastify": "^4.28.1",
-    "@fastify/cors": "^9.0.1",
-    "@fastify/static": "^7.0.4",
-    "fast-xml-parser": "^4.5.0",
+    "fastify": "^5.12.1",
+    "@fastify/static": "^10.1.3",
+    "fast-xml-parser": "^5.11.0",
     "prisma": "^5.20.0",
     "zod": "^3.23.8"
   },

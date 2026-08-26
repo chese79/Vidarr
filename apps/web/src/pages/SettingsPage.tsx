@@ -1,8 +1,42 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/client';
+import { api, setStoredApiKey } from '../api/client';
 import { renderNamingFormat } from '@vidarr/shared-types';
 import type { RecommendationProviderConfig, TransferMode } from '@vidarr/shared-types';
+
+function SecuritySection({ apiKey }: { apiKey: string | null }) {
+  const queryClient = useQueryClient();
+  const [revealed, setRevealed] = useState(false);
+
+  const regenerate = useMutation({
+    mutationFn: api.settings.regenerateApiKey,
+    onSuccess: (result) => {
+      // Keep this browser's own session working — it just proved it already
+      // held the old valid key, so it's the one authorized to rotate it.
+      if (result.apiKey) setStoredApiKey(result.apiKey);
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Security</h3>
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <input readOnly type={revealed ? 'text' : 'password'} value={apiKey ?? ''} style={{ minWidth: 320 }} />
+        <button type="button" className="secondary" onClick={() => setRevealed((v) => !v)}>
+          {revealed ? 'Hide' : 'Show'}
+        </button>
+        <button type="button" className="secondary" onClick={() => regenerate.mutate()}>
+          {regenerate.isPending ? 'Regenerating…' : 'Regenerate'}
+        </button>
+      </div>
+      <p className="empty-state" style={{ padding: '6px 0 0' }}>
+        Required on every request (sent as the <code>X-Api-Key</code> header). Regenerating
+        immediately signs out every other browser/session using the old key.
+      </p>
+    </div>
+  );
+}
 
 const NAMING_PREVIEW_TOKENS = {
   artistName: 'Sample Artist',
@@ -156,6 +190,7 @@ export default function SettingsPage() {
         <button type="submit">Save</button>
       </form>
 
+      <SecuritySection apiKey={settings.data?.apiKey ?? null} />
       <RecommendationProvidersSection />
     </div>
   );

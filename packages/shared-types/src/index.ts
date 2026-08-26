@@ -115,10 +115,19 @@ export const SettingsSchema = z.object({
   transferMode: TransferMode,
   minFreeSpaceMb: z.number().int(),
   imvdbApiKey: z.string().nullable(),
+  // vidarr's own API key — read-only via this schema (UpdateSettingsSchema
+  // strips it, since it's Zod .partial()'d from this one); rotate it only
+  // via POST /config/regenerate-api-key.
+  apiKey: z.string().nullable(),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
-export const UpdateSettingsSchema = SettingsSchema.partial();
+// .omit even though SettingsSchema.partial() alone would already make apiKey
+// optional — explicit here so a general settings PUT can never carry a
+// client-supplied apiKey, regardless of how SettingsSchema's shape changes
+// later. Rotation only happens via POST /config/regenerate-api-key, which
+// always generates the value server-side.
+export const UpdateSettingsSchema = SettingsSchema.omit({ apiKey: true }).partial();
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>;
 
 // --- Library Connectors & Artist Recommendations (M2.5) ---

@@ -45,6 +45,16 @@ ENV PORT=3434
 ENV DATABASE_URL="file:/config/vidarr.db"
 ENV WEB_DIST_PATH=/app/apps/web/dist
 
+# Don't run as root — a fixed uid/gid (1000, a common non-root default) so a
+# named Docker volume's ownership is predictable. If you bind-mount ./media
+# from the host instead, make sure that host directory is writable by uid
+# 1000 (e.g. `chown -R 1000:1000 ./media`), since a bind mount keeps the
+# host's ownership rather than the image's.
+RUN groupadd -g 1000 vidarr && useradd -u 1000 -g vidarr -M -s /usr/sbin/nologin vidarr \
+  && mkdir -p /config /media \
+  && chown -R vidarr:vidarr /config /media /app
+
+USER vidarr
 WORKDIR /app/apps/server
 EXPOSE 3434
 VOLUME ["/config", "/media"]

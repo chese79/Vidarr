@@ -61,15 +61,35 @@ export interface QueueItem {
   musicVideo: { title: string; artist: { name: string } };
 }
 
+const API_KEY_STORAGE_KEY = 'vidarr_api_key';
+
+export function getStoredApiKey(): string | null {
+  return localStorage.getItem(API_KEY_STORAGE_KEY);
+}
+export function setStoredApiKey(key: string): void {
+  localStorage.setItem(API_KEY_STORAGE_KEY, key);
+}
+export function clearStoredApiKey(): void {
+  localStorage.removeItem(API_KEY_STORAGE_KEY);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Only declare a JSON content-type when there's actually a body — Fastify's
   // default JSON parser rejects Content-Type: application/json paired with an
   // empty body (FST_ERR_CTP_EMPTY_JSON_BODY), which every bodyless POST here
   // (test/sync/refresh/grab/run) would otherwise hit.
-  const res = await fetch(`/api/v1${path}`, {
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
-    ...init,
-  });
+  const headers: Record<string, string> = {};
+  if (init?.body) headers['Content-Type'] = 'application/json';
+  const apiKey = getStoredApiKey();
+  if (apiKey) headers['X-Api-Key'] = apiKey;
+
+  const res = await fetch(`/api/v1${path}`, { ...init, headers });
+  if (res.status === 401) {
+    clearStoredApiKey();
+    // Tells the ApiKeyGate to re-prompt without a full page reload.
+    window.dispatchEvent(new Event('vidarr:unauthorized'));
+    throw new Error('Unauthorized — check your API key.');
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Request failed: ${res.status}`);
@@ -132,6 +152,8 @@ export const api = {
     get: () => request<Settings>('/config'),
     update: (data: UpdateSettings) =>
       request<Settings>('/config', { method: 'PUT', body: JSON.stringify(data) }),
+    regenerateApiKey: () =>
+      request<Settings>('/config/regenerate-api-key', { method: 'POST' }),
   },
   libraryConnectors: {
     list: () => request<LibraryConnector[]>('/libraryconnector'),

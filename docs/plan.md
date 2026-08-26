@@ -269,6 +269,59 @@ deliberate scope choice to reuse the existing Playlist model and push-to-Plex/Je
   AND vs OR combining a passing and a failing filter, artist-id filter) — all produced exactly the
   expected match/no-match result, confirmed via the actual created PlaylistItem rows, then cleaned up.
 
+**Security review — no new features, hardening + real-CVE research**: researched actual published
+Sonarr/Radarr/Lidarr/Prowlarr security advisories (not assumed from memory) before auditing vidarr's
+own code, then fixed every real finding.
+- **No authentication (the headline finding)**: every `/api/v1/*` route was completely open —
+  combined with `host: '0.0.0.0'` and permissive CORS, anyone on the network, or any webpage the
+  user's browser visited, could read or change everything, including every stored third-party
+  credential. This was the original M1 plan ("single-user, API-key style auth, matches Sonarr/
+  Radarr's own model") that never actually got built. Fixed: `Settings.apiKey`, generated on first
+  boot and printed to the server console (same bootstrap approach Sonarr/Radarr use with
+  config.xml — there's no way to fetch a key you don't have through an API that requires it), a
+  global `onRequest` hook requiring it (constant-time compare) on every route except `/health`, a
+  `POST /config/regenerate-api-key` rotation action, and a web-side `ApiKeyGate` (prompts once,
+  persists in localStorage, re-prompts on any 401 via a `vidarr:unauthorized` window event) — see
+  `apps/server/src/pipeline/auth.ts` and `apps/web/src/components/ApiKeyGate.tsx`.
+- **Path traversal via Artist/MusicVideo name (CWE-22)** — same vulnerability *class* as Sonarr's
+  own [CVE-2026-30976](https://github.com/Sonarr/Sonarr/security/advisories/GHSA-h393-v5hm-6h8f),
+  though a file-*write* here rather than their file-*read*: `sanitizeForPath` stripped path
+  separators but not a segment that collapsed to exactly `.`/`..` — an Artist named literally `..`
+  (paired with the default naming format's bare `{Artist Name}` first segment) caused imported
+  files to land outside the configured root folder. Fixed in two independent layers: `sanitizeForPath`
+  now neutralizes bare `.`/`..`/empty segments, and `import.ts` separately verifies the resolved
+  destination is still inside the root folder before writing, on the theory that file placement is
+  a security boundary that shouldn't depend on a single upstream check being perfect.
+- **Vulnerable dependencies** (`npm audit`): `@fastify/static` had two real advisories in the exact
+  same class as the Sonarr path-traversal CVE above (confirmed live post-upgrade: a raw,
+  non-normalized `../../../../etc/passwd` request against the built SPA now throws @fastify/static's
+  own `forbiddenPathError` → 403, not a leak); `fastify` itself had an `X-Forwarded-Proto/Host`
+  spoofing issue (the same header-trust category as Sonarr's auth-bypass CVE, though vidarr's auth
+  hook never reads forwarded headers at all, so it wasn't independently exploitable here — fixed by
+  the upgrade regardless); `fast-xml-parser`'s CVE was in `XMLBuilder`, which vidarr never imports
+  (confirmed via grep before treating it as lower-priority); `react-router-dom`'s open-redirect CVE
+  needs an attacker-controlled redirect target, which vidarr's routing never has. Upgraded all four
+  plus `vite` (a dev-server-only advisory) anyway — `npm audit` went from 6 vulnerabilities (3
+  high) to 0. All were major-version bumps; verified via full rebuild + live smoke test of every
+  route category (SPA serving, SPA fallback, static assets, API auth) rather than just a green
+  build.
+- **Global error handler didn't respect a thrown error's own `statusCode`** — found while verifying
+  the @fastify/static upgrade actually worked: its real 403 was being flattened to a generic 500.
+  Fixed to surface any `< 500` statusCode a Fastify plugin sets, only defaulting to 500 (and
+  logging server-side) for genuinely unexpected errors.
+- **Docker container ran as root** — added a fixed-uid (1000) non-root user, `chown`'d `/config`
+  and `/media` before the `VOLUME` declarations so a named volume inherits correct ownership;
+  documented the one real wrinkle (a bind-mounted host directory keeps the host's own ownership,
+  so it needs a manual `chown` if it isn't already uid 1000).
+- **Removed the CORS registration entirely** rather than narrowing its origin list — the browser
+  never makes a cross-origin request to vidarr's API in any real deployment (Vite's dev-server
+  proxy in development, same-origin static serving in production), so a permissive CORS policy was
+  pure attack surface with no corresponding feature.
+- Confirmed clean, no fix needed: no raw SQL anywhere (Prisma parameterizes everything); every
+  `child_process.spawn` call (yt-dlp, ffmpeg, ffprobe) uses an args array with no `shell: true`, so
+  there's no command-injection surface from artist/title strings; no `dangerouslySetInnerHTML` or
+  `eval`/`new Function` anywhere in the web app.
+
 ## Verification
 
 - After M1: `docker compose up` boots the app; can create an Artist/MusicVideo/QualityProfile/RootFolder manually through the UI and see them persisted (`docker compose down && up` retains data via the SQLite volume).

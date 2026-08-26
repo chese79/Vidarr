@@ -111,6 +111,24 @@ YTDLP_PATH="C:\path\to\yt-dlp.exe" FFMPEG_PATH="C:\path\to\ffmpeg.exe" npm run d
 `ffprobe` is assumed to live alongside `ffmpeg` (same directory) unless overridden separately via
 `FFPROBE_PATH` — true for both a standard apt/winget install and the Docker image.
 
+### First run: the API key
+
+Every `/api/v1/*` request requires an API key (sent as the `X-Api-Key` header) — vidarr generates
+one automatically the first time the server boots and **prints it to the server's own console
+log**, e.g.:
+
+```
+[vidarr] Generated a new API key (required on every request — see Settings once logged in to view/rotate it):
+
+    <64 hex characters>
+```
+
+Copy that value into the web UI's key prompt on first load (it's remembered in the browser after
+that). Once logged in, Settings → Security shows and can regenerate the key. There's no way to
+retrieve a forgotten key through the API itself (every route requires it) — read it back out of
+the `Settings` table, or just regenerate: `sqlite3 apps/server/dev.db "UPDATE Settings SET apiKey = NULL WHERE id = 1;"`
+and restart the server to have it generate a fresh one.
+
 ### Configuration (Settings page + connector/indexer pages, not env vars)
 
 Nearly everything is configured at runtime through the UI and stored in the database, not via env
@@ -133,4 +151,23 @@ docker compose up --build
 The app is served at `http://localhost:3434`. `yt-dlp` and `ffmpeg` are installed into the image at
 build time, so no host setup is needed. `/config` (a named volume) holds the SQLite database,
 `/media` (mounted from `./media` by default) is where organized files get written — point your
-Plex/Jellyfin media-video library at that same folder on the host.
+Plex/Jellyfin media-video library at that same folder on the host. The container runs as a
+non-root user (uid/gid 1000) — if you bind-mount a host directory for `/media` instead of using a
+named volume, make sure that host directory is writable by uid 1000
+(`sudo chown -R 1000:1000 ./media`). If you're upgrading an existing deployment created before this
+change, the named `/config` volume will still be root-owned from the previous root-run container —
+fix it once with `docker compose run --rm --user root vidarr chown -R 1000:1000 /config /media`
+before starting the updated image.
+
+## Security
+
+- Every `/api/v1/*` route requires an API key (see "First run" above) — there is no unauthenticated
+  access to any data or action.
+- **Don't expose vidarr directly to the internet.** Like Sonarr/Radarr/Lidarr, it's designed to be
+  reached over your own network, a VPN, or Tailscale — not port-forwarded. It stores plaintext
+  credentials for every indexer, download client, and library connector you configure, and (like
+  the rest of the *arr family) has no rate limiting or intrusion detection of its own.
+- If you do put it behind a reverse proxy, terminate TLS there and don't strip/forward
+  `X-Forwarded-*` headers vidarr doesn't itself trust — it only checks the API key header, not
+  client IP or forwarded-host headers, so there's nothing proxy-related to misconfigure into an
+  auth bypass (the class of issue Sonarr's own [CVE-2026-30975](https://github.com/Sonarr/Sonarr/security/advisories/GHSA-h5qx-5hjf-7c9r) was).

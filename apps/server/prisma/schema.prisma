@@ -189,6 +189,7 @@ model Settings {
   transferMode   String  @default("hardlink") // "hardlink" | "copy" | "move"
   minFreeSpaceMb Int     @default(1024)
   imvdbApiKey    String?
+  apiKey         String? // vidarr's own API key — required on every /api/v1/* request except /health. Generated on first boot (see pipeline/auth.ts); matches Sonarr/Radarr's own single-user API-key model.
 }
 
 model LibraryConnector {

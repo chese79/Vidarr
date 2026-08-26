@@ -1,10 +1,12 @@
 import { existsSync } from 'node:fs';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
+import { prisma } from './db/client.js';
+import { ensureApiKey } from './pipeline/auth.js';
 import { artistRoutes } from './api/artist.js';
 import { musicVideoRoutes } from './api/musicvideo.js';
 import { qualityProfileRoutes } from './api/qualityprofile.js';
@@ -48,13 +50,53 @@ app.setErrorHandler((err, _req, reply) => {
     reply.code(404).send({ error: 'Not found' });
     return;
   }
+  // Fastify plugins set a real statusCode on errors they throw for a reason —
+  // e.g. @fastify/static's own path-traversal guard throws a 403 "Forbidden"
+  // for an escaping path, which should reach the client as 403, not a
+  // generic 500 that obscures what actually happened.
+  const isErrorWithStatus = err instanceof Error && 'statusCode' in err;
+  const statusCode = isErrorWithStatus && typeof err.statusCode === 'number' ? err.statusCode : 500;
+  if (isErrorWithStatus && statusCode < 500) {
+    reply.code(statusCode).send({ error: err.message || 'Error' });
+    return;
+  }
   app.log.error(err);
   reply.code(500).send({ error: 'InternalServerError' });
 });
 
-await app.register(cors, { origin: true });
+// No CORS registration: the browser only ever talks to whatever origin
+// served the page — Vite's dev-server proxy in development (see
+// apps/web/vite.config.ts), same-origin static serving in production (this
+// same Fastify instance, below). There is no legitimate cross-origin caller,
+// so a permissive CORS policy here would be pure attack surface, not a
+// feature.
 
 app.get('/api/v1/health', async () => ({ status: 'ok' }));
+
+// Every other /api/v1/* route requires vidarr's own API key (generated on
+// first boot — see pipeline/auth.ts). Without this, the app was fully
+// unauthenticated: anyone reaching it over the network, or any webpage the
+// user's browser visited, could read or change everything — including every
+// stored third-party credential (indexer/download-client/library-connector
+// keys and passwords). Constant-time comparison to avoid a timing
+// side-channel on the key itself.
+app.addHook('onRequest', async (req, reply) => {
+  if (!req.url.startsWith('/api/v1/') || req.url === '/api/v1/health') return;
+
+  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const expected = settings?.apiKey;
+  const provided = req.headers['x-api-key'];
+
+  const valid =
+    typeof expected === 'string' &&
+    typeof provided === 'string' &&
+    expected.length === provided.length &&
+    timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
+
+  if (!valid) {
+    reply.code(401).send({ error: 'Unauthorized' });
+  }
+});
 
 await app.register(artistRoutes);
 await app.register(musicVideoRoutes);
@@ -86,6 +128,8 @@ if (existsSync(webDistPath)) {
     reply.sendFile('index.html');
   });
 }
+
+await ensureApiKey();
 
 const port = Number(process.env.PORT ?? 3434);
 app.listen({ port, host: '0.0.0.0' }).catch((err) => {
