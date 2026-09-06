@@ -159,6 +159,10 @@ change, the named `/config` volume will still be root-owned from the previous ro
 fix it once with `docker compose run --rm --user root vidarr chown -R 1000:1000 /config /media`
 before starting the updated image.
 
+Running without Docker (a persistent native service on Linux via systemd, or on Windows via a
+service wrapper) is also documented — see [`docs/deployment.md`](docs/deployment.md) for every
+deployment path, including this one, in full step-by-step detail.
+
 ## Security
 
 - Every `/api/v1/*` route requires an API key (see "First run" above) — there is no unauthenticated

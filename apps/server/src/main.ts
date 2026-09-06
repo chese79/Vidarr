@@ -1,6 +1,8 @@
+import './loadEnv.js';
 import { existsSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { ZodError } from 'zod';
@@ -117,7 +119,11 @@ await app.register(calendarRoutes);
 await app.register(playlistRoutes);
 await app.register(bulkImportRoutes);
 
-const webDistPath = process.env.WEB_DIST_PATH ?? path.resolve(process.cwd(), '../web/dist');
+// Relative to this module's own location, not process.cwd() — so it
+// resolves correctly whether launched from apps/server (the normal case) or
+// from anywhere else (e.g. `node apps/server/dist/main.js` from a repo root).
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const webDistPath = process.env.WEB_DIST_PATH ?? path.resolve(moduleDir, '../../web/dist');
 if (existsSync(webDistPath)) {
   await app.register(fastifyStatic, { root: webDistPath });
   app.setNotFoundHandler((req, reply) => {
