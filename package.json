@@ -11,6 +11,7 @@
     "dev:server": "npm run dev --workspace apps/server",
     "dev:web": "npm run dev --workspace apps/web",
     "build": "npm run build --workspace packages/shared-types && npm run build --workspace apps/server && npm run build --workspace apps/web",
+    "test": "npm run build --workspace packages/shared-types && npm run test --workspace apps/server",
     "prisma:generate": "npm run prisma:generate --workspace apps/server",
     "prisma:migrate": "npm run prisma:migrate --workspace apps/server"
   }

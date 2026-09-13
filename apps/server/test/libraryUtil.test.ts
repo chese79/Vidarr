@@ -1,0 +1,99 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { baseUrl, createAuthedFetcher } from '../src/providers/library/util.js';
+import type { LibraryConnector } from '@prisma/client';
+
+function fakeConnector(overrides: Partial<LibraryConnector> = {}): LibraryConnector {
+  return {
+    id: 1,
+    name: 'Test',
+    type: 'jellyfin',
+    host: 'http://jellyfin.local:8096',
+    authToken: 'secret-token',
+    username: null,
+    password: null,
+    musicLibraryId: null,
+    videoLibraryId: null,
+    enabled: true,
+    lastSyncedAt: null,
+    lastSyncStatus: null,
+    lastSyncError: null,
+    ...overrides,
+  };
+}
+
+describe('baseUrl', () => {
+  it('strips a single trailing slash', () => {
+    expect(baseUrl('http://host:8096/')).toBe('http://host:8096');
+  });
+
+  it('strips multiple trailing slashes', () => {
+    expect(baseUrl('http://host:8096///')).toBe('http://host:8096');
+  });
+
+  it('leaves a host with no trailing slash unchanged', () => {
+    expect(baseUrl('http://host:8096')).toBe('http://host:8096');
+  });
+});
+
+describe('createAuthedFetcher', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('get() sends the auth header under the configured header name and joins the path', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ hello: 'world' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { get } = createAuthedFetcher('Jellyfin', 'X-Emby-Token');
+    const result = await get(fakeConnector({ host: 'http://host:8096/' }), '/Users');
+
+    expect(result).toEqual({ hello: 'world' });
+    expect(fetchMock).toHaveBeenCalledWith('http://host:8096/Users', {
+      headers: { Accept: 'application/json', 'X-Emby-Token': 'secret-token' },
+    });
+  });
+
+  it('get() throws with the provider label and status on a non-ok response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' }),
+    );
+
+    const { get } = createAuthedFetcher('Plex', 'X-Plex-Token');
+    await expect(get(fakeConnector(), '/library/sections')).rejects.toThrow('Plex request failed: 404 Not Found');
+  });
+
+  it('send() includes a JSON content-type header only when a body is given', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { send } = createAuthedFetcher('Jellyfin', 'X-Emby-Token');
+    await send(fakeConnector(), 'DELETE', '/Items/123');
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['Content-Type']).toBeUndefined();
+  });
+
+  it('send() returns null for a 204 response without attempting to parse a body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }));
+
+    const { send } = createAuthedFetcher('Jellyfin', 'X-Emby-Token');
+    const result = await send(fakeConnector(), 'POST', '/Playlists', { Name: 'test' });
+    expect(result).toBeNull();
+  });
+
+  it('send() parses a non-empty JSON body on success', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{"Id":"abc"}' }),
+    );
+
+    const { send } = createAuthedFetcher('Jellyfin', 'X-Emby-Token');
+    const result = await send(fakeConnector(), 'POST', '/Playlists', { Name: 'test' });
+    expect(result).toEqual({ Id: 'abc' });
+  });
+});

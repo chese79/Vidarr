@@ -4,6 +4,7 @@ import { prisma } from '../db/client.js';
 import { renderNamingFormat } from '@vidarr/shared-types';
 import { placeFile, type TransferMode } from './transfer.js';
 import { writeLibraryMetadata } from './libraryConvention.js';
+import { isPathWithinRoot } from './pathContainment.js';
 
 export interface ImportResult {
   path: string;
@@ -46,13 +47,7 @@ export async function importDownloadedFile(
   });
   const destPath = path.join(rootFolder.path, `${relativePath}${path.extname(sourcePath)}`);
 
-  // Defense in depth against path traversal (CWE-22) — sanitizeForPath
-  // already neutralizes bare "."/".." segments, but file placement is a
-  // security boundary and shouldn't rely on a single upstream check being
-  // perfect. Same vulnerability class as Sonarr's CVE-2026-30976.
-  const resolvedRoot = path.resolve(rootFolder.path);
-  const resolvedDest = path.resolve(destPath);
-  if (resolvedDest !== resolvedRoot && !resolvedDest.startsWith(resolvedRoot + path.sep)) {
+  if (!isPathWithinRoot(rootFolder.path, destPath)) {
     throw new Error(
       `Refusing to import outside the configured root folder (computed path escaped ${rootFolder.path}).`,
     );
