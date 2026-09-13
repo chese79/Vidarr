@@ -6,4 +6,9 @@ node_modules
 docs
 *.md
 apps/server/prisma/dev.db
+apps/server/prisma/dev.db-journal
+apps/server/prisma/test.db
+apps/server/prisma/test.db-journal
+apps/server/prisma/test.db-wal
+apps/server/prisma/test.db-shm
 apps/server/.env
