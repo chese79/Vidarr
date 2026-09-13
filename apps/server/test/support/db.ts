@@ -106,6 +106,43 @@ export async function createMusicVideoFile(
   });
 }
 
+export async function createLibraryConnector(
+  overrides: Partial<{ name: string; type: string; host: string; enabled: boolean }> = {},
+) {
+  return prisma.libraryConnector.create({
+    data: {
+      name: overrides.name ?? 'Test Connector',
+      type: overrides.type ?? 'jellyfin',
+      host: overrides.host ?? 'http://jellyfin.local:8096',
+      enabled: overrides.enabled ?? true,
+    },
+  });
+}
+
+export async function createRecommendationProviderConfig(
+  overrides: Partial<{ provider: string; enabled: boolean }> = {},
+) {
+  return prisma.recommendationProviderConfig.create({
+    data: {
+      provider: overrides.provider ?? 'lastfm',
+      enabled: overrides.enabled ?? false,
+    },
+  });
+}
+
+export async function createRecommendation(
+  overrides: Partial<{ artistName: string; normalizedArtistName: string; aggregateScore: number; dismissed: boolean }> = {},
+) {
+  return prisma.recommendation.create({
+    data: {
+      artistName: overrides.artistName ?? 'Recommended Artist',
+      normalizedArtistName: overrides.normalizedArtistName ?? (overrides.artistName ?? 'Recommended Artist').toLowerCase(),
+      aggregateScore: overrides.aggregateScore ?? 1.0,
+      dismissed: overrides.dismissed ?? false,
+    },
+  });
+}
+
 export async function ensureSettings(overrides: Partial<{ apiKey: string | null }> = {}) {
   return prisma.settings.upsert({
     where: { id: 1 },
