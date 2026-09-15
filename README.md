@@ -129,9 +129,31 @@ only works once, before anyone has ever logged in, and only for a short window a
 generated. After that, paste it into the key prompt manually (remembered in the browser after
 that). Once logged in, Settings → Security shows and can regenerate the key. There's no way to
 retrieve a forgotten key through the API itself (every route requires it) — read it back out of
-the `Settings` table, or just regenerate: `sqlite3 apps/server/dev.db "UPDATE Settings SET apiKey = NULL WHERE id = 1;"`
-and restart the server to have it generate a fresh one (this also re-arms the first-login reveal
-screen, so you can just copy it from the UI again instead).
+the `Settings` table directly, or just regenerate it.
+
+### Recovering a lost API key (locked out entirely)
+
+If you're locked out with no way back in — the key was never saved, no username/password or
+Google Sign-On is configured, and the one-time bootstrap-reveal screen has already closed after
+your first login — run the factory-reset script with container/host shell access (the same level
+of access you'd already need to edit the database by hand):
+
+```bash
+# Docker:
+docker exec vidarr node dist/scripts/factoryReset.js --yes
+
+# Local dev:
+npm run --workspace apps/server factory-reset -- --yes
+```
+
+This clears the API key, admin username/password, and Google Sign-On config, generates a brand-new
+API key, prints it straight to that terminal, and re-arms the one-time in-browser reveal screen too.
+Deliberately *not* a button in the web UI or an API route — that would let anyone who can merely
+reach vidarr over the network reset it and take over, which defeats the entire point of the key
+gate. This is the same recovery as manually running
+`sqlite3 apps/server/dev.db "UPDATE Settings SET apiKey = NULL WHERE id = 1;"` and restarting, just
+without having to hand-edit the database or lose the username/password and Google config to a stale
+state.
 
 ### Optional: Username/password login
 

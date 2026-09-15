@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "factory-reset": "tsx src/scripts/factoryReset.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
