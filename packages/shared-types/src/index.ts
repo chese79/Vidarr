@@ -120,6 +120,12 @@ export const SettingsSchema = z.object({
   // via POST /config/regenerate-api-key.
   apiKey: z.string().nullable(),
 });
+
+// GET /api/v1/setup/bootstrap-key's response — see apps/server/src/api/setup.ts.
+export const BootstrapKeyResponseSchema = z.object({
+  apiKey: z.string(),
+});
+export type BootstrapKeyResponse = z.infer<typeof BootstrapKeyResponseSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 
 // .omit even though SettingsSchema.partial() alone would already make apiKey

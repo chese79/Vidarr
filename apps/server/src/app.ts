@@ -25,6 +25,7 @@ import { historyRoutes } from './api/history.js';
 import { calendarRoutes } from './api/calendar.js';
 import { playlistRoutes } from './api/playlist.js';
 import { bulkImportRoutes } from './api/bulkimport.js';
+import { setupRoutes } from './api/setup.js';
 
 // Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
 // MusicVideoFile.sizeBytes); JSON.stringify can't serialize BigInt natively.
@@ -77,6 +78,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
 
+  // The one other route that must work with no key at all — it's what
+  // reveals the key in the first place. See api/setup.ts for the
+  // time-boxed, first-use-only logic that keeps this from being a standing
+  // unauthenticated secret-disclosure route.
+  const UNAUTHENTICATED_PATHS = new Set(['/api/v1/health', '/api/v1/setup/bootstrap-key']);
+
   // Every other /api/v1/* route requires vidarr's own API key (generated on
   // first boot — see pipeline/auth.ts). Without this, the app was fully
   // unauthenticated: anyone reaching it over the network, or any webpage the
@@ -85,7 +92,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // keys and passwords). Constant-time comparison to avoid a timing
   // side-channel on the key itself.
   app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/api/v1/') || req.url === '/api/v1/health') return;
+    if (!req.url.startsWith('/api/v1/') || UNAUTHENTICATED_PATHS.has(req.url)) return;
 
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     const expected = settings?.apiKey;
@@ -99,9 +106,18 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     if (!valid) {
       reply.code(401).send({ error: 'Unauthorized' });
+      return;
+    }
+
+    // First successful authentication ever — permanently closes the
+    // bootstrap-key reveal window from here on (see api/setup.ts). Only
+    // written once; every later request on an already-claimed key skips this.
+    if (!settings!.apiKeyFirstUsedAt) {
+      await prisma.settings.update({ where: { id: 1 }, data: { apiKeyFirstUsedAt: new Date() } });
     }
   });
 
+  await app.register(setupRoutes);
   await app.register(artistRoutes);
   await app.register(musicVideoRoutes);
   await app.register(qualityProfileRoutes);

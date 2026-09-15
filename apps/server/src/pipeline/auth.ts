@@ -3,20 +3,22 @@ import { prisma } from '../db/client.js';
 
 // Generated once, on first boot, and persisted — every subsequent start
 // reuses the same key rather than rotating it out from under the user.
-// There's no way to view an already-generated key through the API itself
-// (every /api/v1/* route requires it, so that would be circular) — it's
-// printed here on first generation, same bootstrap approach Sonarr/Radarr
-// use with their own config.xml-stored key. After that, it's viewable/
-// rotatable from Settings once you're already authenticated.
+// Printed here on first generation (same bootstrap approach Sonarr/Radarr use
+// with their own config.xml-stored key) and also revealable once, over HTTP,
+// through GET /api/v1/setup/bootstrap-key — see api/setup.ts for the
+// one-time-only, time-boxed logic that keeps that endpoint from being a
+// standing unauthenticated secret-disclosure route. After first use, it's
+// viewable/rotatable from Settings once already authenticated.
 export async function ensureApiKey(): Promise<string> {
   const existing = await prisma.settings.findUnique({ where: { id: 1 } });
   if (existing?.apiKey) return existing.apiKey;
 
   const apiKey = randomBytes(32).toString('hex');
+  const generatedAt = new Date();
   await prisma.settings.upsert({
     where: { id: 1 },
-    update: { apiKey },
-    create: { id: 1, apiKey },
+    update: { apiKey, apiKeyGeneratedAt: generatedAt, apiKeyFirstUsedAt: null },
+    create: { id: 1, apiKey, apiKeyGeneratedAt: generatedAt },
   });
 
   // eslint-disable-next-line no-console

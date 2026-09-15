@@ -197,6 +197,8 @@ model Settings {
   minFreeSpaceMb Int     @default(1024)
   imvdbApiKey    String?
   apiKey         String? // vidarr's own API key — required on every /api/v1/* request except /health. Generated on first boot (see pipeline/auth.ts); matches Sonarr/Radarr's own single-user API-key model.
+  apiKeyGeneratedAt DateTime? // when the current apiKey was generated — bounds the /setup/bootstrap-key reveal window (see api/setup.ts)
+  apiKeyFirstUsedAt DateTime? // set the first time apiKey successfully authenticates a request; once set, /setup/bootstrap-key permanently stops revealing it
 }
 
 model LibraryConnector {
