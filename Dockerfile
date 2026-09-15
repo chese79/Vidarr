@@ -22,13 +22,45 @@ RUN npm run build --workspace @vidarr/web
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 
-# ffmpeg (remux/transcode support) + python3/pip for yt-dlp
+# python3/pip for yt-dlp; xz-utils only to extract the static ffmpeg build
+# below (kept installed afterward — trivial size, not worth a separate purge
+# layer); curl for yt-dlp's own needs plus this image's HEALTHCHECK.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip curl \
+  && apt-get install -y --no-install-recommends python3 python3-pip curl xz-utils \
   && pip3 install --break-system-packages --no-cache-dir yt-dlp \
   && apt-get purge -y python3-pip \
   && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/*
+
+# Static ffmpeg/ffprobe build instead of Debian's `ffmpeg` package. apt's
+# ffmpeg drags in a large tree of hard dependencies vidarr never uses
+# (libsdl2, libcairo2, libpango, librsvg2, X11/GLX libraries — all there for
+# ffplay's display output and subtitle/font rendering, not headless
+# transcode/probe) — installing them was the single largest cost in this
+# build (~11 minutes measured). Trade-off: this binary isn't tracked by
+# Debian's security team the way an apt package is — `apt-get upgrade` won't
+# patch it; bump the pinned build here if a real ffmpeg CVE ever matters for
+# this deployment. Checksummed (MD5, the only verification johnvansickle.com
+# publishes) against the corresponding .md5 file — that guards against a
+# corrupted/truncated download, not a compromised origin.
+ARG TARGETARCH
+RUN set -eu; \
+    case "${TARGETARCH}" in \
+      amd64) FFMPEG_ARCH=amd64 ;; \
+      arm64) FFMPEG_ARCH=arm64 ;; \
+      *) echo "Unsupported architecture for static ffmpeg: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    cd /tmp; \
+    curl -fsSLO "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz"; \
+    curl -fsSLO "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz.md5"; \
+    md5sum -c "ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz.md5"; \
+    mkdir ffmpeg-extract; \
+    tar -xJf "ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz" -C ffmpeg-extract --strip-components=1; \
+    install -m 0755 ffmpeg-extract/ffmpeg /usr/local/bin/ffmpeg; \
+    install -m 0755 ffmpeg-extract/ffprobe /usr/local/bin/ffprobe; \
+    rm -rf /tmp/ffmpeg-extract /tmp/ffmpeg-release-*; \
+    ffmpeg -version | head -1; \
+    ffprobe -version | head -1
 
 COPY package.json package-lock.json ./
 COPY packages/shared-types/package.json packages/shared-types/
