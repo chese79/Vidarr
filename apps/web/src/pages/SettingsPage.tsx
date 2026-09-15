@@ -38,6 +38,75 @@ function SecuritySection({ apiKey }: { apiKey: string | null }) {
   );
 }
 
+function GoogleSignOnSection({
+  googleClientId,
+  googleClientSecret,
+  googleAllowedEmail,
+}: {
+  googleClientId: string | null;
+  googleClientSecret: string | null;
+  googleAllowedEmail: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const [clientId, setClientId] = useState(googleClientId ?? '');
+  const [clientSecret, setClientSecret] = useState(googleClientSecret ?? '');
+  const [allowedEmail, setAllowedEmail] = useState(googleAllowedEmail ?? '');
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.settings.update({
+        googleClientId: clientId || null,
+        googleClientSecret: clientSecret || null,
+        googleAllowedEmail: allowedEmail || null,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
+  });
+
+  const redirectUri =
+    typeof window !== 'undefined' ? `${window.location.origin}/api/v1/auth/google/callback` : '';
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Google Sign-On</h3>
+      <p className="empty-state" style={{ padding: '0 0 8px' }}>
+        An alternative way to log into this web UI besides typing the API key directly — only the
+        one account below can use it. The API key itself is unchanged and still required for every
+        API request.
+      </p>
+      <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        <label htmlFor="google-client-id">Client ID</label>
+        <input id="google-client-id" value={clientId} onChange={(e) => setClientId(e.target.value)} />
+      </div>
+      <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        <label htmlFor="google-client-secret">Client Secret</label>
+        <input
+          id="google-client-secret"
+          type="password"
+          value={clientSecret}
+          onChange={(e) => setClientSecret(e.target.value)}
+        />
+      </div>
+      <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        <label htmlFor="google-allowed-email">Allowed Google account</label>
+        <input
+          id="google-allowed-email"
+          type="email"
+          placeholder="you@example.com"
+          value={allowedEmail}
+          onChange={(e) => setAllowedEmail(e.target.value)}
+        />
+      </div>
+      <button type="button" onClick={() => save.mutate()}>
+        {save.isPending ? 'Saving…' : 'Save'}
+      </button>
+      <p className="empty-state" style={{ padding: '8px 0 0' }}>
+        In the Google Cloud Console, create an OAuth Client ID (type "Web application") and add this
+        exact URL as an authorized redirect URI: <code>{redirectUri}</code>
+      </p>
+    </div>
+  );
+}
+
 const NAMING_PREVIEW_TOKENS = {
   artistName: 'Sample Artist',
   videoTitle: 'Sample Video Title',
@@ -191,6 +260,11 @@ export default function SettingsPage() {
       </form>
 
       <SecuritySection apiKey={settings.data?.apiKey ?? null} />
+      <GoogleSignOnSection
+        googleClientId={settings.data?.googleClientId ?? null}
+        googleClientSecret={settings.data?.googleClientSecret ?? null}
+        googleAllowedEmail={settings.data?.googleAllowedEmail ?? null}
+      />
       <RecommendationProvidersSection />
     </div>
   );

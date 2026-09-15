@@ -199,6 +199,15 @@ model Settings {
   apiKey         String? // vidarr's own API key — required on every /api/v1/* request except /health. Generated on first boot (see pipeline/auth.ts); matches Sonarr/Radarr's own single-user API-key model.
   apiKeyGeneratedAt DateTime? // when the current apiKey was generated — bounds the /setup/bootstrap-key reveal window (see api/setup.ts)
   apiKeyFirstUsedAt DateTime? // set the first time apiKey successfully authenticates a request; once set, /setup/bootstrap-key permanently stops revealing it
+
+  // Google Sign-On: an alternative, browser-only way to obtain the real
+  // apiKey (see api/googleAuth.ts) — not a parallel auth system. Every
+  // /api/v1/* request still authenticates with apiKey exactly as before;
+  // this just gates *handing that key to a browser* behind "is this the one
+  // allowed Google account" instead of "did you already have the key."
+  googleClientId     String?
+  googleClientSecret String?
+  googleAllowedEmail String? // the single Google account allowed to sign in this way
 }
 
 model LibraryConnector {

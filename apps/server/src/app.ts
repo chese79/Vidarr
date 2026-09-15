@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyCookie from '@fastify/cookie';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from './db/client.js';
@@ -26,6 +27,7 @@ import { calendarRoutes } from './api/calendar.js';
 import { playlistRoutes } from './api/playlist.js';
 import { bulkImportRoutes } from './api/bulkimport.js';
 import { setupRoutes } from './api/setup.js';
+import { googleAuthRoutes } from './api/googleAuth.js';
 
 // Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
 // MusicVideoFile.sizeBytes); JSON.stringify can't serialize BigInt natively.
@@ -76,13 +78,27 @@ export async function buildApp(): Promise<FastifyInstance> {
   // so a permissive CORS policy here would be pure attack surface, not a
   // feature.
 
+  // Needed before the auth hook below (req.cookies) and before any route
+  // that sets/reads a cookie (Google sign-in's CSRF state).
+  await app.register(fastifyCookie);
+
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
 
-  // The one other route that must work with no key at all — it's what
-  // reveals the key in the first place. See api/setup.ts for the
-  // time-boxed, first-use-only logic that keeps this from being a standing
-  // unauthenticated secret-disclosure route.
-  const UNAUTHENTICATED_PATHS = new Set(['/api/v1/health', '/api/v1/setup/bootstrap-key']);
+  // Routes that must work with no API key at all — either they're what
+  // reveals the key in the first place (setup.ts's time-boxed bootstrap
+  // reveal), or they're the Google OAuth redirect legs, which by definition
+  // run before the browser has a key to send. Compared against the URL's
+  // path only (not the full req.url) — Google's callback always arrives with
+  // a ?code=&state= query string, which an exact match against req.url would
+  // never match, incorrectly 401ing the callback before it ever ran.
+  const UNAUTHENTICATED_PATHS = new Set([
+    '/api/v1/health',
+    '/api/v1/setup/bootstrap-key',
+    '/api/v1/auth/google/status',
+    '/api/v1/auth/google/login',
+    '/api/v1/auth/google/callback',
+    '/api/v1/auth/google/exchange',
+  ]);
 
   // Every other /api/v1/* route requires vidarr's own API key (generated on
   // first boot — see pipeline/auth.ts). Without this, the app was fully
@@ -92,7 +108,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // keys and passwords). Constant-time comparison to avoid a timing
   // side-channel on the key itself.
   app.addHook('onRequest', async (req, reply) => {
-    if (!req.url.startsWith('/api/v1/') || UNAUTHENTICATED_PATHS.has(req.url)) return;
+    const urlPath = req.url.split('?')[0];
+    if (!urlPath.startsWith('/api/v1/') || UNAUTHENTICATED_PATHS.has(urlPath)) return;
 
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     const expected = settings?.apiKey;
@@ -118,6 +135,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(setupRoutes);
+  await app.register(googleAuthRoutes);
   await app.register(artistRoutes);
   await app.register(musicVideoRoutes);
   await app.register(qualityProfileRoutes);

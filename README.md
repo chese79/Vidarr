@@ -123,11 +123,26 @@ log**, e.g.:
     <64 hex characters>
 ```
 
-Copy that value into the web UI's key prompt on first load (it's remembered in the browser after
+On a fresh install, the web UI's first screen also shows this key directly (with a clear
+"copy it now, you won't see it here again" warning) instead of requiring a trip to the logs — this
+only works once, before anyone has ever logged in, and only for a short window after the key is
+generated. After that, paste it into the key prompt manually (remembered in the browser after
 that). Once logged in, Settings → Security shows and can regenerate the key. There's no way to
 retrieve a forgotten key through the API itself (every route requires it) — read it back out of
 the `Settings` table, or just regenerate: `sqlite3 apps/server/dev.db "UPDATE Settings SET apiKey = NULL WHERE id = 1;"`
-and restart the server to have it generate a fresh one.
+and restart the server to have it generate a fresh one (this also re-arms the first-login reveal
+screen, so you can just copy it from the UI again instead).
+
+### Optional: Google Sign-On
+
+As an alternative to typing the API key manually, Settings → Google Sign-On lets you configure a
+Google OAuth Client ID/Secret and a single allowed Google account. Once configured, the key prompt
+shows a "Sign in with Google" button — signing in with that one account hands your browser the
+real API key, same as typing it in yourself. This doesn't replace or change the API key itself;
+every actual API request still authenticates with it exactly as before, and any script or
+integration using the key directly is unaffected. Create the OAuth client in the
+[Google Cloud Console](https://console.cloud.google.com/apis/credentials) (type "Web application")
+— the Settings page shows the exact redirect URI to register.
 
 ### Configuration (Settings page + connector/indexer pages, not env vars)
 

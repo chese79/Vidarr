@@ -119,6 +119,11 @@ export const SettingsSchema = z.object({
   // strips it, since it's Zod .partial()'d from this one); rotate it only
   // via POST /config/regenerate-api-key.
   apiKey: z.string().nullable(),
+  // Google Sign-On config — an alternative way to get apiKey into a browser,
+  // not a parallel credential (see apps/server/src/api/googleAuth.ts).
+  googleClientId: z.string().nullable(),
+  googleClientSecret: z.string().nullable(),
+  googleAllowedEmail: z.string().nullable(),
 });
 
 // GET /api/v1/setup/bootstrap-key's response — see apps/server/src/api/setup.ts.
@@ -127,6 +132,17 @@ export const BootstrapKeyResponseSchema = z.object({
 });
 export type BootstrapKeyResponse = z.infer<typeof BootstrapKeyResponseSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
+
+export const GoogleAuthStatusSchema = z.object({
+  configured: z.boolean(),
+});
+export type GoogleAuthStatus = z.infer<typeof GoogleAuthStatusSchema>;
+
+// POST /api/v1/auth/google/exchange — see apps/server/src/api/googleAuth.ts.
+export const GoogleAuthExchangeResponseSchema = z.object({
+  apiKey: z.string(),
+});
+export type GoogleAuthExchangeResponse = z.infer<typeof GoogleAuthExchangeResponseSchema>;
 
 // .omit even though SettingsSchema.partial() alone would already make apiKey
 // optional — explicit here so a general settings PUT can never carry a

@@ -48,6 +48,7 @@ import type {
   GeneratePlaylistResult,
   StandardGenreMatch,
   PlayCountSyncResult,
+  GoogleAuthStatus,
 } from '@vidarr/shared-types';
 
 export interface QueueItem {
@@ -286,5 +287,10 @@ export const api = {
   },
   calendar: {
     list: () => request<CalendarItem[]>('/calendar'),
+  },
+  googleAuth: {
+    // Not routed through request() — it must work with no stored API key at
+    // all, which is exactly the point (see ApiKeyGate).
+    status: () => fetch('/api/v1/auth/google/status').then((r) => r.json() as Promise<GoogleAuthStatus>),
   },
 };

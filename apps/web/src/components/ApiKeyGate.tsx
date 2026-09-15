@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { getStoredApiKey, setStoredApiKey, clearStoredApiKey } from '../api/client';
+import { api, getStoredApiKey, setStoredApiKey, clearStoredApiKey } from '../api/client';
+
+const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
+  state_mismatch: 'That sign-in link expired or was invalid — try again.',
+  not_configured: 'Google sign-in is not configured.',
+  token_exchange_failed: 'Google sign-in failed — please try again.',
+  token_verification_failed: 'Google sign-in failed — please try again.',
+  audience_mismatch: 'Google sign-in failed — please try again.',
+  email_not_verified: "That Google account's email isn't verified.",
+  not_allowed: "That Google account isn't allowed to sign in here.",
+};
 
 // Every /api/v1/* route (except /health and /setup/bootstrap-key) requires
 // vidarr's own API key — this gate keeps the app from rendering (and
@@ -18,6 +28,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
   const [bootstrapKey, setBootstrapKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [googleConfigured, setGoogleConfigured] = useState(false);
   const keyTextRef = useRef<HTMLSpanElement>(null);
 
   async function tryKey(key: string) {
@@ -40,6 +51,47 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
   }
 
   useEffect(() => {
+    api.googleAuth
+      .status()
+      .then((status) => setGoogleConfigured(status.configured))
+      .catch(() => setGoogleConfigured(false));
+
+    const params = new URLSearchParams(window.location.search);
+    const exchangeToken = params.get('google_exchange');
+    const googleError = params.get('google_error');
+
+    if (exchangeToken || googleError) {
+      // Strip these from the URL either way — they're single-use/sensitive
+      // and shouldn't linger in the address bar or browser history.
+      params.delete('google_exchange');
+      params.delete('google_error');
+      const cleanUrl = window.location.pathname + (params.toString() ? `?${params}` : '');
+      window.history.replaceState(null, '', cleanUrl);
+    }
+
+    if (exchangeToken) {
+      setChecking(true);
+      fetch('/api/v1/auth/google/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: exchangeToken }),
+      })
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((body: { apiKey: string }) => tryKey(body.apiKey))
+        .catch(() => {
+          setAuthorized(false);
+          setError('That sign-in link expired or was already used — try signing in again.');
+        })
+        .finally(() => setChecking(false));
+      return;
+    }
+
+    if (googleError) {
+      setAuthorized(false);
+      setError(GOOGLE_ERROR_MESSAGES[googleError] ?? 'Google sign-in failed — please try again.');
+      return;
+    }
+
     const stored = getStoredApiKey();
     if (stored) {
       setChecking(true);
@@ -173,6 +225,23 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
           </button>
         </div>
         {error && <p className="empty-state">{error}</p>}
+        {googleConfigured && (
+          <>
+            <p className="empty-state" style={{ padding: '12px 0 4px', textAlign: 'center' }}>
+              or
+            </p>
+            <button
+              type="button"
+              className="secondary"
+              style={{ width: '100%' }}
+              onClick={() => {
+                window.location.href = '/api/v1/auth/google/login';
+              }}
+            >
+              Sign in with Google
+            </button>
+          </>
+        )}
       </form>
     </div>
   );
