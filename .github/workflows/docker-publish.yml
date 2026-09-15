@@ -1,0 +1,49 @@
+name: Publish Docker image
+
+# Standing rule: every successful build on main gets published as a public
+# image automatically — not something to run by hand after each change.
+# Runs on push to main (after a successful build) and can be triggered
+# manually for a rebuild without a new commit.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: ghcr.io
+  # GHCR requires a lowercase image name; the repo itself is "Vidarr".
+  IMAGE_NAME: ${{ github.repository_owner }}/vidarr
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # linux/amd64 only for now — the Dockerfile's static-ffmpeg step is
+          # already arch-aware (TARGETARCH) if arm64 is added here later.
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
