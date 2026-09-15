@@ -49,6 +49,7 @@ import type {
   StandardGenreMatch,
   PlayCountSyncResult,
   GoogleAuthStatus,
+  LocalLoginStatus,
 } from '@vidarr/shared-types';
 
 export interface QueueItem {
@@ -155,6 +156,11 @@ export const api = {
       request<Settings>('/config', { method: 'PUT', body: JSON.stringify(data) }),
     regenerateApiKey: () =>
       request<Settings>('/config/regenerate-api-key', { method: 'POST' }),
+    setLoginCredentials: (username: string, password: string) =>
+      request<{ adminUsername: string }>('/auth/login/credentials', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      }),
   },
   libraryConnectors: {
     list: () => request<LibraryConnector[]>('/libraryconnector'),
@@ -292,5 +298,19 @@ export const api = {
     // Not routed through request() — it must work with no stored API key at
     // all, which is exactly the point (see ApiKeyGate).
     status: () => fetch('/api/v1/auth/google/status').then((r) => r.json() as Promise<GoogleAuthStatus>),
+  },
+  localAuth: {
+    // Same reasoning as googleAuth above — no stored key exists yet at this point.
+    status: () => fetch('/api/v1/auth/login/status').then((r) => r.json() as Promise<LocalLoginStatus>),
+    login: async (username: string, password: string) => {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? 'Login failed.');
+      return body as { apiKey: string };
+    },
   },
 };

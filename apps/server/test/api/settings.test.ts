@@ -73,6 +73,21 @@ describe('settings routes', () => {
     expect(probe.statusCode).toBe(401);
   });
 
+  it('PUT /api/v1/config cannot set adminPasswordHash directly — only POST /auth/login/credentials may, since it hashes the password', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/config',
+      headers: authHeaders(),
+      // adminPasswordHash is not part of UpdateSettingsSchema — a generic
+      // settings PUT must never be able to plant an attacker-chosen "hash"
+      // that would then successfully verify against some attacker-known
+      // plaintext password (see apps/server/src/api/localAuth.ts).
+      payload: { adminUsername: 'admin', adminPasswordHash: 'attacker-chosen-hash-value' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().adminPasswordHash).toBeNull();
+  });
+
   it('POST /api/v1/config/regenerate-api-key rotates the key and invalidates the old one', async () => {
     const res = await app.inject({
       method: 'POST',

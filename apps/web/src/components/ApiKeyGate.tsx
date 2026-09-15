@@ -29,6 +29,10 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const [googleConfigured, setGoogleConfigured] = useState(false);
+  const [localLoginConfigured, setLocalLoginConfigured] = useState(false);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const keyTextRef = useRef<HTMLSpanElement>(null);
 
   async function tryKey(key: string) {
@@ -55,6 +59,11 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
       .status()
       .then((status) => setGoogleConfigured(status.configured))
       .catch(() => setGoogleConfigured(false));
+
+    api.localAuth
+      .status()
+      .then((status) => setLocalLoginConfigured(status.configured))
+      .catch(() => setLocalLoginConfigured(false));
 
     const params = new URLSearchParams(window.location.search);
     const exchangeToken = params.get('google_exchange');
@@ -146,6 +155,22 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
     tryKey(input.trim()).finally(() => setChecking(false));
   }
 
+  async function handleLocalLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!loginUsername.trim() || !loginPassword) return;
+    setLoggingIn(true);
+    setError(null);
+    try {
+      const { apiKey } = await api.localAuth.login(loginUsername.trim(), loginPassword);
+      await tryKey(apiKey);
+    } catch (err) {
+      setAuthorized(false);
+      setError(err instanceof Error ? err.message : 'Login failed.');
+    } finally {
+      setLoggingIn(false);
+    }
+  }
+
   if (authorized) return <>{children}</>;
 
   if (authorized === null || checking) {
@@ -204,26 +229,60 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-      <form className="card" onSubmit={handleSubmit} style={{ minWidth: 360 }}>
+      <div className="card" style={{ minWidth: 360 }}>
         <h2 style={{ marginTop: 0 }}>vidarr</h2>
-        <p className="empty-state" style={{ padding: '0 0 12px' }}>
-          Enter your API key. It was printed to the server's console log the first time it started
-          — check there, or ask whoever set up this instance.
-        </p>
-        <div className="form-row">
-          <input
-            type="password"
-            placeholder="API key"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            style={{ minWidth: 260 }}
-            autoFocus
-            required
-          />
-          <button type="submit" disabled={checking}>
-            {checking ? 'Checking…' : 'Continue'}
-          </button>
-        </div>
+
+        {localLoginConfigured && (
+          <>
+            <form onSubmit={handleLocalLogin}>
+              <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  autoFocus
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  required
+                />
+                <button type="submit" disabled={loggingIn || checking}>
+                  {loggingIn ? 'Signing in…' : 'Sign in'}
+                </button>
+              </div>
+            </form>
+            <p className="empty-state" style={{ padding: '12px 0 4px', textAlign: 'center' }}>
+              or
+            </p>
+          </>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <p className="empty-state" style={{ padding: '0 0 12px' }}>
+            Enter your API key. It was printed to the server's console log the first time it started
+            — check there, or ask whoever set up this instance.
+          </p>
+          <div className="form-row">
+            <input
+              type="password"
+              placeholder="API key"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              style={{ minWidth: 260 }}
+              autoFocus={!localLoginConfigured}
+              required
+            />
+            <button type="submit" disabled={checking}>
+              {checking ? 'Checking…' : 'Continue'}
+            </button>
+          </div>
+        </form>
+
         {error && <p className="empty-state">{error}</p>}
         {googleConfigured && (
           <>
@@ -242,7 +301,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
             </button>
           </>
         )}
-      </form>
+      </div>
     </div>
   );
 }

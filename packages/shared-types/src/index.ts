@@ -124,6 +124,14 @@ export const SettingsSchema = z.object({
   googleClientId: z.string().nullable(),
   googleClientSecret: z.string().nullable(),
   googleAllowedEmail: z.string().nullable(),
+  // Username/password login — another alternative way to get apiKey into a
+  // browser (see apps/server/src/api/localAuth.ts). adminPasswordHash is a
+  // one-way scrypt hash, never the plaintext password, but is still not
+  // settable via a general settings PUT (see UpdateSettingsSchema below) —
+  // it's only ever written by POST /api/v1/auth/login/credentials, which
+  // hashes the plaintext password server-side.
+  adminUsername: z.string().nullable(),
+  adminPasswordHash: z.string().nullable(),
 });
 
 // GET /api/v1/setup/bootstrap-key's response — see apps/server/src/api/setup.ts.
@@ -144,12 +152,39 @@ export const GoogleAuthExchangeResponseSchema = z.object({
 });
 export type GoogleAuthExchangeResponse = z.infer<typeof GoogleAuthExchangeResponseSchema>;
 
+// GET /api/v1/auth/login/status — see apps/server/src/api/localAuth.ts.
+export const LocalLoginStatusSchema = z.object({
+  configured: z.boolean(),
+});
+export type LocalLoginStatus = z.infer<typeof LocalLoginStatusSchema>;
+
+// POST /api/v1/auth/login — same shape used for POST /api/v1/auth/login/credentials
+// (setting/changing the admin login), though the two routes enforce different
+// minimum-length rules server-side.
+export const LocalLoginRequestSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+export type LocalLoginRequest = z.infer<typeof LocalLoginRequestSchema>;
+
+export const LocalLoginResponseSchema = z.object({
+  apiKey: z.string(),
+});
+export type LocalLoginResponse = z.infer<typeof LocalLoginResponseSchema>;
+
 // .omit even though SettingsSchema.partial() alone would already make apiKey
 // optional — explicit here so a general settings PUT can never carry a
 // client-supplied apiKey, regardless of how SettingsSchema's shape changes
 // later. Rotation only happens via POST /config/regenerate-api-key, which
-// always generates the value server-side.
-export const UpdateSettingsSchema = SettingsSchema.omit({ apiKey: true }).partial();
+// always generates the value server-side. adminUsername/adminPasswordHash
+// are excluded the same way — they're only ever set together, and only via
+// POST /api/v1/auth/login/credentials, which hashes the plaintext password;
+// a generic PUT could otherwise store an unhashed value into adminPasswordHash.
+export const UpdateSettingsSchema = SettingsSchema.omit({
+  apiKey: true,
+  adminUsername: true,
+  adminPasswordHash: true,
+}).partial();
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>;
 
 // --- Library Connectors & Artist Recommendations (M2.5) ---

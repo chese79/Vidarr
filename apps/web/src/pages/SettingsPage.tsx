@@ -107,6 +107,85 @@ function GoogleSignOnSection({
   );
 }
 
+function LocalLoginSection({ adminUsername }: { adminUsername: string | null }) {
+  const queryClient = useQueryClient();
+  const [username, setUsername] = useState(adminUsername ?? '');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: () => api.settings.setLoginCredentials(username, password),
+    onSuccess: () => {
+      setPassword('');
+      setConfirmPassword('');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err) => setFormError(err instanceof Error ? err.message : 'Failed to save.'),
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+    if (password !== confirmPassword) {
+      setFormError("Passwords don't match.");
+      return;
+    }
+    save.mutate();
+  }
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Username &amp; Password Login</h3>
+      <p className="empty-state" style={{ padding: '0 0 8px' }}>
+        Another alternative to typing the API key directly. The API key itself is unchanged and
+        still required for every API request — signing in here just hands your browser that same
+        key after checking these credentials.
+        {adminUsername && (
+          <>
+            {' '}
+            Currently signed in as <strong>{adminUsername}</strong>.
+          </>
+        )}
+      </p>
+      <form onSubmit={handleSubmit}>
+        <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <label htmlFor="admin-username">Username</label>
+          <input id="admin-username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        </div>
+        <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <label htmlFor="admin-password">
+            {adminUsername ? 'New password' : 'Password'} (min. 8 characters)
+          </label>
+          <input
+            id="admin-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
+            required
+          />
+        </div>
+        <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <label htmlFor="admin-password-confirm">Confirm password</label>
+          <input
+            id="admin-password-confirm"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            minLength={8}
+            required
+          />
+        </div>
+        <button type="submit" disabled={save.isPending}>
+          {save.isPending ? 'Saving…' : adminUsername ? 'Update login' : 'Set up login'}
+        </button>
+        {formError && <p className="empty-state">{formError}</p>}
+      </form>
+    </div>
+  );
+}
+
 const NAMING_PREVIEW_TOKENS = {
   artistName: 'Sample Artist',
   videoTitle: 'Sample Video Title',
@@ -260,6 +339,7 @@ export default function SettingsPage() {
       </form>
 
       <SecuritySection apiKey={settings.data?.apiKey ?? null} />
+      <LocalLoginSection adminUsername={settings.data?.adminUsername ?? null} />
       <GoogleSignOnSection
         googleClientId={settings.data?.googleClientId ?? null}
         googleClientSecret={settings.data?.googleClientSecret ?? null}

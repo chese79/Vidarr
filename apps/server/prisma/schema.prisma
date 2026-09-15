@@ -208,6 +208,14 @@ model Settings {
   googleClientId     String?
   googleClientSecret String?
   googleAllowedEmail String? // the single Google account allowed to sign in this way
+
+  // Username/password login: another alternative, browser-only way to obtain
+  // the real apiKey (see api/localAuth.ts and pipeline/password.ts) — same
+  // relationship to apiKey as Google Sign-On above, not a parallel credential.
+  // adminPasswordHash is never the plaintext password — only set via
+  // POST /api/v1/auth/login/credentials, which hashes it server-side.
+  adminUsername     String?
+  adminPasswordHash String? // format "<hex salt>:<hex scrypt derived key>"
 }
 
 model LibraryConnector {

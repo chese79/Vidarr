@@ -28,6 +28,7 @@ import { playlistRoutes } from './api/playlist.js';
 import { bulkImportRoutes } from './api/bulkimport.js';
 import { setupRoutes } from './api/setup.js';
 import { googleAuthRoutes } from './api/googleAuth.js';
+import { localAuthRoutes } from './api/localAuth.js';
 
 // Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
 // MusicVideoFile.sizeBytes); JSON.stringify can't serialize BigInt natively.
@@ -98,6 +99,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     '/api/v1/auth/google/login',
     '/api/v1/auth/google/callback',
     '/api/v1/auth/google/exchange',
+    '/api/v1/auth/login/status',
+    '/api/v1/auth/login',
   ]);
 
   // Every other /api/v1/* route requires vidarr's own API key (generated on
@@ -136,6 +139,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(setupRoutes);
   await app.register(googleAuthRoutes);
+  await app.register(localAuthRoutes);
   await app.register(artistRoutes);
   await app.register(musicVideoRoutes);
   await app.register(qualityProfileRoutes);

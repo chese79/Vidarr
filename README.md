@@ -133,10 +133,20 @@ the `Settings` table, or just regenerate: `sqlite3 apps/server/dev.db "UPDATE Se
 and restart the server to have it generate a fresh one (this also re-arms the first-login reveal
 screen, so you can just copy it from the UI again instead).
 
+### Optional: Username/password login
+
+As an alternative to typing the API key manually, Settings → Username & Password Login lets you
+set a single admin username and password. Once set, the key prompt shows a username/password form
+— signing in hands your browser the real API key, same as typing it in yourself. This doesn't
+replace or change the API key itself; every actual API request still authenticates with it exactly
+as before, and any script or integration using the key directly is unaffected. The password is
+never stored in plaintext, only a salted hash. Changing the login requires already being
+authenticated, same as regenerating the API key.
+
 ### Optional: Google Sign-On
 
-As an alternative to typing the API key manually, Settings → Google Sign-On lets you configure a
-Google OAuth Client ID/Secret and a single allowed Google account. Once configured, the key prompt
+As another alternative to typing the API key manually, Settings → Google Sign-On lets you configure
+a Google OAuth Client ID/Secret and a single allowed Google account. Once configured, the key prompt
 shows a "Sign in with Google" button — signing in with that one account hands your browser the
 real API key, same as typing it in yourself. This doesn't replace or change the API key itself;
 every actual API request still authenticates with it exactly as before, and any script or
