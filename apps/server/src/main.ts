@@ -1,11 +1,13 @@
 import './loadEnv.js';
 import { buildApp } from './app.js';
 import { ensureApiKey } from './pipeline/auth.js';
+import { ensureDefaultData } from './pipeline/ensureDefaults.js';
 import { startScheduler } from './scheduler/index.js';
 
 const app = await buildApp();
 
 await ensureApiKey();
+await ensureDefaultData();
 
 const port = Number(process.env.PORT ?? 3434);
 app.listen({ port, host: '0.0.0.0' }).catch((err) => {

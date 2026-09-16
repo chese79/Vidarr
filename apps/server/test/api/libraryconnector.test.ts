@@ -32,6 +32,28 @@ describe('libraryconnector routes', () => {
     expect(res.json()).toMatchObject({ name: 'My Jellyfin', type: 'jellyfin', enabled: true });
   });
 
+  it('POST /api/v1/libraryconnector prepends http:// to a bare host — a schemeless host makes every request fail with "Failed to parse URL"', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/libraryconnector',
+      headers: authHeaders(),
+      payload: { name: 'JF', type: 'jellyfin', host: '192.168.0.8:8096' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().host).toBe('http://192.168.0.8:8096');
+  });
+
+  it('POST /api/v1/libraryconnector leaves a host that already has a scheme untouched', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/libraryconnector',
+      headers: authHeaders(),
+      payload: { name: 'Secure Plex', type: 'plex', host: 'https://plex.example.com' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().host).toBe('https://plex.example.com');
+  });
+
   it('POST /api/v1/libraryconnector rejects an invalid type', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -59,6 +81,18 @@ describe('libraryconnector routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().videoLibraryId).toBe('section-2');
+  });
+
+  it('PUT /api/v1/libraryconnector/:id also normalizes a schemeless host', async () => {
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/libraryconnector/${connector.id}`,
+      headers: authHeaders(),
+      payload: { host: '192.168.0.8:8096' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().host).toBe('http://192.168.0.8:8096');
   });
 
   it('PUT /api/v1/libraryconnector/:id updates host/token/username — fixing a bad credential without deleting the row', async () => {

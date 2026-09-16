@@ -208,10 +208,21 @@ export const LibraryConnectorSchema = z.object({
 });
 export type LibraryConnector = z.infer<typeof LibraryConnectorSchema>;
 
+// A bare "192.168.1.10:8096" (no scheme) makes every outgoing request build
+// an invalid URL and fail with a cryptic "Failed to parse URL from ..." —
+// the fetch() call has no way to guess http vs https, and there's no
+// legitimate reason a local Plex/Jellyfin/Subsonic server needs https, so
+// defaulting the scheme to http rather than rejecting the input turns a
+// confusing dead end into something that just works.
+function normalizeConnectorHost(host: string): string {
+  const trimmed = host.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+}
+
 export const CreateLibraryConnectorSchema = z.object({
   name: z.string().min(1),
   type: LibraryConnectorType,
-  host: z.string().min(1),
+  host: z.string().min(1).transform(normalizeConnectorHost),
   authToken: z.string().nullable().optional(),
   username: z.string().nullable().optional(),
   password: z.string().nullable().optional(),

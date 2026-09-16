@@ -121,7 +121,7 @@ function ConnectorRow({
           <div className="form-row" style={{ flexWrap: 'wrap' }}>
             <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
             <input
-              placeholder="Host"
+              placeholder="Host, e.g. http://192.168.1.10:8096"
               value={host}
               onChange={(e) => setHost(e.target.value)}
               style={{ minWidth: 220 }}
