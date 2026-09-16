@@ -61,6 +61,139 @@ function VideoLibraryPicker({ connector }: { connector: LibraryConnector }) {
   );
 }
 
+// Edit form for one existing connector — lets host/token/username (and, for
+// Subsonic, password) be corrected in place instead of forcing a
+// delete-and-recreate whenever a credential is wrong or a server moves.
+// Isolated per-row state, same pattern as VideoLibraryPicker above.
+function ConnectorRow({
+  connector,
+  status,
+  onTest,
+  onSync,
+  onSyncPlayCounts,
+  onRemove,
+}: {
+  connector: LibraryConnector;
+  status: string | undefined;
+  onTest: () => void;
+  onSync: () => void;
+  onSyncPlayCounts: () => void;
+  onRemove: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(connector.name);
+  const [host, setHost] = useState(connector.host);
+  const [authToken, setAuthToken] = useState(connector.authToken ?? '');
+  const [username, setUsername] = useState(connector.username ?? '');
+  const [password, setPassword] = useState('');
+
+  const update = useMutation({
+    mutationFn: () =>
+      api.libraryConnectors.update(connector.id, {
+        name,
+        host,
+        authToken: authToken || null,
+        username: username || null,
+        ...(password ? { password } : {}),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['libraryConnectors'] });
+      setPassword('');
+      setEditing(false);
+    },
+  });
+
+  function startEditing() {
+    setName(connector.name);
+    setHost(connector.host);
+    setAuthToken(connector.authToken ?? '');
+    setUsername(connector.username ?? '');
+    setPassword('');
+    update.reset();
+    setEditing(true);
+  }
+
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={6}>
+          <div className="form-row" style={{ flexWrap: 'wrap' }}>
+            <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              placeholder="Host"
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
+              style={{ minWidth: 220 }}
+            />
+            {connector.type !== 'subsonic' && (
+              <input
+                placeholder={connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key'}
+                value={authToken}
+                onChange={(e) => setAuthToken(e.target.value)}
+              />
+            )}
+            {(connector.type === 'jellyfin' || connector.type === 'subsonic') && (
+              <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            )}
+            {connector.type === 'subsonic' && (
+              <input
+                placeholder="New password (leave blank to keep current)"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            )}
+            <button onClick={() => update.mutate()} disabled={update.isPending}>
+              {update.isPending ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="secondary" onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+          {update.isError && <p className="empty-state">{(update.error as Error).message}</p>}
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td>{connector.name}</td>
+      <td>{connector.type}</td>
+      <td>{connector.host}</td>
+      <td>{status ?? connector.lastSyncStatus ?? '—'}</td>
+      <td>
+        <VideoLibraryPicker connector={connector} />
+      </td>
+      <td style={{ display: 'flex', gap: 6 }}>
+        <button className="secondary" onClick={onTest}>
+          Test
+        </button>
+        <button className="secondary" onClick={onSync}>
+          Sync
+        </button>
+        {connector.type !== 'subsonic' && (
+          <button
+            className="secondary"
+            onClick={onSyncPlayCounts}
+            disabled={!connector.videoLibraryId}
+            title={!connector.videoLibraryId ? 'Pick a video library first' : undefined}
+          >
+            Sync Play Counts
+          </button>
+        )}
+        <button className="secondary" onClick={startEditing}>
+          Edit
+        </button>
+        <button className="secondary" onClick={onRemove}>
+          Remove
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 export default function LibraryConnectorsPage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
@@ -257,36 +390,15 @@ export default function LibraryConnectorsPage() {
           </thead>
           <tbody>
             {connectors.data.map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{c.type}</td>
-                <td>{c.host}</td>
-                <td>{status[c.id] ?? c.lastSyncStatus ?? '—'}</td>
-                <td>
-                  <VideoLibraryPicker connector={c} />
-                </td>
-                <td style={{ display: 'flex', gap: 6 }}>
-                  <button className="secondary" onClick={() => handleTest(c.id)}>
-                    Test
-                  </button>
-                  <button className="secondary" onClick={() => handleSync(c.id)}>
-                    Sync
-                  </button>
-                  {c.type !== 'subsonic' && (
-                    <button
-                      className="secondary"
-                      onClick={() => handleSyncPlayCounts(c.id)}
-                      disabled={!c.videoLibraryId}
-                      title={!c.videoLibraryId ? 'Pick a video library first' : undefined}
-                    >
-                      Sync Play Counts
-                    </button>
-                  )}
-                  <button className="secondary" onClick={() => removeConnector.mutate(c.id)}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
+              <ConnectorRow
+                key={c.id}
+                connector={c}
+                status={status[c.id]}
+                onTest={() => handleTest(c.id)}
+                onSync={() => handleSync(c.id)}
+                onSyncPlayCounts={() => handleSyncPlayCounts(c.id)}
+                onRemove={() => removeConnector.mutate(c.id)}
+              />
             ))}
           </tbody>
         </table>

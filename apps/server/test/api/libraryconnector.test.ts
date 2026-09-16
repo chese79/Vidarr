@@ -61,6 +61,18 @@ describe('libraryconnector routes', () => {
     expect(res.json().videoLibraryId).toBe('section-2');
   });
 
+  it('PUT /api/v1/libraryconnector/:id updates host/token/username — fixing a bad credential without deleting the row', async () => {
+    const connector = await createLibraryConnector({ name: 'My Jellyfin', type: 'jellyfin', host: 'http://old-host:8096' });
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/libraryconnector/${connector.id}`,
+      headers: authHeaders(),
+      payload: { host: 'http://new-host:8096', authToken: 'new-token', username: 'admin' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ host: 'http://new-host:8096', authToken: 'new-token', username: 'admin' });
+  });
+
   it('DELETE /api/v1/libraryconnector/:id removes it', async () => {
     const connector = await createLibraryConnector();
     const del = await app.inject({
