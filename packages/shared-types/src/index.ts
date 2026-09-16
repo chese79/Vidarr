@@ -229,6 +229,23 @@ export const LibraryConnectorTestResultSchema = z.object({
 });
 export type LibraryConnectorTestResult = z.infer<typeof LibraryConnectorTestResultSchema>;
 
+// Auto-detect: broadcasts a UDP discovery request on the local network for
+// Plex or Jellyfin servers — see apps/server/src/pipeline/discovery.ts. No
+// equivalent protocol exists for Subsonic/Navidrome.
+export const DiscoverableLibraryConnectorType = z.enum(['plex', 'jellyfin']);
+export type DiscoverableLibraryConnectorType = z.infer<typeof DiscoverableLibraryConnectorType>;
+
+export const DiscoverLibraryConnectorBodySchema = z.object({
+  type: DiscoverableLibraryConnectorType,
+});
+export type DiscoverLibraryConnectorBody = z.infer<typeof DiscoverLibraryConnectorBodySchema>;
+
+export const DiscoveredServerSchema = z.object({
+  host: z.string(),
+  name: z.string(),
+});
+export type DiscoveredServer = z.infer<typeof DiscoveredServerSchema>;
+
 export const LibrarySectionSchema = z.object({
   id: z.string(),
   title: z.string(),

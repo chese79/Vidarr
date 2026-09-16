@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { LibraryConnector, LibraryConnectorType, LibrarySection } from '@vidarr/shared-types';
+import type { DiscoveredServer, LibraryConnector, LibraryConnectorType, LibrarySection } from '@vidarr/shared-types';
 
 // Video library picker — separate from the music-library section used to read
 // listened-to artists. This is where the connector will look for vidarr's own
@@ -70,6 +70,8 @@ export default function LibraryConnectorsPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<Record<number, string>>({});
+  const [discovering, setDiscovering] = useState(false);
+  const [discovered, setDiscovered] = useState<DiscoveredServer[] | null>(null);
 
   const connectors = useQuery({
     queryKey: ['libraryConnectors'],
@@ -113,6 +115,24 @@ export default function LibraryConnectorsPage() {
     invalidate();
   }
 
+  async function handleDiscover() {
+    if (type === 'subsonic') return;
+    setDiscovering(true);
+    setDiscovered(null);
+    try {
+      setDiscovered(await api.libraryConnectors.discover(type));
+    } catch {
+      setDiscovered([]);
+    } finally {
+      setDiscovering(false);
+    }
+  }
+
+  function applyDiscovered(server: DiscoveredServer) {
+    setHost(server.host);
+    if (!name) setName(server.name);
+  }
+
   async function handleSyncPlayCounts(id: number) {
     setStatus((s) => ({ ...s, [id]: 'Syncing play counts…' }));
     try {
@@ -146,7 +166,13 @@ export default function LibraryConnectorsPage() {
       <form className="card" onSubmit={handleSubmit}>
         <div className="form-row">
           <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
-          <select value={type} onChange={(e) => setType(e.target.value as LibraryConnectorType)}>
+          <select
+            value={type}
+            onChange={(e) => {
+              setType(e.target.value as LibraryConnectorType);
+              setDiscovered(null);
+            }}
+          >
             <option value="plex">Plex</option>
             <option value="jellyfin">Jellyfin</option>
             <option value="subsonic">Navidrome / Subsonic</option>
@@ -158,7 +184,38 @@ export default function LibraryConnectorsPage() {
             style={{ minWidth: 260 }}
             required
           />
+          {type !== 'subsonic' && (
+            <button type="button" className="secondary" onClick={handleDiscover} disabled={discovering}>
+              {discovering ? 'Searching…' : 'Auto-detect'}
+            </button>
+          )}
         </div>
+        {discovered && (
+          <div className="form-row">
+            {discovered.length ? (
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  const server = discovered.find((s) => s.host === e.target.value);
+                  if (server) applyDiscovered(server);
+                }}
+              >
+                <option value="" disabled>
+                  {discovered.length} found on your network — pick one…
+                </option>
+                {discovered.map((s) => (
+                  <option key={s.host} value={s.host}>
+                    {s.name} ({s.host})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="empty-state" style={{ padding: 0 }}>
+                No servers found on your network — enter the address manually.
+              </span>
+            )}
+          </div>
+        )}
         <div className="form-row">
           {type !== 'subsonic' && (
             <input

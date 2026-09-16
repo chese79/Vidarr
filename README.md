@@ -186,7 +186,10 @@ vars — matching Sonarr/Radarr's own model:
 - **Download Clients** — qBittorrent or SABnzbd host/credentials.
 - **YouTube Sources** — subscribe a channel/playlist directly to an artist.
 - **Library Connectors** — Plex/Jellyfin/Navidrome host + token; separately pick a *music* library
-  (for reading artists) and a *video* library (for playlist push) per connector.
+  (for reading artists) and a *video* library (for playlist push) per connector. For Plex/Jellyfin,
+  "Auto-detect" on the add form finds servers on your local network (Plex's GDM broadcast / Jellyfin's
+  own UDP discovery) and fills in the host for you — Navidrome/Subsonic has no equivalent protocol,
+  so its host is always entered by hand.
 - **Recommendation Providers** — optional Last.fm/Spotify/MusicBrainz credentials for Discover.
 
 ## Docker

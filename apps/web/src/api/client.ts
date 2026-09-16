@@ -50,6 +50,8 @@ import type {
   PlayCountSyncResult,
   GoogleAuthStatus,
   LocalLoginStatus,
+  DiscoverableLibraryConnectorType,
+  DiscoveredServer,
 } from '@vidarr/shared-types';
 
 export interface QueueItem {
@@ -181,6 +183,11 @@ export const api = {
     sections: (id: number) => request<LibrarySection[]>(`/libraryconnector/${id}/sections`),
     syncPlayCounts: (id: number) =>
       request<PlayCountSyncResult>(`/libraryconnector/${id}/sync-play-counts`, { method: 'POST' }),
+    discover: (type: DiscoverableLibraryConnectorType) =>
+      request<DiscoveredServer[]>('/libraryconnector/discover', {
+        method: 'POST',
+        body: JSON.stringify({ type }),
+      }),
   },
   playlists: {
     list: () => request<Playlist[]>('/playlist'),

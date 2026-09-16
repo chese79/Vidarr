@@ -1,13 +1,24 @@
 import type { FastifyInstance } from 'fastify';
-import { CreateLibraryConnectorSchema, UpdateLibraryConnectorSchema } from '@vidarr/shared-types';
+import { CreateLibraryConnectorSchema, UpdateLibraryConnectorSchema, DiscoverLibraryConnectorBodySchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
 import { syncPlayCounts } from '../pipeline/playCountSync.js';
+import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discovery.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
     return prisma.libraryConnector.findMany();
+  });
+
+  // Broadcasts a UDP discovery request on the local network and returns
+  // whatever Plex/Jellyfin servers answer — purely a convenience for the "Add
+  // connector" form so the host field can be filled in instead of typed by
+  // hand. No equivalent protocol exists for Subsonic/Navidrome.
+  app.post('/api/v1/libraryconnector/discover', async (req) => {
+    const body = DiscoverLibraryConnectorBodySchema.parse(req.body);
+    if (body.type === 'plex') return discoverPlexServers();
+    return discoverJellyfinServers();
   });
 
   app.post('/api/v1/libraryconnector', async (req, reply) => {
