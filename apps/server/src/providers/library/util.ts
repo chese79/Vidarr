@@ -14,9 +14,13 @@ export function providerRequestSignal(): AbortSignal {
 // Plex and Jellyfin's HTTP APIs differ only in header name and error-message
 // label — this factory captures that one difference so both providers share
 // the actual fetch/error/204-handling logic instead of duplicating it.
-export function createAuthedFetcher(providerLabel: string, tokenHeaderName: string) {
+export function createAuthedFetcher(
+  providerLabel: string,
+  tokenHeaderName: string,
+  formatToken: (token: string) => string = (token) => token,
+) {
   function headers(config: LibraryConnector): Record<string, string> {
-    return { Accept: 'application/json', [tokenHeaderName]: config.authToken ?? '' };
+    return { Accept: 'application/json', [tokenHeaderName]: formatToken(config.authToken ?? '') };
   }
 
   async function get(config: LibraryConnector, path: string): Promise<any> {

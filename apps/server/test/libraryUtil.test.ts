@@ -66,6 +66,26 @@ describe('createAuthedFetcher', () => {
     );
   });
 
+  it('supports provider-specific token formatting for modern authorization schemes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { get } = createAuthedFetcher(
+      'Jellyfin',
+      'Authorization',
+      (token) => `MediaBrowser Token="${token}"`,
+    );
+    await get(fakeConnector(), '/System/Info');
+
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
+      'MediaBrowser Token="secret-token"',
+    );
+  });
+
   it('get() throws with the provider label and status on a non-ok response', async () => {
     vi.stubGlobal(
       'fetch',

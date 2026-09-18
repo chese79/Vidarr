@@ -9,7 +9,14 @@ import type {
   PlaylistPushResult,
 } from './types.js';
 
-const { get: jellyfinGet, send: jellyfinSend } = createAuthedFetcher('Jellyfin', 'X-Emby-Token');
+// Jellyfin 12 disables the legacy X-Emby-Token header by default. The
+// MediaBrowser Authorization scheme is accepted by both current and older
+// Jellyfin releases, so use it for all connector requests.
+const { get: jellyfinGet, send: jellyfinSend } = createAuthedFetcher(
+  'Jellyfin',
+  'Authorization',
+  (token) => `MediaBrowser Token="${token}"`,
+);
 
 // One item per music video in the target library, matched by normalized
 // title + artist (Jellyfin's MusicVideo items carry an Artists array). Exact

@@ -46,6 +46,9 @@ describe('jellyfinProvider', () => {
       ok: true,
       userId: 'resolved-user',
     });
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      Authorization: 'MediaBrowser Token="token"',
+    });
   });
 
   it('scopes artist sync to both the resolved user and selected music library', async () => {
