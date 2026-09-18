@@ -83,11 +83,6 @@ export const plexProvider: LibraryConnectorProvider = {
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
 
-    // Full replace, not a diff — see PlaylistSync doc comment in schema.prisma.
-    if (existingRemoteId) {
-      await plexSend(config, 'DELETE', `/playlists/${existingRemoteId}`).catch(() => {});
-    }
-
     const identity = await plexGet(config, '/identity');
     const machineIdentifier = identity?.MediaContainer?.machineIdentifier as string;
     const uri = `server://${machineIdentifier}/com.plexapp.plugins.library/library/metadata/${matchedKeys.join(',')}`;
@@ -97,6 +92,16 @@ export const plexProvider: LibraryConnectorProvider = {
       `/playlists?type=video&title=${encodeURIComponent(name)}&smart=0&uri=${encodeURIComponent(uri)}`,
     );
     const remotePlaylistId = String(created?.MediaContainer?.Metadata?.[0]?.ratingKey ?? '');
+    if (!remotePlaylistId) throw new Error('Plex created a playlist but returned no playlist id.');
+
+    if (existingRemoteId) {
+      try {
+        await plexSend(config, 'DELETE', `/playlists/${existingRemoteId}`);
+      } catch (err) {
+        await plexSend(config, 'DELETE', `/playlists/${remotePlaylistId}`).catch(() => {});
+        throw err;
+      }
+    }
 
     return { remotePlaylistId, matchedCount: matchedKeys.length, unmatchedTitles };
   },

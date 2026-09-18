@@ -5,7 +5,7 @@ import { searchIndexer } from '../providers/indexer/torznab.js';
 
 export async function indexerRoutes(app: FastifyInstance) {
   app.get('/api/v1/indexer', async () => {
-    return prisma.indexer.findMany();
+    return (await prisma.indexer.findMany()).map(redactIndexer);
   });
 
   app.post('/api/v1/indexer', async (req, reply) => {
@@ -22,13 +22,13 @@ export async function indexerRoutes(app: FastifyInstance) {
       },
     });
     reply.code(201);
-    return created;
+    return redactIndexer(created);
   });
 
   app.put('/api/v1/indexer/:id', async (req) => {
     const id = Number((req.params as { id: string }).id);
     const body = UpdateIndexerSchema.parse(req.body);
-    return prisma.indexer.update({
+    return redactIndexer(await prisma.indexer.update({
       where: { id },
       data: {
         ...(body.name !== undefined && { name: body.name }),
@@ -39,7 +39,7 @@ export async function indexerRoutes(app: FastifyInstance) {
         ...(body.enabled !== undefined && { enabled: body.enabled }),
         ...(body.priority !== undefined && { priority: body.priority }),
       },
-    });
+    }));
   });
 
   app.delete('/api/v1/indexer/:id', async (req, reply) => {
@@ -59,4 +59,9 @@ export async function indexerRoutes(app: FastifyInstance) {
       return { ok: false, message: (err as Error).message };
     }
   });
+}
+
+function redactIndexer<T extends { apiKey: string | null }>(indexer: T) {
+  const { apiKey, ...safe } = indexer;
+  return { ...safe, apiKey: null, hasApiKey: Boolean(apiKey) };
 }

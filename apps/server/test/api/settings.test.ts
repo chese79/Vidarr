@@ -42,6 +42,25 @@ describe('settings routes', () => {
     expect(res.json()).toMatchObject({ transferMode: 'copy', minFreeSpaceMb: 2048 });
   });
 
+  it('stores third-party secrets without returning them to the browser', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/config',
+      headers: authHeaders(),
+      payload: { imvdbApiKey: 'imvdb-secret', googleClientSecret: 'google-secret' },
+    });
+
+    expect(res.json()).toMatchObject({
+      imvdbApiKey: null,
+      googleClientSecret: null,
+      adminPasswordHash: null,
+      hasImvdbApiKey: true,
+      hasGoogleClientSecret: true,
+    });
+    expect(JSON.stringify(res.json())).not.toContain('imvdb-secret');
+    expect(JSON.stringify(res.json())).not.toContain('google-secret');
+  });
+
   it('PUT /api/v1/config rejects an invalid transferMode', async () => {
     const res = await app.inject({
       method: 'PUT',

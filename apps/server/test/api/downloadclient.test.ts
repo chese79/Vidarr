@@ -32,6 +32,26 @@ describe('downloadclient routes', () => {
     expect(res.json()).toMatchObject({ name: 'qBit', category: 'vidarr', enabled: true });
   });
 
+  it('stores download-client credentials without returning them', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/downloadclient',
+      headers: authHeaders(),
+      payload: {
+        name: 'Secret client',
+        implementation: 'SABnzbd',
+        host: 'sabnzbd',
+        port: 8080,
+        password: 'download-password',
+        apiKey: 'download-key',
+      },
+    });
+    expect(res.json()).not.toHaveProperty('password');
+    expect(res.json()).not.toHaveProperty('apiKey');
+    expect(JSON.stringify(res.json())).not.toContain('download-password');
+    expect(JSON.stringify(res.json())).not.toContain('download-key');
+  });
+
   it('POST /api/v1/downloadclient rejects a missing port', async () => {
     const res = await app.inject({
       method: 'POST',

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { LibraryConnector } from '@prisma/client';
-import { baseUrl } from './util.js';
+import { baseUrl, providerRequestSignal } from './util.js';
 import type { FetchedLibraryArtist, LibraryConnectorProvider, LibraryConnectorTestResult } from './types.js';
 
 function authParams(config: LibraryConnector): string {
@@ -20,7 +20,9 @@ function authParams(config: LibraryConnector): string {
 }
 
 async function subsonicGet(config: LibraryConnector, endpoint: string): Promise<any> {
-  const res = await fetch(`${baseUrl(config.host)}/rest/${endpoint}?${authParams(config)}`);
+  const res = await fetch(`${baseUrl(config.host)}/rest/${endpoint}?${authParams(config)}`, {
+    signal: providerRequestSignal(),
+  });
   if (!res.ok) {
     throw new Error(`Subsonic request failed: ${res.status} ${res.statusText}`);
   }

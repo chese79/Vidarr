@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { prisma } from '../db/client.js';
 import { renderNamingFormat } from '@vidarr/shared-types';
-import { placeFile, type TransferMode } from './transfer.js';
+import { placeFile, replaceFile, type TransferMode } from './transfer.js';
 import { writeLibraryMetadata } from './libraryConvention.js';
 import { isPathWithinRoot } from './pathContainment.js';
 
@@ -53,7 +53,12 @@ export async function importDownloadedFile(
     );
   }
 
-  await placeFile(sourcePath, destPath, settings.transferMode as TransferMode);
+  const transferMode = settings.transferMode as TransferMode;
+  if (existingFile?.path === destPath) {
+    await replaceFile(sourcePath, destPath, transferMode);
+  } else {
+    await placeFile(sourcePath, destPath, transferMode);
+  }
   const stat = await fs.stat(destPath);
 
   await writeLibraryMetadata(destPath, {

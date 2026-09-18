@@ -18,12 +18,12 @@ const { get: jellyfinGet, send: jellyfinSend } = createAuthedFetcher('Jellyfin',
 // scan in the first place. UserData.PlayCount comes free on the same search
 // response, so playlist push and play-count sync share this one lookup.
 const findLibraryItem: LibraryConnectorProvider['findLibraryItem'] = async (config, item) => {
-  if (!config.musicLibraryId) {
+  if (!config.userId) {
     throw new Error('Jellyfin connector has no resolved user id; run Test first.');
   }
   const body = await jellyfinGet(
     config,
-    `/Users/${config.musicLibraryId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&SearchTerm=${encodeURIComponent(item.title)}&ParentId=${encodeURIComponent(config.videoLibraryId ?? '')}&Fields=Artists`,
+    `/Users/${config.userId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&SearchTerm=${encodeURIComponent(item.title)}&ParentId=${encodeURIComponent(config.videoLibraryId ?? '')}&Fields=Artists`,
   );
   const candidates: any[] = body?.Items ?? [];
   const wantTitle = normalizeTitle(item.title);
@@ -50,19 +50,22 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       if (!user) {
         return { ok: false, message: `No Jellyfin user named "${config.username}" found.` };
       }
-      return { ok: true, musicLibraryId: user.Id as string };
+      return { ok: true, userId: user.Id as string };
     } catch (err) {
       return { ok: false, message: (err as Error).message };
     }
   },
 
   async fetchArtists(config): Promise<FetchedLibraryArtist[]> {
-    if (!config.musicLibraryId) {
+    if (!config.userId) {
       throw new Error('Jellyfin connector has no resolved user id; run Test first.');
+    }
+    if (!config.musicLibraryId) {
+      throw new Error('No music library selected for this Jellyfin connector.');
     }
     const body = await jellyfinGet(
       config,
-      `/Users/${config.musicLibraryId}/Items?IncludeItemTypes=MusicArtist&Recursive=true`,
+      `/Users/${config.userId}/Items?IncludeItemTypes=MusicArtist&Recursive=true&ParentId=${encodeURIComponent(config.musicLibraryId)}`,
     );
     const items: any[] = body?.Items ?? [];
     return items.map((item) => ({
@@ -83,7 +86,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
   },
 
   async pushPlaylist(config, { name, items, existingRemoteId }): Promise<PlaylistPushResult> {
-    if (!config.musicLibraryId) {
+    if (!config.userId) {
       throw new Error('Jellyfin connector has no resolved user id; run Test first.');
     }
     if (!config.videoLibraryId) {
@@ -98,19 +101,27 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
 
-    // Full replace, not a diff — see PlaylistSync doc comment in schema.prisma.
-    if (existingRemoteId) {
-      await jellyfinSend(config, 'DELETE', `/Items/${existingRemoteId}`).catch(() => {});
-    }
-
+    // Create first so a transient Jellyfin failure never destroys the last
+    // known-good playlist. If deleting the old playlist fails, remove the new
+    // one again and surface the error rather than silently leaving duplicates.
     const created = await jellyfinSend(config, 'POST', '/Playlists', {
       Name: name,
       Ids: matchedIds,
-      UserId: config.musicLibraryId,
+      UserId: config.userId,
       MediaType: 'Video',
     });
+    const remotePlaylistId = created.Id as string;
 
-    return { remotePlaylistId: created.Id as string, matchedCount: matchedIds.length, unmatchedTitles };
+    if (existingRemoteId) {
+      try {
+        await jellyfinSend(config, 'DELETE', `/Items/${existingRemoteId}`);
+      } catch (err) {
+        await jellyfinSend(config, 'DELETE', `/Items/${remotePlaylistId}`).catch(() => {});
+        throw err;
+      }
+    }
+
+    return { remotePlaylistId, matchedCount: matchedIds.length, unmatchedTitles };
   },
 
   findLibraryItem,

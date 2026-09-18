@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { placeFile } from '../src/pipeline/transfer.js';
+import { placeFile, replaceFile } from '../src/pipeline/transfer.js';
 
 describe('placeFile', () => {
   let tmpDir: string;
@@ -48,5 +48,17 @@ describe('placeFile', () => {
     const destPath = path.join(tmpDir, 'a', 'b', 'c', 'dest.mp4');
     await placeFile(sourcePath, destPath, 'copy');
     await expect(fs.readFile(destPath, 'utf-8')).resolves.toBe('fake video bytes');
+  });
+
+  it('replaces an existing destination in hardlink mode without EEXIST', async () => {
+    const destPath = path.join(tmpDir, 'dest.mp4');
+    await fs.writeFile(destPath, 'old video bytes');
+
+    await replaceFile(sourcePath, destPath, 'hardlink');
+
+    await expect(fs.readFile(destPath, 'utf-8')).resolves.toBe('fake video bytes');
+    const sourceStat = await fs.stat(sourcePath);
+    const destStat = await fs.stat(destPath);
+    expect(destStat.ino).toBe(sourceStat.ino);
   });
 });

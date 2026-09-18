@@ -11,6 +11,7 @@ function fakeConnector(overrides: Partial<LibraryConnector> = {}): LibraryConnec
     authToken: 'secret-token',
     username: null,
     password: null,
+    userId: null,
     musicLibraryId: null,
     videoLibraryId: null,
     enabled: true,
@@ -33,6 +34,10 @@ describe('baseUrl', () => {
   it('leaves a host with no trailing slash unchanged', () => {
     expect(baseUrl('http://host:8096')).toBe('http://host:8096');
   });
+
+  it('adds http:// to a legacy schemeless host loaded from the database', () => {
+    expect(baseUrl('jellyfin:8096')).toBe('http://jellyfin:8096');
+  });
 });
 
 describe('createAuthedFetcher', () => {
@@ -52,9 +57,13 @@ describe('createAuthedFetcher', () => {
     const result = await get(fakeConnector({ host: 'http://host:8096/' }), '/Users');
 
     expect(result).toEqual({ hello: 'world' });
-    expect(fetchMock).toHaveBeenCalledWith('http://host:8096/Users', {
-      headers: { Accept: 'application/json', 'X-Emby-Token': 'secret-token' },
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://host:8096/Users',
+      expect.objectContaining({
+        headers: { Accept: 'application/json', 'X-Emby-Token': 'secret-token' },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it('get() throws with the provider label and status on a non-ok response', async () => {

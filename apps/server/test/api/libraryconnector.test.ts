@@ -32,6 +32,26 @@ describe('libraryconnector routes', () => {
     expect(res.json()).toMatchObject({ name: 'My Jellyfin', type: 'jellyfin', enabled: true });
   });
 
+  it('never returns connector tokens or passwords', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/libraryconnector',
+      headers: authHeaders(),
+      payload: {
+        name: 'Secret connector',
+        type: 'jellyfin',
+        host: 'jellyfin:8096',
+        authToken: 'connector-secret',
+        password: 'connector-password',
+      },
+    });
+
+    expect(res.json()).toMatchObject({ authToken: null, hasAuthToken: true });
+    expect(res.json()).not.toHaveProperty('password');
+    expect(JSON.stringify(res.json())).not.toContain('connector-secret');
+    expect(JSON.stringify(res.json())).not.toContain('connector-password');
+  });
+
   it('POST /api/v1/libraryconnector prepends http:// to a bare host — a schemeless host makes every request fail with "Failed to parse URL"', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -104,7 +124,8 @@ describe('libraryconnector routes', () => {
       payload: { host: 'http://new-host:8096', authToken: 'new-token', username: 'admin' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ host: 'http://new-host:8096', authToken: 'new-token', username: 'admin' });
+    expect(res.json()).toMatchObject({ host: 'http://new-host:8096', authToken: null, hasAuthToken: true, username: 'admin' });
+    expect(JSON.stringify(res.json())).not.toContain('new-token');
   });
 
   it('DELETE /api/v1/libraryconnector/:id removes it', async () => {

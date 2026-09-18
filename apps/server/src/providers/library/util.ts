@@ -1,7 +1,14 @@
 import type { LibraryConnector } from '@prisma/client';
 
 export function baseUrl(host: string): string {
-  return host.replace(/\/+$/, '');
+  const trimmed = host.trim().replace(/\/+$/, '');
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+}
+
+const PROVIDER_TIMEOUT_MS = Number(process.env.PROVIDER_TIMEOUT_MS ?? 15_000);
+
+export function providerRequestSignal(): AbortSignal {
+  return AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
 }
 
 // Plex and Jellyfin's HTTP APIs differ only in header name and error-message
@@ -13,7 +20,10 @@ export function createAuthedFetcher(providerLabel: string, tokenHeaderName: stri
   }
 
   async function get(config: LibraryConnector, path: string): Promise<any> {
-    const res = await fetch(`${baseUrl(config.host)}${path}`, { headers: headers(config) });
+    const res = await fetch(`${baseUrl(config.host)}${path}`, {
+      headers: headers(config),
+      signal: providerRequestSignal(),
+    });
     if (!res.ok) {
       throw new Error(`${providerLabel} request failed: ${res.status} ${res.statusText}`);
     }
@@ -25,6 +35,7 @@ export function createAuthedFetcher(providerLabel: string, tokenHeaderName: stri
       method,
       headers: body !== undefined ? { ...headers(config), 'Content-Type': 'application/json' } : headers(config),
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: providerRequestSignal(),
     });
     if (!res.ok) {
       throw new Error(`${providerLabel} request failed: ${res.status} ${res.statusText}`);

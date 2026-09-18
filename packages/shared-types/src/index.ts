@@ -115,6 +115,7 @@ export const SettingsSchema = z.object({
   transferMode: TransferMode,
   minFreeSpaceMb: z.number().int(),
   imvdbApiKey: z.string().nullable(),
+  hasImvdbApiKey: z.boolean(),
   // vidarr's own API key — read-only via this schema (UpdateSettingsSchema
   // strips it, since it's Zod .partial()'d from this one); rotate it only
   // via POST /config/regenerate-api-key.
@@ -123,6 +124,7 @@ export const SettingsSchema = z.object({
   // not a parallel credential (see apps/server/src/api/googleAuth.ts).
   googleClientId: z.string().nullable(),
   googleClientSecret: z.string().nullable(),
+  hasGoogleClientSecret: z.boolean(),
   googleAllowedEmail: z.string().nullable(),
   // Username/password login — another alternative way to get apiKey into a
   // browser (see apps/server/src/api/localAuth.ts). adminPasswordHash is a
@@ -184,6 +186,8 @@ export const UpdateSettingsSchema = SettingsSchema.omit({
   apiKey: true,
   adminUsername: true,
   adminPasswordHash: true,
+  hasImvdbApiKey: true,
+  hasGoogleClientSecret: true,
 }).partial();
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>;
 
@@ -198,7 +202,9 @@ export const LibraryConnectorSchema = z.object({
   type: LibraryConnectorType,
   host: z.string().min(1),
   authToken: z.string().nullable(),
+  hasAuthToken: z.boolean(),
   username: z.string().nullable(),
+  userId: z.string().nullable(),
   musicLibraryId: z.string().nullable(),
   videoLibraryId: z.string().nullable(),
   enabled: z.boolean(),
@@ -226,6 +232,7 @@ export const CreateLibraryConnectorSchema = z.object({
   authToken: z.string().nullable().optional(),
   username: z.string().nullable().optional(),
   password: z.string().nullable().optional(),
+  musicLibraryId: z.string().nullable().optional(),
   videoLibraryId: z.string().nullable().optional(),
   enabled: z.boolean().default(true),
 });
@@ -282,8 +289,10 @@ export const RecommendationProviderConfigSchema = z.object({
   provider: RecommendationProviderName,
   enabled: z.boolean(),
   apiKey: z.string().nullable(),
+  hasApiKey: z.boolean(),
   clientId: z.string().nullable(),
   clientSecret: z.string().nullable(),
+  hasClientSecret: z.boolean(),
 });
 export type RecommendationProviderConfig = z.infer<typeof RecommendationProviderConfigSchema>;
 
@@ -396,6 +405,7 @@ export const IndexerSchema = z.object({
   implementation: IndexerImplementation,
   baseUrl: z.string(),
   apiKey: z.string().nullable(),
+  hasApiKey: z.boolean(),
   categories: z.string(), // JSON-encoded int[]
   enabled: z.boolean(),
   priority: z.number().int(),

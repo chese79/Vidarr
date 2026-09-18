@@ -40,7 +40,8 @@ describe('recommendationprovider routes', () => {
       payload: { enabled: true, apiKey: 'a-real-key' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ enabled: true, apiKey: 'a-real-key' });
+    expect(res.json()).toMatchObject({ enabled: true, apiKey: null, hasApiKey: true });
+    expect(JSON.stringify(res.json())).not.toContain('a-real-key');
   });
 
   it('PUT /api/v1/recommendationprovider/:provider 404s for a provider with no config row (P2025 -> 404)', async () => {

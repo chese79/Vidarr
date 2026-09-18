@@ -1,11 +1,8 @@
 generator client {
   provider      = "prisma-client-js"
   // "native" covers local dev (Windows/macOS/whatever host runs `npm run dev`).
-  // "debian-openssl-3.0.x" is added explicitly for Docker: the build stage's
-  // node:20-bookworm-slim (no apt packages installed) resolves as
-  // debian-openssl-1.1.x at generate time, but the runtime stage installs
-  // ffmpeg/curl, which pull in libssl3 — so the container that actually runs
-  // needs the 3.0.x engine, not the one "native" would have picked there.
+    // "debian-openssl-3.0.x" is explicit so a client generated on a developer
+    // machine also contains the engine required by the Debian Docker runtime.
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -226,7 +223,8 @@ model LibraryConnector {
   authToken      String? // Plex X-Plex-Token, or Jellyfin API key
   username       String? // Jellyfin / Subsonic
   password       String? // Subsonic only (salted-MD5 auth requires it server-side)
-  musicLibraryId String? // cached: Plex section key, or Jellyfin userId — used to read artists (LibraryArtist sync)
+  userId         String? // Jellyfin user id resolved by Test; separate from the selected music library
+  musicLibraryId String? // selected Plex/Jellyfin music section used to read artists (LibraryArtist sync)
   videoLibraryId String? // section/library holding vidarr's own downloaded music videos — used for playlist push; a different library than musicLibraryId, picked by the user from listSections()
   enabled        Boolean   @default(true)
   lastSyncedAt   DateTime?

@@ -4,6 +4,7 @@ export interface LibraryConnectorTestResult {
   ok: boolean;
   message?: string;
   musicLibraryId?: string;
+  userId?: string;
 }
 
 export interface FetchedLibraryArtist {

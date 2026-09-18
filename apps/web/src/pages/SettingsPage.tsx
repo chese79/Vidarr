@@ -40,26 +40,29 @@ function SecuritySection({ apiKey }: { apiKey: string | null }) {
 
 function GoogleSignOnSection({
   googleClientId,
-  googleClientSecret,
+  hasGoogleClientSecret,
   googleAllowedEmail,
 }: {
   googleClientId: string | null;
-  googleClientSecret: string | null;
+  hasGoogleClientSecret: boolean;
   googleAllowedEmail: string | null;
 }) {
   const queryClient = useQueryClient();
   const [clientId, setClientId] = useState(googleClientId ?? '');
-  const [clientSecret, setClientSecret] = useState(googleClientSecret ?? '');
+  const [clientSecret, setClientSecret] = useState('');
   const [allowedEmail, setAllowedEmail] = useState(googleAllowedEmail ?? '');
 
   const save = useMutation({
     mutationFn: () =>
       api.settings.update({
         googleClientId: clientId || null,
-        googleClientSecret: clientSecret || null,
+        ...(clientSecret ? { googleClientSecret: clientSecret } : {}),
         googleAllowedEmail: allowedEmail || null,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
+    onSuccess: () => {
+      setClientSecret('');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
   });
 
   const redirectUri =
@@ -82,6 +85,7 @@ function GoogleSignOnSection({
         <input
           id="google-client-secret"
           type="password"
+          placeholder={hasGoogleClientSecret ? 'Leave blank to keep current secret' : ''}
           value={clientSecret}
           onChange={(e) => setClientSecret(e.target.value)}
         />
@@ -202,19 +206,23 @@ const PROVIDER_LABEL: Record<string, string> = {
 function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
   const queryClient = useQueryClient();
   const [enabled, setEnabled] = useState(config.enabled);
-  const [apiKey, setApiKey] = useState(config.apiKey ?? '');
+  const [apiKey, setApiKey] = useState('');
   const [clientId, setClientId] = useState(config.clientId ?? '');
-  const [clientSecret, setClientSecret] = useState(config.clientSecret ?? '');
+  const [clientSecret, setClientSecret] = useState('');
 
   const update = useMutation({
     mutationFn: () =>
       api.recommendationProviders.update(config.provider, {
         enabled,
-        apiKey: apiKey || null,
         clientId: clientId || null,
-        clientSecret: clientSecret || null,
+        ...(apiKey ? { apiKey } : {}),
+        ...(clientSecret ? { clientSecret } : {}),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recommendationProviders'] }),
+    onSuccess: () => {
+      setApiKey('');
+      setClientSecret('');
+      queryClient.invalidateQueries({ queryKey: ['recommendationProviders'] });
+    },
   });
 
   return (
@@ -231,14 +239,19 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
             onChange={(e) => setClientId(e.target.value)}
           />
           <input
-            placeholder="Client Secret"
+            placeholder={`Client Secret${config.hasClientSecret ? ' (leave blank to keep)' : ''}`}
             type="password"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
           />
         </>
       ) : config.provider === 'lastfm' ? (
-        <input placeholder="API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+        <input
+          placeholder={`API key${config.hasApiKey ? ' (leave blank to keep)' : ''}`}
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
       ) : (
         <span className="empty-state" style={{ padding: 0 }}>
           No credentials required
@@ -280,7 +293,7 @@ export default function SettingsPage() {
       setNamingFormat(settings.data.namingFormat);
       setTransferMode(settings.data.transferMode);
       setMinFreeSpaceMb(settings.data.minFreeSpaceMb);
-      setImvdbApiKey(settings.data.imvdbApiKey ?? '');
+      setImvdbApiKey('');
     }
   }, [settings.data]);
 
@@ -299,12 +312,23 @@ export default function SettingsPage() {
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
-          update.mutate({ namingFormat, transferMode, minFreeSpaceMb, imvdbApiKey: imvdbApiKey || null });
+          update.mutate({
+            namingFormat,
+            transferMode,
+            minFreeSpaceMb,
+            ...(imvdbApiKey ? { imvdbApiKey } : {}),
+          });
         }}
       >
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label htmlFor="imvdb-api-key">IMVDb API key</label>
-          <input id="imvdb-api-key" value={imvdbApiKey} onChange={(e) => setImvdbApiKey(e.target.value)} />
+          <input
+            id="imvdb-api-key"
+            type="password"
+            placeholder={settings.data?.hasImvdbApiKey ? 'Leave blank to keep current key' : ''}
+            value={imvdbApiKey}
+            onChange={(e) => setImvdbApiKey(e.target.value)}
+          />
         </div>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label htmlFor="naming-format">Naming format</label>
@@ -342,7 +366,7 @@ export default function SettingsPage() {
       <LocalLoginSection adminUsername={settings.data?.adminUsername ?? null} />
       <GoogleSignOnSection
         googleClientId={settings.data?.googleClientId ?? null}
-        googleClientSecret={settings.data?.googleClientSecret ?? null}
+        hasGoogleClientSecret={settings.data?.hasGoogleClientSecret ?? false}
         googleAllowedEmail={settings.data?.googleAllowedEmail ?? null}
       />
       <RecommendationProvidersSection />

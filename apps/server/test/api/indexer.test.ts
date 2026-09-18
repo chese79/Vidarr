@@ -32,6 +32,17 @@ describe('indexer routes', () => {
     expect(res.json()).toMatchObject({ name: 'My Indexer', categories: '[3020]', enabled: true, priority: 25 });
   });
 
+  it('stores an indexer API key without returning it', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/indexer',
+      headers: authHeaders(),
+      payload: { name: 'Secret', implementation: 'Torznab', baseUrl: 'http://indexer.local', apiKey: 'indexer-secret' },
+    });
+    expect(res.json()).toMatchObject({ apiKey: null, hasApiKey: true });
+    expect(JSON.stringify(res.json())).not.toContain('indexer-secret');
+  });
+
   it('POST /api/v1/indexer rejects an invalid implementation', async () => {
     const res = await app.inject({
       method: 'POST',

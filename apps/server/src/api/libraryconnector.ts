@@ -8,7 +8,7 @@ import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discov
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
-    return prisma.libraryConnector.findMany();
+    return (await prisma.libraryConnector.findMany()).map(serializeConnector);
   });
 
   // Broadcasts a UDP discovery request on the local network and returns
@@ -31,12 +31,13 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         authToken: body.authToken ?? null,
         username: body.username ?? null,
         password: body.password ?? null,
+        musicLibraryId: body.musicLibraryId ?? null,
         videoLibraryId: body.videoLibraryId ?? null,
         enabled: body.enabled,
       },
     });
     reply.code(201);
-    return created;
+    return serializeConnector(created);
   });
 
   // Lists the connector's library sections so the UI can offer a picker for
@@ -59,7 +60,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.put('/api/v1/libraryconnector/:id', async (req) => {
     const id = Number((req.params as { id: string }).id);
     const body = UpdateLibraryConnectorSchema.parse(req.body);
-    return prisma.libraryConnector.update({ where: { id }, data: body });
+    return serializeConnector(await prisma.libraryConnector.update({ where: { id }, data: body }));
   });
 
   app.delete('/api/v1/libraryconnector/:id', async (req, reply) => {
@@ -74,10 +75,13 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
     if (!connector) return reply.code(404).send({ error: 'Connector not found' });
 
     const result = await getLibraryConnectorProvider(connector.type).testConnection(connector);
-    if (result.musicLibraryId) {
+    if (result.musicLibraryId || result.userId) {
       await prisma.libraryConnector.update({
         where: { id },
-        data: { musicLibraryId: result.musicLibraryId },
+        data: {
+          ...(result.musicLibraryId && { musicLibraryId: result.musicLibraryId }),
+          ...(result.userId && { userId: result.userId }),
+        },
       });
     }
     return { ok: result.ok, message: result.message };
@@ -155,4 +159,9 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: (err as Error).message });
     }
   });
+}
+
+function serializeConnector<T extends { authToken: string | null; password: string | null }>(connector: T) {
+  const { authToken, password: _password, ...safe } = connector;
+  return { ...safe, authToken: null, hasAuthToken: Boolean(authToken) };
 }

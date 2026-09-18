@@ -3,17 +3,26 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { DiscoveredServer, LibraryConnector, LibraryConnectorType, LibrarySection } from '@vidarr/shared-types';
 
-// Video library picker — separate from the music-library section used to read
-// listened-to artists. This is where the connector will look for vidarr's own
-// downloaded music videos when pushing a playlist (see playlist push).
-function VideoLibraryPicker({ connector }: { connector: LibraryConnector }) {
+// The music and video sections are deliberately selected independently: one
+// seeds Discover, while the other contains vidarr's organized video files.
+function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind: 'music' | 'video' }) {
   const queryClient = useQueryClient();
   const [sections, setSections] = useState<LibrarySection[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const selectedId = kind === 'music' ? connector.musicLibraryId : connector.videoLibraryId;
+  const visibleSections = sections?.filter((section) => {
+    const type = section.type.toLowerCase();
+    const isMusic = type === 'music' || type === 'artist';
+    return kind === 'music' ? isMusic : !isMusic;
+  });
   const updateConnector = useMutation({
-    mutationFn: (videoLibraryId: string) => api.libraryConnectors.update(connector.id, { videoLibraryId }),
+    mutationFn: (libraryId: string) =>
+      api.libraryConnectors.update(
+        connector.id,
+        kind === 'music' ? { musicLibraryId: libraryId } : { videoLibraryId: libraryId },
+      ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['libraryConnectors'] }),
   });
 
@@ -35,7 +44,7 @@ function VideoLibraryPicker({ connector }: { connector: LibraryConnector }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <button className="secondary" onClick={loadSections} disabled={loading}>
-          {loading ? 'Loading…' : connector.videoLibraryId ? `Library #${connector.videoLibraryId}` : 'Choose…'}
+          {loading ? 'Loading…' : selectedId ? `Library #${selectedId}` : 'Choose…'}
         </button>
         {error && (
           <span className="empty-state" style={{ padding: 0 }} title={error}>
@@ -48,11 +57,11 @@ function VideoLibraryPicker({ connector }: { connector: LibraryConnector }) {
 
   return (
     <select
-      value={connector.videoLibraryId ?? ''}
+      value={selectedId ?? ''}
       onChange={(e) => updateConnector.mutate(e.target.value)}
     >
-      <option value="">Select video library…</option>
-      {sections.map((s) => (
+      <option value="">Select {kind} library…</option>
+      {visibleSections?.map((s) => (
         <option key={s.id} value={s.id}>
           {s.title} ({s.type})
         </option>
@@ -84,7 +93,7 @@ function ConnectorRow({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(connector.name);
   const [host, setHost] = useState(connector.host);
-  const [authToken, setAuthToken] = useState(connector.authToken ?? '');
+  const [authToken, setAuthToken] = useState('');
   const [username, setUsername] = useState(connector.username ?? '');
   const [password, setPassword] = useState('');
 
@@ -93,7 +102,7 @@ function ConnectorRow({
       api.libraryConnectors.update(connector.id, {
         name,
         host,
-        authToken: authToken || null,
+        ...(authToken ? { authToken } : {}),
         username: username || null,
         ...(password ? { password } : {}),
       }),
@@ -107,7 +116,7 @@ function ConnectorRow({
   function startEditing() {
     setName(connector.name);
     setHost(connector.host);
-    setAuthToken(connector.authToken ?? '');
+    setAuthToken('');
     setUsername(connector.username ?? '');
     setPassword('');
     update.reset();
@@ -117,7 +126,7 @@ function ConnectorRow({
   if (editing) {
     return (
       <tr>
-        <td colSpan={6}>
+        <td colSpan={7}>
           <div className="form-row" style={{ flexWrap: 'wrap' }}>
             <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
             <input
@@ -128,7 +137,8 @@ function ConnectorRow({
             />
             {connector.type !== 'subsonic' && (
               <input
-                placeholder={connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key'}
+                placeholder={`${connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key'}${connector.hasAuthToken ? ' (leave blank to keep)' : ''}`}
+                type="password"
                 value={authToken}
                 onChange={(e) => setAuthToken(e.target.value)}
               />
@@ -164,7 +174,10 @@ function ConnectorRow({
       <td>{connector.host}</td>
       <td>{status ?? connector.lastSyncStatus ?? '—'}</td>
       <td>
-        <VideoLibraryPicker connector={connector} />
+        <LibraryPicker connector={connector} kind="music" />
+      </td>
+      <td>
+        <LibraryPicker connector={connector} kind="video" />
       </td>
       <td style={{ display: 'flex', gap: 6 }}>
         <button className="secondary" onClick={onTest}>
@@ -351,8 +364,9 @@ export default function LibraryConnectorsPage() {
         )}
         <div className="form-row">
           {type !== 'subsonic' && (
-            <input
+          <input
               placeholder={type === 'plex' ? 'Plex token' : 'Jellyfin API key'}
+              type="password"
               value={authToken}
               onChange={(e) => setAuthToken(e.target.value)}
             />
@@ -384,6 +398,7 @@ export default function LibraryConnectorsPage() {
               <th>Type</th>
               <th>Host</th>
               <th>Status</th>
+              <th>Music library</th>
               <th>Video library</th>
               <th></th>
             </tr>

@@ -8,7 +8,7 @@ const MIN_VIDEO_SIZE_BYTES = 5 * 1024 * 1024; // excludes samples/thumbnails
 // @types/node@20's fs.readdir overloads don't cover withFileTypes+recursive
 // together even though Node itself has supported it since 20.1 — a types-lag
 // gap, not a real `any`. `parentPath` is the current Dirent field name
-// (`path` is its deprecated alias, kept here for older Node 20.x point
+// (`path` is its deprecated alias, kept here for older Node releases
 // releases that predate the rename).
 interface RecursiveDirent {
   name: string;

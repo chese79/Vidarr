@@ -84,7 +84,7 @@ and "write to" a media server are different jobs with different data:
 
 ## Local development
 
-Requires Node 20+.
+Requires Node 22.12+.
 
 ```bash
 npm install

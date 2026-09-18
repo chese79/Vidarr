@@ -5,7 +5,7 @@ import { getDownloadClientProvider } from '../providers/downloadclient/index.js'
 
 export async function downloadClientRoutes(app: FastifyInstance) {
   app.get('/api/v1/downloadclient', async () => {
-    return prisma.downloadClient.findMany();
+    return (await prisma.downloadClient.findMany()).map(redactDownloadClient);
   });
 
   app.post('/api/v1/downloadclient', async (req, reply) => {
@@ -24,7 +24,7 @@ export async function downloadClientRoutes(app: FastifyInstance) {
       },
     });
     reply.code(201);
-    return created;
+    return redactDownloadClient(created);
   });
 
   app.delete('/api/v1/downloadclient/:id', async (req, reply) => {
@@ -39,4 +39,9 @@ export async function downloadClientRoutes(app: FastifyInstance) {
     if (!client) return reply.code(404).send({ error: 'Download client not found' });
     return getDownloadClientProvider(client.implementation).testConnection(client);
   });
+}
+
+function redactDownloadClient<T extends { password: string | null; apiKey: string | null }>(client: T) {
+  const { password: _password, apiKey: _apiKey, ...safe } = client;
+  return safe;
 }

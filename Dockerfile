@@ -1,6 +1,13 @@
 # --- base stage: deps + shared-types + prisma client (feeds both parallel builds below) ---
-FROM node:20-bookworm-slim AS base
+FROM node:22-bookworm-slim AS base
 WORKDIR /app
+
+# Prisma selects its native schema engine while generating the client. The
+# slim base does not include OpenSSL detection metadata, so install it only in
+# this build stage rather than letting Prisma guess the wrong binary target.
+RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends openssl
 
 COPY package.json package-lock.json ./
 COPY packages/shared-types/package.json packages/shared-types/
@@ -26,7 +33,7 @@ FROM base AS build-web
 RUN npm run build --workspace @vidarr/web
 
 # --- runtime stage ---
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 
 # python3/pip for yt-dlp; xz-utils only to extract the static ffmpeg build
@@ -61,12 +68,8 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
 # changed) — re-verified against its checksum on every build regardless of
 # whether it came from cache or a fresh download.
 #
-# curl is bounded (--max-time per attempt, a few retries) rather than
-# unbounded — measured directly against johnvansickle.com from this network:
-# one build finished this download in 379s, another took 1202s for the same
-# ~80MB file. Better to fail loudly and retryably within a known ceiling
-# (worst case ~3 attempts x 180s + delays, well under 10 minutes) than risk
-# a silent 20-minute stall with no feedback.
+# curl is bounded rather than unbounded, but each attempt allows for slow
+# connections and resumes a partial cache entry instead of restarting it.
 ARG TARGETARCH
 RUN --mount=type=cache,target=/var/cache/ffmpeg-dl set -eu; \
     case "${TARGETARCH}" in \
@@ -77,7 +80,7 @@ RUN --mount=type=cache,target=/var/cache/ffmpeg-dl set -eu; \
     cd /var/cache/ffmpeg-dl; \
     if [ ! -f "ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz" ] \
        || ! md5sum -c "ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz.md5" >/dev/null 2>&1; then \
-      curl -fSL --connect-timeout 15 --max-time 180 --retry 2 --retry-delay 5 --retry-all-errors \
+      curl -fSL --connect-timeout 15 --max-time 1800 --retry 2 --retry-delay 5 --retry-all-errors --continue-at - \
         -O "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz"; \
       curl -fSL --connect-timeout 15 --max-time 60 --retry 2 --retry-delay 5 --retry-all-errors \
         -O "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz.md5"; \
