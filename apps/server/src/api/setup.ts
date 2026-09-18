@@ -1,12 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../db/client.js';
+import { BOOTSTRAP_WINDOW_MS } from '../pipeline/auth.js';
 
 // How long after generation the key stays revealable through this endpoint,
 // even if nobody has logged in yet — bounds the exposure window for what is,
 // by necessity, an unauthenticated route (see main.ts's onRequest hook,
 // which exempts this path the same way it exempts /health).
-const REVEAL_WINDOW_MS = 30 * 60 * 1000;
-
 // Lets the web UI show the freshly-generated API key directly on first load
 // instead of requiring a trip to the server/container logs — but only
 // before it's ever been used to log in, and only within a short window
@@ -21,7 +20,7 @@ export async function setupRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'Not available' });
     }
     const age = Date.now() - settings.apiKeyGeneratedAt.getTime();
-    if (age > REVEAL_WINDOW_MS) {
+    if (age > BOOTSTRAP_WINDOW_MS) {
       return reply.code(404).send({ error: 'Not available' });
     }
     return { apiKey: settings.apiKey };

@@ -41,16 +41,24 @@ describe('local username/password login routes', () => {
     expect(res.statusCode).toBe(200);
   }
 
+  async function prepareFreshInstallation(apiKey = 'internal-key') {
+    await ensureSettings({ apiKey });
+    await prisma.settings.update({
+      where: { id: 1 },
+      data: { apiKeyGeneratedAt: new Date(), apiKeyFirstUsedAt: null },
+    });
+  }
+
   describe('GET /api/v1/auth/login/status', () => {
     it('reports not configured when nothing is set', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/v1/auth/login/status' });
-      expect(res.json()).toEqual({ configured: false });
+      expect(res.json()).toEqual({ configured: false, setupAllowed: false });
     });
 
     it('reports configured once a username/password have been set', async () => {
       await configureLogin();
       const res = await app.inject({ method: 'GET', url: '/api/v1/auth/login/status' });
-      expect(res.json()).toEqual({ configured: true });
+      expect(res.json()).toEqual({ configured: true, setupAllowed: false });
     });
 
     it('requires no API key itself', async () => {
@@ -61,7 +69,7 @@ describe('local username/password login routes', () => {
 
   describe('POST /api/v1/auth/setup', () => {
     it('lets an unclaimed installation create its owner without an API key', async () => {
-      await ensureSettings({ apiKey: 'internal-key' });
+      await prepareFreshInstallation();
       const res = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/setup',
@@ -77,7 +85,7 @@ describe('local username/password login routes', () => {
     });
 
     it('can be claimed only once and cannot overwrite the owner account', async () => {
-      await ensureSettings({ apiKey: 'internal-key' });
+      await prepareFreshInstallation();
       const first = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/setup',
@@ -101,7 +109,7 @@ describe('local username/password login routes', () => {
     });
 
     it('rejects weak setup credentials', async () => {
-      await ensureSettings({ apiKey: TEST_API_KEY });
+      await prepareFreshInstallation(TEST_API_KEY);
       const res = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/setup',
@@ -109,7 +117,7 @@ describe('local username/password login routes', () => {
       });
       expect(res.statusCode).toBe(400);
       const status = await app.inject({ method: 'GET', url: '/api/v1/auth/login/status' });
-      expect(status.json()).toEqual({ configured: false });
+      expect(status.json()).toEqual({ configured: false, setupAllowed: true });
     });
 
     it('waits for server initialization when no internal key exists yet', async () => {
@@ -119,6 +127,41 @@ describe('local username/password login routes', () => {
         payload: { username: 'owner', password: 'correct horse battery staple' },
       });
       expect(res.statusCode).toBe(503);
+    });
+
+    it('does not let an existing API-key installation be claimed', async () => {
+      await ensureSettings({ apiKey: 'existing-key' });
+      await prisma.settings.update({
+        where: { id: 1 },
+        data: { apiKeyGeneratedAt: new Date(), apiKeyFirstUsedAt: new Date() },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/setup',
+        payload: { username: 'attacker', password: 'correct horse battery staple' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+      expect(settings?.adminUsername).toBeNull();
+    });
+
+    it('closes owner setup after the bootstrap window expires', async () => {
+      await ensureSettings({ apiKey: 'existing-key' });
+      await prisma.settings.update({
+        where: { id: 1 },
+        data: { apiKeyGeneratedAt: new Date(Date.now() - 31 * 60 * 1000), apiKeyFirstUsedAt: null },
+      });
+
+      const status = await app.inject({ method: 'GET', url: '/api/v1/auth/login/status' });
+      expect(status.json()).toEqual({ configured: false, setupAllowed: false });
+      const setup = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/setup',
+        payload: { username: 'attacker', password: 'correct horse battery staple' },
+      });
+      expect(setup.statusCode).toBe(409);
     });
   });
 
@@ -200,6 +243,40 @@ describe('local username/password login routes', () => {
       });
       expect(res.statusCode).toBe(401);
     });
+
+    it('rate-limits repeated failed sign-in attempts', async () => {
+      await configureLogin();
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          payload: { username: 'admin', password: 'wrong password' },
+        });
+        expect(res.statusCode).toBe(401);
+      }
+      const limited = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { username: 'admin', password: 'correct horse battery staple' },
+      });
+      expect(limited.statusCode).toBe(429);
+    });
+
+    it('reserves rate-limit slots before parallel password checks finish', async () => {
+      await configureLogin();
+      const responses = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          app.inject({
+            method: 'POST',
+            url: '/api/v1/auth/login',
+            payload: { username: 'admin', password: 'wrong password' },
+          }),
+        ),
+      );
+
+      expect(responses.filter((res) => res.statusCode === 401)).toHaveLength(5);
+      expect(responses.filter((res) => res.statusCode === 429)).toHaveLength(1);
+    });
   });
 
   describe('POST /api/v1/auth/login/credentials', () => {
@@ -223,7 +300,7 @@ describe('local username/password login routes', () => {
       });
       expect(res.statusCode).toBe(400);
       const status = await app.inject({ method: 'GET', url: '/api/v1/auth/login/status' });
-      expect(status.json()).toEqual({ configured: false });
+      expect(status.json()).toEqual({ configured: false, setupAllowed: false });
     });
 
     it('rejects an empty username', async () => {

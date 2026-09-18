@@ -157,6 +157,7 @@ export type GoogleAuthExchangeResponse = z.infer<typeof GoogleAuthExchangeRespon
 // GET /api/v1/auth/login/status — see apps/server/src/api/localAuth.ts.
 export const LocalLoginStatusSchema = z.object({
   configured: z.boolean(),
+  setupAllowed: z.boolean(),
 });
 export type LocalLoginStatus = z.infer<typeof LocalLoginStatusSchema>;
 

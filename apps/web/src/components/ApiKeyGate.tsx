@@ -13,16 +13,20 @@ const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
 
 // The web UI is username/password-first. The server still uses an API key as
 // its internal bearer credential so scripts and integrations remain compatible,
-// but browser users never need to find, copy, or enter that key themselves.
+// New browser users never need to find or copy that key themselves. Existing
+// API-key-only installations can still enter it once to migrate safely.
 export default function ApiKeyGate({ children }: { children: React.ReactNode }) {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [googleConfigured, setGoogleConfigured] = useState(false);
   const [localLoginConfigured, setLocalLoginConfigured] = useState<boolean | null>(null);
+  const [localSetupAllowed, setLocalSetupAllowed] = useState(false);
+  const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
 
   async function tryKey(key: string) {
     setStoredApiKey(key);
@@ -33,6 +37,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
         setError(null);
         return true;
       }
+      setError('Incorrect API key.');
     } catch {
       setError('Could not reach the server.');
     }
@@ -54,11 +59,12 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
     async function initialize() {
       const [googleStatus, loginStatus] = await Promise.all([
         api.googleAuth.status().catch(() => ({ configured: false })),
-        api.localAuth.status().catch(() => ({ configured: false })),
+        api.localAuth.status(),
       ]);
       if (cancelled) return;
       setGoogleConfigured(googleStatus.configured);
       setLocalLoginConfigured(loginStatus.configured);
+      setLocalSetupAllowed(loginStatus.setupAllowed);
 
       const params = new URLSearchParams(window.location.search);
       const exchangeToken = params.get('google_exchange');
@@ -108,9 +114,9 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
     }
 
     initialize().catch(() => {
-      setLocalLoginConfigured(false);
+      setStatusUnavailable(true);
       setAuthorized(false);
-      setError('Could not reach the server.');
+      setError('Could not reach the server or check its sign-in status.');
     });
 
     return () => {
@@ -121,8 +127,17 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const isSetup = !localLoginConfigured && localSetupAllowed;
+    const isApiKeyMigration = !localLoginConfigured && !localSetupAllowed;
+    if (isApiKeyMigration) {
+      if (!apiKeyInput.trim()) return;
+      setChecking(true);
+      setError(null);
+      await tryKey(apiKeyInput.trim());
+      setChecking(false);
+      return;
+    }
     if (!username.trim() || !password) return;
-    const isSetup = !localLoginConfigured;
     if (isSetup && password !== confirmPassword) {
       setError("Passwords don't match.");
       return;
@@ -140,8 +155,14 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
       setAuthorized(false);
       setError(err instanceof Error ? err.message : isSetup ? 'Account setup failed.' : 'Sign-in failed.');
       if (isSetup) {
-        const status = await api.localAuth.status().catch(() => ({ configured: false }));
-        setLocalLoginConfigured(status.configured);
+        try {
+          const status = await api.localAuth.status();
+          setLocalLoginConfigured(status.configured);
+          setLocalSetupAllowed(status.setupAllowed);
+        } catch {
+          setStatusUnavailable(true);
+          setError('Could not reach the server or check its sign-in status.');
+        }
       }
     } finally {
       setChecking(false);
@@ -149,6 +170,18 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
   }
 
   if (authorized) return <>{children}</>;
+
+  if (statusUnavailable) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 24 }}>
+        <div className="card" style={{ width: '100%', maxWidth: 420 }}>
+          <h2 style={{ marginTop: 0 }}>Vidarr is unavailable</h2>
+          <p className="empty-state">{error}</p>
+          <button type="button" onClick={() => window.location.reload()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   if (authorized === null || checking || localLoginConfigured === null) {
     return (
@@ -158,7 +191,8 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
     );
   }
 
-  const isSetup = !localLoginConfigured;
+  const isSetup = !localLoginConfigured && localSetupAllowed;
+  const isApiKeyMigration = !localLoginConfigured && !localSetupAllowed;
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 24 }}>
       <div className="card" style={{ width: '100%', maxWidth: 420 }}>
@@ -166,43 +200,62 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
         <p className="empty-state" style={{ padding: '0 0 12px' }}>
           {isSetup
             ? 'Create the owner account for this Vidarr installation.'
-            : 'Enter your owner username and password.'}
+            : isApiKeyMigration
+              ? 'Enter the existing integration API key once, then create an owner account in Settings.'
+              : 'Enter your owner username and password.'}
         </p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <label htmlFor="login-username">Username</label>
-            <input
-              id="login-username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoFocus
-              required
-            />
-            <label htmlFor="login-password">Password{isSetup ? ' (min. 8 characters)' : ''}</label>
-            <input
-              id="login-password"
-              type="password"
-              autoComplete={isSetup ? 'new-password' : 'current-password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={isSetup ? 8 : undefined}
-              required
-            />
-            {isSetup && (
+            {isApiKeyMigration ? (
               <>
-                <label htmlFor="login-password-confirm">Confirm password</label>
+                <label htmlFor="login-api-key">Integration API key</label>
                 <input
-                  id="login-password-confirm"
+                  id="login-api-key"
                   type="password"
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  minLength={8}
+                  autoComplete="off"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  autoFocus
                   required
                 />
+              </>
+            ) : (
+              <>
+                <label htmlFor="login-username">Username</label>
+                <input
+                  id="login-username"
+                  type="text"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoFocus
+                  required
+                />
+                <label htmlFor="login-password">Password{isSetup ? ' (min. 8 characters)' : ''}</label>
+                <input
+                  id="login-password"
+                  type="password"
+                  autoComplete={isSetup ? 'new-password' : 'current-password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={isSetup ? 8 : undefined}
+                  required
+                />
+                {isSetup && (
+                  <>
+                    <label htmlFor="login-password-confirm">Confirm password</label>
+                    <input
+                      id="login-password-confirm"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      minLength={8}
+                      required
+                    />
+                  </>
+                )}
               </>
             )}
             <button type="submit">{isSetup ? 'Create owner account' : 'Sign in'}</button>

@@ -62,7 +62,7 @@ describe('factoryReset', () => {
     expect(settings?.adminUsername).toBeNull();
     expect(settings?.adminPasswordHash).toBeNull();
     const status = await app.inject({ method: 'GET', url: '/api/v1/auth/login/status' });
-    expect(status.json()).toEqual({ configured: false });
+    expect(status.json()).toEqual({ configured: false, setupAllowed: true });
   });
 
   it('clears the Google Sign-On config', async () => {

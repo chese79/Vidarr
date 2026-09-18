@@ -308,7 +308,12 @@ export const api = {
   },
   localAuth: {
     // These routes work before the browser has its internal API credential.
-    status: () => fetch('/api/v1/auth/login/status').then((r) => r.json() as Promise<LocalLoginStatus>),
+    status: async () => {
+      const res = await fetch('/api/v1/auth/login/status');
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? 'Could not check sign-in status.');
+      return body as LocalLoginStatus;
+    },
     login: async (username: string, password: string) => {
       const res = await fetch('/api/v1/auth/login', {
         method: 'POST',

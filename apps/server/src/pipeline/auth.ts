@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../db/client.js';
 
+export const BOOTSTRAP_WINDOW_MS = 30 * 60 * 1000;
+
 // Generated once, on first boot, and persisted — every subsequent start
 // reuses the same key rather than rotating it out from under the user.
 // Printed here on first generation (same bootstrap approach Sonarr/Radarr use

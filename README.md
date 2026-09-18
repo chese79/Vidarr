@@ -115,8 +115,13 @@ YTDLP_PATH="C:\path\to\yt-dlp.exe" FFMPEG_PATH="C:\path\to\ffmpeg.exe" npm run d
 
 Open the web interface and choose an owner username and password. That is the normal sign-in from
 then on; the browser no longer asks you to find or paste an API key. The password is stored only as
-a salted hash. Owner setup is available only while the installation is unclaimed and cannot be
-used to overwrite an existing account.
+a salted hash. Unauthenticated owner setup is available only during the first 30 minutes of a
+genuinely new or factory-reset installation, and closes immediately when the API key is first used.
+It cannot claim an existing API-key installation or overwrite an existing account.
+
+When upgrading an older API-key-only installation, enter that existing key once at the sign-in
+screen, then create the owner username and password under Settings → Owner account. This preserves
+the existing deployment without opening an unauthenticated account-claim path.
 
 Vidarr still generates an internal API key for scripts and third-party integrations that call
 `/api/v1/*` directly with the `X-Api-Key` header. An authenticated owner can view or rotate that
@@ -193,8 +198,9 @@ deployment path, including this one, in full step-by-step detail.
   access to any data or action.
 - **Don't expose vidarr directly to the internet.** Like Sonarr/Radarr/Lidarr, it's designed to be
   reached over your own network, a VPN, or Tailscale — not port-forwarded. It stores plaintext
-  credentials for every indexer, download client, and library connector you configure, and (like
-  the rest of the *arr family) has no rate limiting or intrusion detection of its own.
+  credentials for every indexer, download client, and library connector you configure. Owner-login
+  failures are rate-limited in memory, but Vidarr does not provide comprehensive intrusion
+  detection or an internet-facing security perimeter.
 - If you do put it behind a reverse proxy, terminate TLS there and don't strip/forward
   `X-Forwarded-*` headers vidarr doesn't itself trust — it only checks the API key header, not
   client IP or forwarded-host headers, so there's nothing proxy-related to misconfigure into an
