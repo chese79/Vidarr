@@ -12,11 +12,19 @@ function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind:
   const [error, setError] = useState<string | null>(null);
 
   const selectedId = kind === 'music' ? connector.musicLibraryId : connector.videoLibraryId;
-  const visibleSections = sections?.filter((section) => {
-    const type = section.type.toLowerCase();
-    const isMusic = type === 'music' || type === 'artist';
-    return kind === 'music' ? isMusic : !isMusic;
-  });
+  const visibleSections = sections
+    ? [...sections].sort((a, b) => {
+        const isRecommended = (section: LibrarySection) => {
+          const type = section.type.toLowerCase();
+          return kind === 'music'
+            ? type === 'music' || type === 'artist'
+            : type === 'musicvideos';
+        };
+
+        return Number(isRecommended(b)) - Number(isRecommended(a))
+          || a.title.localeCompare(b.title);
+      })
+    : null;
   const updateConnector = useMutation({
     mutationFn: (libraryId: string) =>
       api.libraryConnectors.update(
@@ -60,10 +68,15 @@ function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind:
       value={selectedId ?? ''}
       onChange={(e) => updateConnector.mutate(e.target.value)}
     >
-      <option value="">Select {kind} library…</option>
+      <option value="">Select {kind === 'music' ? 'music' : 'music video'} library…</option>
       {visibleSections?.map((s) => (
         <option key={s.id} value={s.id}>
           {s.title} ({s.type})
+          {(kind === 'music'
+            ? ['music', 'artist'].includes(s.type.toLowerCase())
+            : s.type.toLowerCase() === 'musicvideos')
+            ? ' — recommended'
+            : ''}
         </option>
       ))}
     </select>
@@ -191,7 +204,7 @@ function ConnectorRow({
             className="secondary"
             onClick={onSyncPlayCounts}
             disabled={!connector.videoLibraryId}
-            title={!connector.videoLibraryId ? 'Pick a video library first' : undefined}
+            title={!connector.videoLibraryId ? 'Pick a music video library first' : undefined}
           >
             Sync Play Counts
           </button>
@@ -398,8 +411,11 @@ export default function LibraryConnectorsPage() {
               <th>Type</th>
               <th>Host</th>
               <th>Status</th>
-              <th>Music library</th>
-              <th>Video library</th>
+              <th>
+                Music library
+                <small style={{ display: 'block', fontWeight: 400 }}>(artist matching only)</small>
+              </th>
+              <th>Music Video library</th>
               <th></th>
             </tr>
           </thead>
