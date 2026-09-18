@@ -101,6 +101,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     '/api/v1/auth/google/exchange',
     '/api/v1/auth/login/status',
     '/api/v1/auth/login',
+    '/api/v1/auth/setup',
   ]);
 
   // Every other /api/v1/* route requires vidarr's own API key (generated on

@@ -59,6 +59,69 @@ describe('local username/password login routes', () => {
     });
   });
 
+  describe('POST /api/v1/auth/setup', () => {
+    it('lets an unclaimed installation create its owner without an API key', async () => {
+      await ensureSettings({ apiKey: 'internal-key' });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/setup',
+        payload: { username: ' owner ', password: 'correct horse battery staple' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ apiKey: 'internal-key' });
+      const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+      expect(settings?.adminUsername).toBe('owner');
+      expect(settings?.adminPasswordHash).toBeTruthy();
+      expect(settings?.adminPasswordHash).not.toContain('correct horse battery staple');
+    });
+
+    it('can be claimed only once and cannot overwrite the owner account', async () => {
+      await ensureSettings({ apiKey: 'internal-key' });
+      const first = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/setup',
+        payload: { username: 'owner', password: 'first password123' },
+      });
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/setup',
+        payload: { username: 'attacker', password: 'second password456' },
+      });
+      expect(second.statusCode).toBe(409);
+
+      const login = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { username: 'owner', password: 'first password123' },
+      });
+      expect(login.statusCode).toBe(200);
+    });
+
+    it('rejects weak setup credentials', async () => {
+      await ensureSettings({ apiKey: TEST_API_KEY });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/setup',
+        payload: { username: 'owner', password: 'short' },
+      });
+      expect(res.statusCode).toBe(400);
+      const status = await app.inject({ method: 'GET', url: '/api/v1/auth/login/status' });
+      expect(status.json()).toEqual({ configured: false });
+    });
+
+    it('waits for server initialization when no internal key exists yet', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/setup',
+        payload: { username: 'owner', password: 'correct horse battery staple' },
+      });
+      expect(res.statusCode).toBe(503);
+    });
+  });
+
   describe('POST /api/v1/auth/login', () => {
     it('requires no API key itself — that would be circular', async () => {
       const res = await app.inject({

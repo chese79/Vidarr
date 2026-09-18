@@ -20,7 +20,7 @@ function SecuritySection({ apiKey }: { apiKey: string | null }) {
 
   return (
     <div className="card">
-      <h3 style={{ marginTop: 0 }}>Security</h3>
+      <h3 style={{ marginTop: 0 }}>Integration API key</h3>
       <div className="form-row" style={{ alignItems: 'center' }}>
         <input readOnly type={revealed ? 'text' : 'password'} value={apiKey ?? ''} style={{ minWidth: 320 }} />
         <button type="button" className="secondary" onClick={() => setRevealed((v) => !v)}>
@@ -31,8 +31,8 @@ function SecuritySection({ apiKey }: { apiKey: string | null }) {
         </button>
       </div>
       <p className="empty-state" style={{ padding: '6px 0 0' }}>
-        Required on every request (sent as the <code>X-Api-Key</code> header). Regenerating
-        immediately signs out every other browser/session using the old key.
+        For scripts and third-party integrations that call Vidarr directly. You do not need this
+        key to sign in to the web interface. Regenerating it signs out other browser sessions.
       </p>
     </div>
   );
@@ -72,9 +72,8 @@ function GoogleSignOnSection({
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Google Sign-On</h3>
       <p className="empty-state" style={{ padding: '0 0 8px' }}>
-        An alternative way to log into this web UI besides typing the API key directly — only the
-        one account below can use it. The API key itself is unchanged and still required for every
-        API request.
+        Optional alternative to the owner username and password. Only the Google account below can
+        use it.
       </p>
       <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
         <label htmlFor="google-client-id">Client ID</label>
@@ -140,11 +139,9 @@ function LocalLoginSection({ adminUsername }: { adminUsername: string | null }) 
 
   return (
     <div className="card">
-      <h3 style={{ marginTop: 0 }}>Username &amp; Password Login</h3>
+      <h3 style={{ marginTop: 0 }}>Owner account</h3>
       <p className="empty-state" style={{ padding: '0 0 8px' }}>
-        Another alternative to typing the API key directly. The API key itself is unchanged and
-        still required for every API request — signing in here just hands your browser that same
-        key after checking these credentials.
+        Use this username and password to sign in to the Vidarr web interface.
         {adminUsername && (
           <>
             {' '}

@@ -111,32 +111,21 @@ YTDLP_PATH="C:\path\to\yt-dlp.exe" FFMPEG_PATH="C:\path\to\ffmpeg.exe" npm run d
 `ffprobe` is assumed to live alongside `ffmpeg` (same directory) unless overridden separately via
 `FFPROBE_PATH` — true for both a standard apt/winget install and the Docker image.
 
-### First run: the API key
+### First run: create the owner account
 
-Every `/api/v1/*` request requires an API key (sent as the `X-Api-Key` header) — vidarr generates
-one automatically the first time the server boots and **prints it to the server's own console
-log**, e.g.:
+Open the web interface and choose an owner username and password. That is the normal sign-in from
+then on; the browser no longer asks you to find or paste an API key. The password is stored only as
+a salted hash. Owner setup is available only while the installation is unclaimed and cannot be
+used to overwrite an existing account.
 
-```
-[vidarr] Generated a new API key (required on every request — see Settings once logged in to view/rotate it):
+Vidarr still generates an internal API key for scripts and third-party integrations that call
+`/api/v1/*` directly with the `X-Api-Key` header. An authenticated owner can view or rotate that
+key under Settings → Integration API key, but it is not needed for normal web use.
 
-    <64 hex characters>
-```
+### Recovering a forgotten owner login
 
-On a fresh install, the web UI's first screen also shows this key directly (with a clear
-"copy it now, you won't see it here again" warning) instead of requiring a trip to the logs — this
-only works once, before anyone has ever logged in, and only for a short window after the key is
-generated. After that, paste it into the key prompt manually (remembered in the browser after
-that). Once logged in, Settings → Security shows and can regenerate the key. There's no way to
-retrieve a forgotten key through the API itself (every route requires it) — read it back out of
-the `Settings` table directly, or just regenerate it.
-
-### Recovering a lost API key (locked out entirely)
-
-If you're locked out with no way back in — the key was never saved, no username/password or
-Google Sign-On is configured, and the one-time bootstrap-reveal screen has already closed after
-your first login — run the factory-reset script with container/host shell access (the same level
-of access you'd already need to edit the database by hand):
+If the owner username/password is lost and Google Sign-On is not configured, run the factory-reset
+script with container/host shell access:
 
 ```bash
 # Docker:
@@ -146,33 +135,18 @@ docker exec vidarr node dist/scripts/factoryReset.js --yes
 npm run --workspace apps/server factory-reset -- --yes
 ```
 
-This clears the API key, admin username/password, and Google Sign-On config, generates a brand-new
-API key, prints it straight to that terminal, and re-arms the one-time in-browser reveal screen too.
-Deliberately *not* a button in the web UI or an API route — that would let anyone who can merely
-reach vidarr over the network reset it and take over, which defeats the entire point of the key
-gate. This is the same recovery as manually running
-`sqlite3 apps/server/dev.db "UPDATE Settings SET apiKey = NULL WHERE id = 1;"` and restarting, just
-without having to hand-edit the database or lose the username/password and Google config to a stale
-state.
-
-### Optional: Username/password login
-
-As an alternative to typing the API key manually, Settings → Username & Password Login lets you
-set a single admin username and password. Once set, the key prompt shows a username/password form
-— signing in hands your browser the real API key, same as typing it in yourself. This doesn't
-replace or change the API key itself; every actual API request still authenticates with it exactly
-as before, and any script or integration using the key directly is unaffected. The password is
-never stored in plaintext, only a salted hash. Changing the login requires already being
-authenticated, same as regenerating the API key.
+This clears the owner login, API key, and Google Sign-On configuration. On the next page load,
+create a new owner account. Recovery is deliberately not exposed as an unauthenticated reset
+button, since that would let anyone who can reach Vidarr take over an already-claimed instance.
+The owner can change the username/password later under Settings → Owner account.
 
 ### Optional: Google Sign-On
 
-As another alternative to typing the API key manually, Settings → Google Sign-On lets you configure
+As an alternative to the owner username/password, Settings → Google Sign-On lets you configure
 a Google OAuth Client ID/Secret and a single allowed Google account. Once configured, the key prompt
 shows a "Sign in with Google" button — signing in with that one account hands your browser the
-real API key, same as typing it in yourself. This doesn't replace or change the API key itself;
-every actual API request still authenticates with it exactly as before, and any script or
-integration using the key directly is unaffected. Create the OAuth client in the
+browser's internal credential after verifying the account. Scripts and integrations using the API
+key directly are unaffected. Create the OAuth client in the
 [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (type "Web application")
 — the Settings page shows the exact redirect URI to register.
 

@@ -90,9 +90,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/v1${path}`, { ...init, headers });
   if (res.status === 401) {
     clearStoredApiKey();
-    // Tells the ApiKeyGate to re-prompt without a full page reload.
+    // Tells the authentication gate to show sign-in without a full reload.
     window.dispatchEvent(new Event('vidarr:unauthorized'));
-    throw new Error('Unauthorized — check your API key.');
+    throw new Error('Your session ended. Sign in again.');
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -307,7 +307,7 @@ export const api = {
     status: () => fetch('/api/v1/auth/google/status').then((r) => r.json() as Promise<GoogleAuthStatus>),
   },
   localAuth: {
-    // Same reasoning as googleAuth above — no stored key exists yet at this point.
+    // These routes work before the browser has its internal API credential.
     status: () => fetch('/api/v1/auth/login/status').then((r) => r.json() as Promise<LocalLoginStatus>),
     login: async (username: string, password: string) => {
       const res = await fetch('/api/v1/auth/login', {
@@ -317,6 +317,16 @@ export const api = {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? 'Login failed.');
+      return body as { apiKey: string };
+    },
+    setup: async (username: string, password: string) => {
+      const res = await fetch('/api/v1/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? 'Account setup failed.');
       return body as { apiKey: string };
     },
   },
