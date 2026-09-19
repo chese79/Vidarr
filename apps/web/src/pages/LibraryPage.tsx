@@ -1,8 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { ImvdbArtist, ImvdbVideoCandidate } from '@vidarr/shared-types';
+import type { ImvdbArtist, ImvdbVideoCandidate, LibraryVideo } from '@vidarr/shared-types';
+
+function LibraryVideoThumbnail({ video }: { video: LibraryVideo }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!video.hasThumbnail) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    api.libraryVideos.thumbnail(video.id).then((blob) => {
+      if (cancelled) return;
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [video.id, video.hasThumbnail]);
+
+  return url
+    ? <img src={url} alt={`Screenshot from ${video.title}`} loading="lazy" />
+    : <div className="library-video-placeholder" aria-label="No screenshot available">▶</div>;
+}
 
 function AddArtistForm({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
@@ -227,6 +250,7 @@ export default function LibraryPage() {
   const [showAdd, setShowAdd] = useState(false);
 
   const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
+  const libraryVideos = useQuery({ queryKey: ['libraryVideos'], queryFn: api.libraryVideos.list });
   const rootFolders = useQuery({ queryKey: ['rootFolders'], queryFn: api.rootFolders.list });
   const qualityProfiles = useQuery({
     queryKey: ['qualityProfiles'],
@@ -252,6 +276,37 @@ export default function LibraryPage() {
       )}
 
       {showAdd && <AddArtistForm onDone={() => setShowAdd(false)} />}
+
+      <section className="library-video-section">
+        <div className="section-heading">
+          <h3>Music videos on your media servers</h3>
+          <span>{libraryVideos.data?.length ?? 0}</span>
+        </div>
+        {libraryVideos.data?.length ? (
+          <div className="library-video-grid">
+            {libraryVideos.data.map((video) => (
+              <article className="library-video-card" key={video.id}>
+                <div className="library-video-image"><LibraryVideoThumbnail video={video} /></div>
+                <div className="library-video-metadata">
+                  <strong title={video.title}>{video.title}</strong>
+                  <span>{video.artistName}{video.releaseYear ? ` · ${video.releaseYear}` : ''}</span>
+                  <small>
+                    {video.connector.name}
+                    {video.playCount !== null ? ` · played ${video.playCount} ${video.playCount === 1 ? 'time' : 'times'}` : ''}
+                  </small>
+                  <small className={video.musicVideoId ? 'status-owned' : ''}>
+                    {video.musicVideoId ? 'Matched in Vidarr catalog' : 'Available on media server'}
+                  </small>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-state">
+            No scanned music videos yet. Select a music-video library on a connector and sync it.
+          </p>
+        )}
+      </section>
 
       {artists.data?.length ? (
         <table>

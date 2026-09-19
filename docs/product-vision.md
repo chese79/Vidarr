@@ -43,7 +43,9 @@ video sites, but the domain model must not assume every direct source is YouTube
 
 Completed downloads are organized into the configured root folder with predictable names,
 metadata sidecars, and artwork. Each root folder should be explicitly associated with the target
-Plex or Jellyfin music-video library when possible.
+Plex or Jellyfin music-video library when possible. Connector sync preserves this inventory as
+provenance-aware records and presents each item in Library with media-server artwork and basic
+metadata; availability there remains distinct from Vidarr's local-file ownership state.
 
 After import, Vidarr should request a media-server library refresh, wait for or later reconcile the
 new server item, and surface whether the file is merely on disk or fully available in the player.
@@ -70,4 +72,3 @@ and deterministic, with optional shuffle/randomization as a user choice.
 4. Map imports to connector libraries and trigger/reconcile media-server refreshes.
 5. Expand static playlist filters and add persisted smart-playlist rules.
 6. Validate the Plex connector end to end against a real Plex server.
-

@@ -61,6 +61,21 @@ describe('jellyfinProvider', () => {
     expect(fetchMock.mock.calls[0][0]).toContain('ParentId=music-1');
   });
 
+  it('scans music videos with metadata and thumbnail availability', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      Items: [{ Id: 'video-7', Name: 'The Song', Artists: ['The Artist'], ProductionYear: 2024,
+        Path: '/videos/song.mkv', UserData: { PlayCount: 3 }, ImageTags: { Primary: 'tag' } }],
+      TotalRecordCount: 1,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(jellyfinProvider.fetchVideos!(connector())).resolves.toEqual([{
+      externalId: 'video-7', title: 'The Song', artistName: 'The Artist', releaseYear: 2024,
+      path: '/videos/song.mkv', playCount: 3, hasThumbnail: true,
+    }]);
+    expect(fetchMock.mock.calls[0][0]).toContain('ParentId=video-1');
+  });
+
   it('creates the replacement playlist before deleting the existing one', async () => {
     const fetchMock = vi
       .fn()

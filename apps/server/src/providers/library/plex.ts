@@ -1,7 +1,8 @@
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { createAuthedFetcher } from './util.js';
+import { baseUrl, createAuthedFetcher, providerRequestSignal } from './util.js';
 import type {
   FetchedLibraryArtist,
+  FetchedLibraryVideo,
   LibraryConnectorProvider,
   LibraryConnectorTestResult,
   LibraryItemMatch,
@@ -62,6 +63,36 @@ export const plexProvider: LibraryConnectorProvider = {
       externalId: String(a.ratingKey),
       name: a.title as string,
     }));
+  },
+
+  async fetchVideos(config): Promise<FetchedLibraryVideo[]> {
+    if (!config.videoLibraryId) {
+      throw new Error('No music-video library selected for this Plex connector.');
+    }
+    const body = await plexGet(config, `/library/sections/${config.videoLibraryId}/all`);
+    const items: any[] = body?.MediaContainer?.Metadata ?? [];
+    return items.map((item) => ({
+      externalId: String(item.ratingKey),
+      title: item.title as string,
+      artistName: (item.grandparentTitle ?? item.parentTitle ?? item.originalTitle ?? 'Unknown Artist') as string,
+      releaseYear: item.year as number | undefined,
+      path: item.Media?.[0]?.Part?.[0]?.file as string | undefined,
+      playCount: item.viewCount as number | undefined,
+      hasThumbnail: Boolean(item.thumb),
+    }));
+  },
+
+  async fetchVideoThumbnail(config, externalId) {
+    const res = await fetch(`${baseUrl(config.host)}/library/metadata/${encodeURIComponent(externalId)}/thumb`, {
+      headers: { 'X-Plex-Token': config.authToken ?? '' },
+      signal: providerRequestSignal(),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Plex thumbnail request failed: ${res.status} ${res.statusText}`);
+    return {
+      contentType: res.headers.get('content-type') ?? 'image/jpeg',
+      data: Buffer.from(await res.arrayBuffer()),
+    };
   },
 
   async listSections(config): Promise<LibrarySection[]> {

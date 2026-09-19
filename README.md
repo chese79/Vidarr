@@ -56,12 +56,15 @@ not-yet-started ideas (concert videos, web-series content types, curated list im
 
 **Plex / Jellyfin / Navidrome integration** — three separate points of contact, since "read from"
 and "write to" a media server are different jobs with different data:
-1. **Read artists into the watchlist** — add a Library Connector (Plex, Jellyfin, or
+1. **Read artists into Discover** — add a Library Connector (Plex, Jellyfin, or
    Navidrome/Subsonic), sync it, and every artist you already listen to that vidarr doesn't yet
    track videos for shows up on the **Discover** page as a "You listen to this artist"
    recommendation (highest-confidence, always surfaced — listening to an artist never excludes them
    just because you don't have their videos yet). Discover also blends in similarity data from
    Last.fm / Spotify / MusicBrainz if you add API credentials for those.
+   The same sync inventories the selected Plex/Jellyfin music-video library. Existing videos appear
+   in Library as screenshot cards with title and basic metadata, while remaining distinct from
+   locally owned Vidarr files.
 2. **Push playlists back out** — build a playlist in vidarr from your downloaded videos, then push
    it to Plex or Jellyfin as a real playlist in their apps. This uses a *second*, separately-chosen
    library on the same connector (the "video library" picker on the Library Connectors page) —

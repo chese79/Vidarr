@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { resetDb, ensureSettings, createLibraryConnector } from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
+import { prisma } from '../../src/db/client.js';
 
 describe('libraryconnector routes', () => {
   let app: FastifyInstance;
@@ -89,6 +90,20 @@ describe('libraryconnector routes', () => {
     await createLibraryConnector({ name: 'B' });
     const res = await app.inject({ method: 'GET', url: '/api/v1/libraryconnector', headers: authHeaders() });
     expect(res.json()).toHaveLength(2);
+  });
+
+  it('GET /api/v1/libraryvideo exposes scanned videos with connector metadata', async () => {
+    const connector = await createLibraryConnector({ name: 'Living Room Jellyfin' });
+    await prisma.libraryVideo.create({ data: {
+      connectorId: connector.id, externalId: 'jf-video-1', title: 'Song', normalizedTitle: 'song',
+      artistName: 'Artist', normalizedArtistName: 'artist', hasThumbnail: true,
+    } });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/libraryvideo', headers: authHeaders() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([expect.objectContaining({
+      title: 'Song', artistName: 'Artist', hasThumbnail: true,
+      connector: { name: 'Living Room Jellyfin', type: 'jellyfin' },
+    })]);
   });
 
   it('PUT /api/v1/libraryconnector/:id updates fields', async () => {

@@ -5,10 +5,39 @@ import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
 import { syncPlayCounts } from '../pipeline/playCountSync.js';
 import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discovery.js';
+import { refreshRecommendations } from '../pipeline/recommendations.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
     return (await prisma.libraryConnector.findMany()).map(serializeConnector);
+  });
+
+  app.get('/api/v1/libraryvideo', async () => {
+    return prisma.libraryVideo.findMany({
+      where: { available: true, connector: { enabled: true } },
+      include: { connector: { select: { name: true, type: true } } },
+      orderBy: [{ artistName: 'asc' }, { title: 'asc' }],
+    });
+  });
+
+  app.get<{ Params: { id: string } }>('/api/v1/libraryvideo/:id/thumbnail', async (req, reply) => {
+    const video = await prisma.libraryVideo.findUnique({
+      where: { id: Number(req.params.id) },
+      include: { connector: true },
+    });
+    if (!video?.available || !video.hasThumbnail) {
+      return reply.code(404).send({ error: 'Thumbnail not found' });
+    }
+    const provider = getLibraryConnectorProvider(video.connector.type);
+    if (!provider.fetchVideoThumbnail) {
+      return reply.code(404).send({ error: 'Thumbnail not supported' });
+    }
+    const thumbnail = await provider.fetchVideoThumbnail(video.connector, video.externalId);
+    if (!thumbnail) return reply.code(404).send({ error: 'Thumbnail not found' });
+    return reply
+      .header('Content-Type', thumbnail.contentType)
+      .header('Cache-Control', 'private, max-age=3600')
+      .send(thumbnail.data);
   });
 
   // Broadcasts a UDP discovery request on the local network and returns
@@ -93,9 +122,10 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
     if (!connector) return reply.code(404).send({ error: 'Connector not found' });
 
     try {
+      const syncStartedAt = new Date();
       const artists = await getLibraryConnectorProvider(connector.type).fetchArtists(connector);
-      for (const artist of artists) {
-        await prisma.libraryArtist.upsert({
+      await prisma.$transaction(artists.map((artist) =>
+        prisma.libraryArtist.upsert({
           where: { connectorId_externalId: { connectorId: id, externalId: artist.externalId } },
           update: {
             name: artist.name,
@@ -112,7 +142,60 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             genre: artist.genre ?? null,
             playCount: artist.playCount ?? null,
           },
+        }),
+      ));
+      await prisma.libraryArtist.deleteMany({
+        where: { connectorId: id, lastSyncedAt: { lt: syncStartedAt } },
+      });
+
+      const provider = getLibraryConnectorProvider(connector.type);
+      const videos = provider.fetchVideos && connector.videoLibraryId
+        ? await provider.fetchVideos(connector)
+        : [];
+      if (provider.fetchVideos && connector.videoLibraryId) {
+        const canonicalVideos = await prisma.musicVideo.findMany({
+          include: { artist: { select: { name: true } } },
         });
+        const canonicalByName = new Map(
+          canonicalVideos.map((video) => [
+            `${normalizeTitle(video.artist.name)}::${normalizeTitle(video.title)}`,
+            video.id,
+          ]),
+        );
+        await prisma.libraryVideo.updateMany({ where: { connectorId: id }, data: { available: false } });
+        await prisma.$transaction(videos.map((video) => {
+          const normalizedArtistName = normalizeTitle(video.artistName);
+          const normalizedTitle = normalizeTitle(video.title);
+          return prisma.libraryVideo.upsert({
+            where: { connectorId_externalId: { connectorId: id, externalId: video.externalId } },
+            update: {
+              title: video.title,
+              normalizedTitle,
+              artistName: video.artistName,
+              normalizedArtistName,
+              releaseYear: video.releaseYear ?? null,
+              path: video.path ?? null,
+              playCount: video.playCount ?? null,
+              hasThumbnail: video.hasThumbnail ?? false,
+              available: true,
+              lastSyncedAt: new Date(),
+              musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
+            },
+            create: {
+              connectorId: id,
+              externalId: video.externalId,
+              title: video.title,
+              normalizedTitle,
+              artistName: video.artistName,
+              normalizedArtistName,
+              releaseYear: video.releaseYear ?? null,
+              path: video.path ?? null,
+              playCount: video.playCount ?? null,
+              hasThumbnail: video.hasThumbnail ?? false,
+              musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
+            },
+          });
+        }));
       }
 
       // Backfill vidarr's own Artist.genre from this connector's synced data
@@ -137,7 +220,13 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         where: { id },
         data: { lastSyncedAt: new Date(), lastSyncStatus: 'success', lastSyncError: null },
       });
-      return { ok: true, artistCount: artists.length };
+      const recommendations = await refreshRecommendations();
+      return {
+        ok: true,
+        artistCount: artists.length,
+        videoCount: videos.length,
+        recommendationCount: recommendations.totalRecommendations,
+      };
     } catch (err) {
       await prisma.libraryConnector.update({
         where: { id },

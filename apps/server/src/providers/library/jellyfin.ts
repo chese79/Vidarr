@@ -1,7 +1,8 @@
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { createAuthedFetcher } from './util.js';
+import { baseUrl, createAuthedFetcher, providerRequestSignal } from './util.js';
 import type {
   FetchedLibraryArtist,
+  FetchedLibraryVideo,
   LibraryConnectorProvider,
   LibraryConnectorTestResult,
   LibraryItemMatch,
@@ -81,6 +82,55 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       genre: Array.isArray(item.Genres) && item.Genres.length ? item.Genres.join(', ') : undefined,
       playCount: item.UserData?.PlayCount as number | undefined,
     }));
+  },
+
+  async fetchVideos(config): Promise<FetchedLibraryVideo[]> {
+    if (!config.userId) {
+      throw new Error('Jellyfin connector has no resolved user id; run Test first.');
+    }
+    if (!config.videoLibraryId) {
+      throw new Error('No music-video library selected for this Jellyfin connector.');
+    }
+
+    const videos: FetchedLibraryVideo[] = [];
+    const limit = 500;
+    for (let startIndex = 0; ; startIndex += limit) {
+      const body = await jellyfinGet(
+        config,
+        `/Users/${config.userId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&ParentId=${encodeURIComponent(config.videoLibraryId)}&Fields=Artists,ProductionYear,Path,UserData,ImageTags&StartIndex=${startIndex}&Limit=${limit}`,
+      );
+      const items: any[] = body?.Items ?? [];
+      for (const item of items) {
+        const artistName = (item.Artists?.[0] ?? item.AlbumArtist ?? 'Unknown Artist') as string;
+        videos.push({
+          externalId: item.Id as string,
+          title: item.Name as string,
+          artistName,
+          releaseYear: item.ProductionYear as number | undefined,
+          path: item.Path as string | undefined,
+          playCount: item.UserData?.PlayCount as number | undefined,
+          hasThumbnail: Boolean(item.ImageTags?.Primary),
+        });
+      }
+      if (items.length < limit || videos.length >= (body?.TotalRecordCount ?? videos.length)) break;
+    }
+    return videos;
+  },
+
+  async fetchVideoThumbnail(config, externalId) {
+    const res = await fetch(
+      `${baseUrl(config.host)}/Items/${encodeURIComponent(externalId)}/Images/Primary?maxWidth=640&quality=85`,
+      {
+        headers: { Authorization: `MediaBrowser Token="${config.authToken ?? ''}"` },
+        signal: providerRequestSignal(),
+      },
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Jellyfin thumbnail request failed: ${res.status} ${res.statusText}`);
+    return {
+      contentType: res.headers.get('content-type') ?? 'image/jpeg',
+      data: Buffer.from(await res.arrayBuffer()),
+    };
   },
 
   async listSections(config): Promise<LibrarySection[]> {

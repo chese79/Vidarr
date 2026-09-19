@@ -267,7 +267,12 @@ export default function LibraryConnectorsPage() {
     setStatus((s) => ({ ...s, [id]: 'Syncing…' }));
     try {
       const result = await api.libraryConnectors.sync(id);
-      setStatus((s) => ({ ...s, [id]: `Synced ${result.artistCount} artists` }));
+      setStatus((s) => ({
+        ...s,
+        [id]: `Synced ${result.artistCount} artists, ${result.videoCount} videos; ${result.recommendationCount} recommendations`,
+      }));
+      queryClient.invalidateQueries({ queryKey: ['libraryVideos'] });
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] });
     } catch (err) {
       setStatus((s) => ({ ...s, [id]: `Sync failed: ${(err as Error).message}` }));
     }

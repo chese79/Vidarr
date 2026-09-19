@@ -52,6 +52,7 @@ import type {
   LocalLoginStatus,
   DiscoverableLibraryConnectorType,
   DiscoveredServer,
+  LibraryVideo,
 } from '@vidarr/shared-types';
 
 export interface QueueItem {
@@ -100,6 +101,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const apiKey = getStoredApiKey();
+  if (apiKey) headers['X-Api-Key'] = apiKey;
+  const res = await fetch(`/api/v1${path}`, { headers });
+  if (res.status === 401) {
+    clearStoredApiKey();
+    window.dispatchEvent(new Event('vidarr:unauthorized'));
+    throw new Error('Your session ended. Sign in again.');
+  }
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.blob();
 }
 
 export const api = {
@@ -177,7 +192,7 @@ export const api = {
     test: (id: number) =>
       request<LibraryConnectorTestResult>(`/libraryconnector/${id}/test`, { method: 'POST' }),
     sync: (id: number) =>
-      request<{ ok: boolean; artistCount: number }>(`/libraryconnector/${id}/sync`, {
+      request<{ ok: boolean; artistCount: number; videoCount: number; recommendationCount: number }>(`/libraryconnector/${id}/sync`, {
         method: 'POST',
       }),
     sections: (id: number) => request<LibrarySection[]>(`/libraryconnector/${id}/sections`),
@@ -188,6 +203,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ type }),
       }),
+  },
+  libraryVideos: {
+    list: () => request<LibraryVideo[]>('/libraryvideo'),
+    thumbnail: (id: number) => requestBlob(`/libraryvideo/${id}/thumbnail`),
   },
   playlists: {
     list: () => request<Playlist[]>('/playlist'),

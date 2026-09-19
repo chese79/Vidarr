@@ -14,6 +14,9 @@ under **Unreleased** in the same commit as the change.
 
 ### Changed
 
+- Library connector syncs now surface synced artists as Discover recommendations and inventory the
+  selected Plex/Jellyfin music-video library. The Library shows those videos as screenshot cards
+  with title, artist, year, play count, source server, and Vidarr-catalog match status.
 - Made owner username/password setup the normal first-run sign-in flow while retaining the API key
   for integrations.
 - Updated Jellyfin authentication for Jellyfin 12's supported MediaBrowser authorization scheme.

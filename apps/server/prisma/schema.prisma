@@ -49,6 +49,7 @@ model MusicVideo {
   queueItems     DownloadQueueItem[]
   history        History[]
   playlistItems  PlaylistItem[]
+  libraryVideos  LibraryVideo[]
 
   @@unique([artistId, normalizedTitle])
 }
@@ -232,7 +233,33 @@ model LibraryConnector {
   lastSyncError  String?
 
   libraryArtists LibraryArtist[]
+  libraryVideos  LibraryVideo[]
   playlistSyncs  PlaylistSync[]
+}
+
+// A video observed in a selected Plex/Jellyfin music-video library. This is
+// deliberately separate from MusicVideoFile: availability in a media server
+// does not prove Vidarr owns or can access the underlying local file.
+model LibraryVideo {
+  id                   Int              @id @default(autoincrement())
+  connectorId          Int
+  connector            LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  externalId           String
+  title                String
+  normalizedTitle      String
+  artistName           String
+  normalizedArtistName String
+  releaseYear          Int?
+  path                 String?
+  playCount            Int?
+  hasThumbnail         Boolean          @default(false)
+  available            Boolean          @default(true)
+  lastSyncedAt         DateTime         @default(now())
+  musicVideoId         Int?
+  musicVideo           MusicVideo?      @relation(fields: [musicVideoId], references: [id], onDelete: SetNull)
+
+  @@unique([connectorId, externalId])
+  @@index([normalizedArtistName, normalizedTitle])
 }
 
 model Playlist {

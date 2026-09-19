@@ -38,10 +38,18 @@ async function buildSeedSet(): Promise<{ seedNames: string[]; excludedNormalized
     orderBy: [{ playCount: 'desc' }, { lastSyncedAt: 'desc' }],
     select: { name: true },
   });
+  const libraryVideoArtists = await prisma.libraryVideo.findMany({
+    where: { available: true, connector: { enabled: true } },
+    select: { artistName: true },
+  });
 
   const seedNames: string[] = [];
   const seen = new Set<string>();
-  for (const name of [...artists.map((a) => a.name), ...libraryArtists.map((a) => a.name)]) {
+  for (const name of [
+    ...artists.map((a) => a.name),
+    ...libraryArtists.map((a) => a.name),
+    ...libraryVideoArtists.map((a) => a.artistName),
+  ]) {
     const norm = normalizeTitle(name);
     if (seen.has(norm)) continue;
     seen.add(norm);
@@ -119,6 +127,22 @@ export async function refreshRecommendations(): Promise<{
       reason: 'You listen to this artist',
     });
   }
+  const libraryVideos = await prisma.libraryVideo.findMany({
+    where: { available: true, connector: { enabled: true } },
+  });
+  const seenVideoArtists = new Set<string>();
+  for (const video of libraryVideos) {
+    const normalizedArtist = normalizeTitle(video.artistName);
+    if (excludedNormalized.has(normalizedArtist) || seenVideoArtists.has(normalizedArtist)) continue;
+    seenVideoArtists.add(normalizedArtist);
+    upsertPending(pending, video.artistName, {
+      source: 'library',
+      sourceRef: `video:${video.connectorId}:${video.externalId}`,
+      seedArtistName: video.artistName,
+      score: 1,
+      reason: 'You have a music video by this artist',
+    });
+  }
 
   const providers = await getEnabledProviders();
   for (const { name, provider } of providers) {
@@ -143,18 +167,17 @@ export async function refreshRecommendations(): Promise<{
     }
   }
 
-  let newCount = 0;
-  for (const entry of pending.values()) {
+  const entries = [...pending.values()];
+  const existingNames = new Set((await prisma.recommendation.findMany({
+    select: { normalizedArtistName: true },
+  })).map((item) => item.normalizedArtistName));
+  const newCount = entries.filter((entry) => !existingNames.has(entry.normalizedArtistName)).length;
+  const recommendations = await prisma.$transaction(entries.map((entry) => {
     const aggregateScore = entry.hits.reduce(
       (sum, hit) => sum + hit.score * (SOURCE_WEIGHT[hit.source] ?? 0),
       0,
     );
-
-    const existing = await prisma.recommendation.findUnique({
-      where: { normalizedArtistName: entry.normalizedArtistName },
-    });
-
-    const recommendation = await prisma.recommendation.upsert({
+    return prisma.recommendation.upsert({
       where: { normalizedArtistName: entry.normalizedArtistName },
       update: { aggregateScore, lastSeenAt: new Date() },
       create: {
@@ -164,20 +187,21 @@ export async function refreshRecommendations(): Promise<{
         aggregateScore,
       },
     });
-    if (!existing) newCount++;
-
+  }));
+  const recommendationIds = recommendations.map((item) => item.id);
+  if (recommendationIds.length) {
     await prisma.recommendationSourceHit.deleteMany({
-      where: { recommendationId: recommendation.id },
+      where: { recommendationId: { in: recommendationIds } },
     });
     await prisma.recommendationSourceHit.createMany({
-      data: entry.hits.map((hit) => ({
-        recommendationId: recommendation.id,
+      data: entries.flatMap((entry, index) => entry.hits.map((hit) => ({
+        recommendationId: recommendations[index].id,
         source: hit.source,
         sourceRef: hit.sourceRef,
         seedArtistName: hit.seedArtistName,
         score: hit.score,
         reason: hit.reason,
-      })),
+      }))),
     });
   }
 

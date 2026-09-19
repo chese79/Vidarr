@@ -14,6 +14,21 @@ export interface FetchedLibraryArtist {
   playCount?: number;
 }
 
+export interface LibraryVideoThumbnail {
+  contentType: string;
+  data: Buffer;
+}
+
+export interface FetchedLibraryVideo {
+  externalId: string;
+  title: string;
+  artistName: string;
+  releaseYear?: number;
+  path?: string;
+  playCount?: number;
+  hasThumbnail?: boolean;
+}
+
 export interface LibrarySection {
   id: string;
   title: string;
@@ -39,6 +54,8 @@ export interface LibraryItemMatch {
 export interface LibraryConnectorProvider {
   testConnection(config: LibraryConnector): Promise<LibraryConnectorTestResult>;
   fetchArtists(config: LibraryConnector): Promise<FetchedLibraryArtist[]>;
+  fetchVideos?(config: LibraryConnector): Promise<FetchedLibraryVideo[]>;
+  fetchVideoThumbnail?(config: LibraryConnector, externalId: string): Promise<LibraryVideoThumbnail | null>;
   // Playlist push and play-count sync are optional per-type — Subsonic/
   // Navidrome has no music-video concept to push a video playlist into or
   // read a video watch-count from.

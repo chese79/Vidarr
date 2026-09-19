@@ -282,6 +282,22 @@ export const LibraryArtistSchema = z.object({
 });
 export type LibraryArtist = z.infer<typeof LibraryArtistSchema>;
 
+export const LibraryVideoSchema = z.object({
+  id: z.number().int(),
+  connectorId: z.number().int(),
+  externalId: z.string(),
+  title: z.string(),
+  artistName: z.string(),
+  releaseYear: z.number().int().nullable(),
+  path: z.string().nullable(),
+  playCount: z.number().int().nullable(),
+  hasThumbnail: z.boolean(),
+  available: z.boolean(),
+  musicVideoId: z.number().int().nullable(),
+  connector: z.object({ name: z.string(), type: LibraryConnectorType }),
+});
+export type LibraryVideo = z.infer<typeof LibraryVideoSchema>;
+
 export const RecommendationProviderName = z.enum(['lastfm', 'spotify', 'musicbrainz']);
 export type RecommendationProviderName = z.infer<typeof RecommendationProviderName>;
 
