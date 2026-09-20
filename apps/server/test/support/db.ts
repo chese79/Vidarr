@@ -57,8 +57,14 @@ export async function createQualityProfile(cutoffQualityId: number, overrides: P
 export async function createArtist(
   rootFolderId: number,
   qualityProfileId: number,
-  overrides: Partial<{ name: string; sortName: string; genre: string | null }> = {},
+  overrides: Partial<{ name: string; sortName: string; genre: string | null; monitored: boolean }> = {},
 ) {
+  // Defaults to monitored: true here — a deliberate, explicit test-fixture
+  // default independent of the production API's own default (which is
+  // false, see schema.prisma's comment on Artist.monitored). Most existing
+  // tests building a fixture via this helper are testing monitored-artist
+  // behavior (search eligibility, backlog jobs, etc.) and would otherwise
+  // silently break if this helper's default changed along with production's.
   return prisma.artist.create({
     data: {
       name: overrides.name ?? 'Test Artist',
@@ -66,6 +72,7 @@ export async function createArtist(
       rootFolderId,
       qualityProfileId,
       genre: overrides.genre ?? null,
+      monitored: overrides.monitored ?? true,
     },
   });
 }

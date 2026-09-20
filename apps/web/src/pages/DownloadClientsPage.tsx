@@ -1,7 +1,123 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { DownloadClientImplementation } from '@vidarr/shared-types';
+import type { DownloadClient, DownloadClientImplementation } from '@vidarr/shared-types';
+
+// Inline edit for an existing download client — previously the only way to
+// fix a wrong host/port/credential was to delete the row and re-add it.
+// implementation isn't editable: qBittorrent and SABnzbd take different
+// credential fields entirely, so switching one is a delete-and-recreate
+// decision, not an edit.
+function DownloadClientRow({ client, status, onTest, onRemove }: {
+  client: DownloadClient;
+  status: string | undefined;
+  onTest: () => void;
+  onRemove: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(client.name);
+  const [host, setHost] = useState(client.host);
+  const [port, setPort] = useState(String(client.port));
+  const [username, setUsername] = useState(client.username ?? '');
+  const [password, setPassword] = useState('');
+  const [apiKey, setApiKey] = useState('');
+
+  const update = useMutation({
+    mutationFn: () =>
+      api.downloadClients.update(client.id, {
+        name,
+        host,
+        port: Number(port),
+        username: username || null,
+        ...(password ? { password } : {}),
+        ...(apiKey ? { apiKey } : {}),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['downloadClients'] });
+      setPassword('');
+      setApiKey('');
+      setEditing(false);
+    },
+  });
+
+  function startEditing() {
+    setName(client.name);
+    setHost(client.host);
+    setPort(String(client.port));
+    setUsername(client.username ?? '');
+    setPassword('');
+    setApiKey('');
+    update.reset();
+    setEditing(true);
+  }
+
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={5}>
+          <div className="form-row" style={{ flexWrap: 'wrap' }}>
+            <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} />
+            <input
+              placeholder="Port"
+              type="number"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              style={{ width: 100 }}
+            />
+            {client.implementation === 'qBittorrent' ? (
+              <>
+                <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+                <input
+                  placeholder={client.hasPassword ? 'New password (leave blank to keep current)' : 'Password'}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </>
+            ) : (
+              <input
+                placeholder={client.hasApiKey ? 'New API key (leave blank to keep current)' : 'API key'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+            )}
+            <button onClick={() => update.mutate()} disabled={update.isPending}>
+              {update.isPending ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="secondary" onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+          {update.isError && <p className="empty-state">{(update.error as Error).message}</p>}
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td>{client.name}</td>
+      <td>{client.implementation}</td>
+      <td>
+        {client.host}:{client.port}
+      </td>
+      <td>{status ?? '—'}</td>
+      <td style={{ display: 'flex', gap: 6 }}>
+        <button className="secondary" onClick={onTest}>
+          Test
+        </button>
+        <button className="secondary" onClick={startEditing}>
+          Edit
+        </button>
+        <button className="secondary" onClick={onRemove}>
+          Remove
+        </button>
+      </td>
+    </tr>
+  );
+}
 
 export default function DownloadClientsPage() {
   const queryClient = useQueryClient();
@@ -118,22 +234,13 @@ export default function DownloadClientsPage() {
           </thead>
           <tbody>
             {clients.data.map((c) => (
-              <tr key={c.id}>
-                <td>{c.name}</td>
-                <td>{c.implementation}</td>
-                <td>
-                  {c.host}:{c.port}
-                </td>
-                <td>{status[c.id] ?? '—'}</td>
-                <td style={{ display: 'flex', gap: 6 }}>
-                  <button className="secondary" onClick={() => handleTest(c.id)}>
-                    Test
-                  </button>
-                  <button className="secondary" onClick={() => removeClient.mutate(c.id)}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
+              <DownloadClientRow
+                key={c.id}
+                client={c}
+                status={status[c.id]}
+                onTest={() => handleTest(c.id)}
+                onRemove={() => removeClient.mutate(c.id)}
+              />
             ))}
           </tbody>
         </table>

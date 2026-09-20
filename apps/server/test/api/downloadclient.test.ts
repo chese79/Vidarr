@@ -46,10 +46,30 @@ describe('downloadclient routes', () => {
         apiKey: 'download-key',
       },
     });
-    expect(res.json()).not.toHaveProperty('password');
-    expect(res.json()).not.toHaveProperty('apiKey');
+    // Nulled with a has<Field> flag — same convention as indexers/connectors
+    // — rather than the field just being absent, so the Edit form can show
+    // "already set" without ever seeing the value.
+    expect(res.json()).toMatchObject({ password: null, apiKey: null, hasPassword: true, hasApiKey: true });
     expect(JSON.stringify(res.json())).not.toContain('download-password');
     expect(JSON.stringify(res.json())).not.toContain('download-key');
+  });
+
+  it('PUT /api/v1/downloadclient/:id updates host/port/credentials without deleting the row', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/downloadclient',
+      headers: authHeaders(),
+      payload: { name: 'qBit', implementation: 'qBittorrent', host: 'old-host', port: 8080 },
+    });
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/downloadclient/${created.json().id}`,
+      headers: authHeaders(),
+      payload: { host: 'new-host', port: 9090, username: 'admin', password: 'new-password' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ host: 'new-host', port: 9090, username: 'admin', hasPassword: true });
+    expect(JSON.stringify(res.json())).not.toContain('new-password');
   });
 
   it('POST /api/v1/downloadclient rejects a missing port', async () => {

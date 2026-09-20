@@ -67,7 +67,10 @@ export type Artist = z.infer<typeof ArtistSchema>;
 export const CreateArtistSchema = z.object({
   name: z.string().min(1),
   imvdbArtistId: z.string().nullable().optional(),
-  monitored: z.boolean().default(true),
+  // Matches the Prisma schema default (see schema.prisma's comment on
+  // Artist.monitored) — a newly added artist doesn't start auto-downloading
+  // its whole catalog just from being added.
+  monitored: z.boolean().default(false),
   rootFolderId: z.number().int(),
   qualityProfileId: z.number().int(),
   posterUrl: z.string().nullable().optional(),
@@ -77,6 +80,62 @@ export type CreateArtist = z.infer<typeof CreateArtistSchema>;
 
 export const UpdateArtistSchema = CreateArtistSchema.partial();
 export type UpdateArtist = z.infer<typeof UpdateArtistSchema>;
+
+// --- Library page: artist-centered summary list (docs/requests/2026-09-19-ui-enhance.md, Phase 1) ---
+
+export const ArtistSummarySchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  sortName: z.string(),
+  genre: z.string().nullable(),
+  monitored: z.boolean(),
+  hasImage: z.boolean(),
+  knownVideoCount: z.number().int(),
+  availableVideoCount: z.number().int(),
+  missingVideoCount: z.number().int(),
+  downloadingVideoCount: z.number().int(),
+  // Distinct from 0 — an artist with videos but no known play-count data
+  // anywhere is `null`, not "played zero times".
+  aggregatePlayCount: z.number().int().nullable(),
+});
+export type ArtistSummary = z.infer<typeof ArtistSummarySchema>;
+
+export const ArtistSummaryListSchema = z.object({
+  items: z.array(ArtistSummarySchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  // Which letters (A-Z, or "#" for a non-alphabetic first character) have at
+  // least one artist in the *unfiltered* library — lets the rail disable
+  // letters with nothing behind them without a separate query per letter.
+  availableLetters: z.array(z.string()),
+});
+export type ArtistSummaryList = z.infer<typeof ArtistSummaryListSchema>;
+
+export const ArtistSummaryQuerySchema = z.object({
+  search: z.string().optional(),
+  genre: z.string().optional(),
+  monitored: z.enum(['true', 'false']).optional(),
+  letter: z.string().optional(),
+  minKnownVideos: z.coerce.number().int().min(0).optional(),
+  minPlayCount: z.coerce.number().int().min(0).optional(),
+  hasMissing: z.enum(['true']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ArtistSummaryQuery = z.infer<typeof ArtistSummaryQuerySchema>;
+
+export const BulkMonitorArtistsBodySchema = z.object({
+  ids: z.array(z.number().int()).min(1),
+  monitored: z.boolean(),
+});
+export type BulkMonitorArtistsBody = z.infer<typeof BulkMonitorArtistsBodySchema>;
+
+export const BulkMonitorArtistsResultSchema = z.object({
+  succeeded: z.array(z.number().int()),
+  failed: z.array(z.object({ id: z.number().int(), error: z.string() })),
+});
+export type BulkMonitorArtistsResult = z.infer<typeof BulkMonitorArtistsResultSchema>;
 
 export const MusicVideoSchema = z.object({
   id: z.number().int(),
@@ -453,6 +512,8 @@ export const DownloadClientSchema = z.object({
   host: z.string(),
   port: z.number().int(),
   username: z.string().nullable(),
+  hasPassword: z.boolean(),
+  hasApiKey: z.boolean(),
   category: z.string().nullable(),
   enabled: z.boolean(),
   priority: z.number().int(),
@@ -471,6 +532,9 @@ export const CreateDownloadClientSchema = z.object({
   enabled: z.boolean().default(true),
 });
 export type CreateDownloadClient = z.infer<typeof CreateDownloadClientSchema>;
+
+export const UpdateDownloadClientSchema = CreateDownloadClientSchema.partial();
+export type UpdateDownloadClient = z.infer<typeof UpdateDownloadClientSchema>;
 
 // Identical shape to LibraryConnectorTestResultSchema — kept as a separate
 // export name since Indexer/DownloadClient test-connection responses are a

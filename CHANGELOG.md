@@ -11,8 +11,30 @@ under **Unreleased** in the same commit as the change.
   media-server delivery workflow, and playlist goals in `docs/product-vision.md`.
 - Added repository instructions requiring tests and documentation updates with every applicable
   commit.
+- Added a project skill (`.claude/skills/implement-feature-request`) documenting how a feature
+  request document gets implemented: read it, echo the request back in plain language before
+  writing code, size it up and phase it if large, then verify and document once it lands.
+
+### Added
+
+- The Library page is now artist-centered (Phase 1 of `docs/requests/2026-09-19-ui-enhance.md`):
+  a vertical A-Z letter rail for navigation, a filter bar (search, genre, monitored state, "has
+  missing videos"), and per-artist rows showing an image, known/available/missing/downloading video
+  counts, and aggregate play count. Expanding a row lazily loads a compact video list. Multiple
+  artists can be selected and bulk monitored/unmonitored at once, with partial-failure reporting.
+  Filters and the current page persist in the URL.
+- Artist images are now proxied through the server (mirroring the existing video-thumbnail proxy)
+  so a connector's credentials never reach the browser — falls back from an explicit poster image
+  to a matched Plex/Jellyfin library image.
+- Added an inline "Edit" action to Indexers and Download Clients (matching the one already added to
+  Library Connectors), so a wrong host, port, or credential can be corrected without deleting and
+  re-adding the row.
 
 ### Changed
+
+- New artists now default to **unmonitored** — adding one (manually, from IMVDb, or from a Discover
+  recommendation) no longer immediately queues its whole catalog for download. Existing artists'
+  monitored state is untouched; only the default for a brand-new row changed.
 
 - Library connector syncs now surface synced artists as Discover recommendations and inventory the
   selected Plex/Jellyfin music-video library. The Library shows those videos as screenshot cards

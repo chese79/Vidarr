@@ -33,8 +33,10 @@ import type {
   GrabResult,
   Indexer,
   CreateIndexer,
+  UpdateIndexer,
   DownloadClient,
   CreateDownloadClient,
+  UpdateDownloadClient,
   ConnectionTestResult,
   IndexerSearchResult,
   QueueRefreshResult,
@@ -53,7 +55,21 @@ import type {
   DiscoverableLibraryConnectorType,
   DiscoveredServer,
   LibraryVideo,
+  ArtistSummaryList,
+  BulkMonitorArtistsResult,
 } from '@vidarr/shared-types';
+
+export interface ArtistSummaryParams {
+  search?: string;
+  genre?: string;
+  monitored?: boolean;
+  letter?: string;
+  minKnownVideos?: number;
+  minPlayCount?: number;
+  hasMissing?: boolean;
+  page?: number;
+  pageSize?: number;
+}
 
 export interface QueueItem {
   id: number;
@@ -131,6 +147,29 @@ export const api = {
     remove: (id: number) => request<void>(`/artist/${id}`, { method: 'DELETE' }),
     matchGenre: (id: number) =>
       request<StandardGenreMatch>(`/artist/${id}/match-genre`, { method: 'POST' }),
+    summary: (params: ArtistSummaryParams = {}) => {
+      const qs = new URLSearchParams();
+      if (params.search) qs.set('search', params.search);
+      if (params.genre) qs.set('genre', params.genre);
+      if (params.monitored !== undefined) qs.set('monitored', String(params.monitored));
+      if (params.letter) qs.set('letter', params.letter);
+      if (params.minKnownVideos !== undefined) qs.set('minKnownVideos', String(params.minKnownVideos));
+      if (params.minPlayCount !== undefined) qs.set('minPlayCount', String(params.minPlayCount));
+      if (params.hasMissing) qs.set('hasMissing', 'true');
+      if (params.page !== undefined) qs.set('page', String(params.page));
+      if (params.pageSize !== undefined) qs.set('pageSize', String(params.pageSize));
+      const query = qs.toString();
+      return request<ArtistSummaryList>(`/artist/summary${query ? `?${query}` : ''}`);
+    },
+    bulkMonitor: (ids: number[], monitored: boolean) =>
+      request<BulkMonitorArtistsResult>('/artist/bulk-monitor', {
+        method: 'POST',
+        body: JSON.stringify({ ids, monitored }),
+      }),
+    // Not routed through request() — this needs the X-Api-Key header attached
+    // as a fetch header (an <img src> can't do that), same reasoning as
+    // libraryVideos.thumbnail below.
+    image: (id: number) => requestBlob(`/artist/${id}/image`),
   },
   musicVideos: {
     list: (opts?: { artistId?: number; hasFile?: boolean }) => {
@@ -276,6 +315,8 @@ export const api = {
     list: () => request<Indexer[]>('/indexer'),
     create: (data: CreateIndexer) =>
       request<Indexer>('/indexer', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: UpdateIndexer) =>
+      request<Indexer>(`/indexer/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     updateCategories: (id: number, categories: number[]) =>
       request<Indexer>(`/indexer/${id}`, { method: 'PUT', body: JSON.stringify({ categories }) }),
     remove: (id: number) => request<void>(`/indexer/${id}`, { method: 'DELETE' }),
@@ -285,6 +326,8 @@ export const api = {
     list: () => request<DownloadClient[]>('/downloadclient'),
     create: (data: CreateDownloadClient) =>
       request<DownloadClient>('/downloadclient', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: UpdateDownloadClient) =>
+      request<DownloadClient>(`/downloadclient/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/downloadclient/${id}`, { method: 'DELETE' }),
     test: (id: number) =>
       request<ConnectionTestResult>(`/downloadclient/${id}/test`, { method: 'POST' }),

@@ -34,6 +34,98 @@ function CategoriesCell({ indexer }: { indexer: Indexer }) {
   );
 }
 
+// Inline edit for an existing indexer's name/URL/API key — previously the
+// only way to fix a wrong base URL or a rotated API key was to delete the
+// row and re-add it, losing its priority. Implementation isn't editable
+// here: Torznab vs. Newznab changes what a "categories" value even means,
+// so that's a delete-and-recreate decision, not an edit.
+function IndexerRow({ indexer, status, onTest, onRemove }: {
+  indexer: Indexer;
+  status: string | undefined;
+  onTest: () => void;
+  onRemove: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(indexer.name);
+  const [baseUrl, setBaseUrl] = useState(indexer.baseUrl);
+  const [apiKey, setApiKey] = useState('');
+
+  const update = useMutation({
+    mutationFn: () =>
+      api.indexers.update(indexer.id, {
+        name,
+        baseUrl,
+        ...(apiKey ? { apiKey } : {}),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['indexers'] });
+      setApiKey('');
+      setEditing(false);
+    },
+  });
+
+  function startEditing() {
+    setName(indexer.name);
+    setBaseUrl(indexer.baseUrl);
+    setApiKey('');
+    update.reset();
+    setEditing(true);
+  }
+
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={5}>
+          <div className="form-row" style={{ flexWrap: 'wrap' }}>
+            <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              placeholder="Base URL"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              style={{ minWidth: 280 }}
+            />
+            <input
+              placeholder={indexer.hasApiKey ? 'New API key (leave blank to keep current)' : 'API key'}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <button onClick={() => update.mutate()} disabled={update.isPending}>
+              {update.isPending ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="secondary" onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+          {update.isError && <p className="empty-state">{(update.error as Error).message}</p>}
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td>{indexer.name}</td>
+      <td>{indexer.implementation}</td>
+      <td>
+        <CategoriesCell indexer={indexer} />
+      </td>
+      <td>{status ?? '—'}</td>
+      <td style={{ display: 'flex', gap: 6 }}>
+        <button className="secondary" onClick={onTest}>
+          Test
+        </button>
+        <button className="secondary" onClick={startEditing}>
+          Edit
+        </button>
+        <button className="secondary" onClick={onRemove}>
+          Remove
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 export default function IndexersPage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
@@ -136,22 +228,13 @@ export default function IndexersPage() {
           </thead>
           <tbody>
             {indexers.data.map((idx) => (
-              <tr key={idx.id}>
-                <td>{idx.name}</td>
-                <td>{idx.implementation}</td>
-                <td>
-                  <CategoriesCell indexer={idx} />
-                </td>
-                <td>{status[idx.id] ?? '—'}</td>
-                <td style={{ display: 'flex', gap: 6 }}>
-                  <button className="secondary" onClick={() => handleTest(idx.id)}>
-                    Test
-                  </button>
-                  <button className="secondary" onClick={() => removeIndexer.mutate(idx.id)}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
+              <IndexerRow
+                key={idx.id}
+                indexer={idx}
+                status={status[idx.id]}
+                onTest={() => handleTest(idx.id)}
+                onRemove={() => removeIndexer.mutate(idx.id)}
+              />
             ))}
           </tbody>
         </table>

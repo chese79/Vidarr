@@ -69,7 +69,10 @@ describe('recommendation routes', () => {
       payload: { rootFolderId, qualityProfileId },
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ name: 'The New Artist', sortName: 'New Artist' });
+    // Accepting a recommendation is "start tracking this artist," not
+    // "start downloading their whole catalog right now" — it should land
+    // unmonitored like every other newly-created artist.
+    expect(res.json()).toMatchObject({ name: 'The New Artist', sortName: 'New Artist', monitored: false });
 
     const artistList = await app.inject({ method: 'GET', url: '/api/v1/artist', headers: authHeaders() });
     expect(artistList.json()).toHaveLength(1);

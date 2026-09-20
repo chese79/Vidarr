@@ -56,6 +56,11 @@ export interface LibraryConnectorProvider {
   fetchArtists(config: LibraryConnector): Promise<FetchedLibraryArtist[]>;
   fetchVideos?(config: LibraryConnector): Promise<FetchedLibraryVideo[]>;
   fetchVideoThumbnail?(config: LibraryConnector, externalId: string): Promise<LibraryVideoThumbnail | null>;
+  // Same image-fetch shape as fetchVideoThumbnail, keyed by a LibraryArtist's
+  // externalId instead of a video's — Plex/Jellyfin both serve any item's
+  // primary image by item id regardless of item type, so this is a thin,
+  // clearly-named wrapper rather than a separate fetch mechanism.
+  fetchArtistImage?(config: LibraryConnector, externalId: string): Promise<LibraryVideoThumbnail | null>;
   // Playlist push and play-count sync are optional per-type — Subsonic/
   // Navidrome has no music-video concept to push a video playlist into or
   // read a video watch-count from.

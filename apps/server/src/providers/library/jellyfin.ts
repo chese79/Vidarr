@@ -128,6 +128,10 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     return jellyfinGetBinary(config, `/Items/${encodeURIComponent(externalId)}/Images/Primary?maxWidth=640&quality=85`);
   },
 
+  async fetchArtistImage(config, externalId) {
+    return jellyfinGetBinary(config, `/Items/${encodeURIComponent(externalId)}/Images/Primary?maxWidth=400&quality=90`);
+  },
+
   async listSections(config): Promise<LibrarySection[]> {
     const folders: any[] = await jellyfinGet(config, '/Library/VirtualFolders');
     return folders.map((f) => ({

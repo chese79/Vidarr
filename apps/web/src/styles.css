@@ -6,6 +6,15 @@
   --text: #e6e8eb;
   --text-muted: #9aa0aa;
   --accent: #4f8cff;
+  /* Status colors for the Library page's per-artist video counts — muted and
+     colorblind-safe (distinguished by more than hue alone via the counts'
+     own labels), sitting quietly next to --accent rather than competing
+     with it. Nothing like this existed before the artist-summary rework. */
+  --status-missing: #c98a3a;
+  --status-queued: #8a93a6;
+  --status-downloading: #4f8cff;
+  --status-failed: #d9556a;
+  --status-review: #b98ae0;
   font-family: -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
@@ -96,6 +105,15 @@ input,
 select {
   font: inherit;
   color: inherit;
+}
+
+/* Only one focus style existed anywhere in the app before this (relying on
+   the browser default outline) — this makes it deliberate and visible
+   against the dark background for every interactive element, not just new
+   Library-page ones. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button {
@@ -221,3 +239,209 @@ select {
   align-items: center;
   gap: 6px;
 }
+
+/* ---- Library page: artist-centered list (docs/requests/2026-09-19-ui-enhance.md) ---- */
+
+/* The signature element: a vertical rail of letter tabs down the left edge,
+   like the alphabetical dividers in a physical record crate — it IS the
+   navigation, not decoration next to it. Sticky so it stays reachable while
+   the list itself scrolls. */
+.library-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.letter-rail {
+  position: sticky;
+  top: 24px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.letter-rail button {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.letter-rail button:last-child {
+  border-bottom: none;
+}
+
+.letter-rail button:disabled {
+  color: #4a4e57;
+  cursor: default;
+}
+
+.letter-rail button.active {
+  color: var(--accent);
+  font-weight: 700;
+  background: rgba(79, 140, 255, 0.1);
+}
+
+.letter-rail button:not(:disabled):hover {
+  color: var(--text);
+}
+
+.library-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.library-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.library-result-count {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+.artist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.artist-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.artist-row-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.artist-image {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--bg), var(--border));
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.artist-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.artist-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The one deliberate typographic move: names get real weight since they're
+   the single thing a user's eye is scanning for in a long list — everything
+   else on the row stays at the app's normal text weight. */
+.artist-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.artist-meta {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.artist-counts {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.artist-counts .missing { color: var(--status-missing); }
+.artist-counts .downloading { color: var(--status-downloading); }
+
+.artist-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.artist-accordion {
+  border-top: 1px solid var(--border);
+  padding: 8px 14px 12px 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.artist-accordion-video {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.artist-accordion-video .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-accordion-video .year {
+  color: var(--text-muted);
+  width: 44px;
+  flex-shrink: 0;
+}
+
+.status-chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.status-chip.available { color: var(--status-downloading); }
+.status-chip.missing { color: var(--status-missing); }

@@ -86,6 +86,10 @@ export const plexProvider: LibraryConnectorProvider = {
     return plexGetBinary(config, `/library/metadata/${encodeURIComponent(externalId)}/thumb`);
   },
 
+  async fetchArtistImage(config, externalId) {
+    return plexGetBinary(config, `/library/metadata/${encodeURIComponent(externalId)}/thumb`);
+  },
+
   async listSections(config): Promise<LibrarySection[]> {
     const body = await plexGet(config, '/library/sections');
     const sections: any[] = body?.MediaContainer?.Directory ?? [];
