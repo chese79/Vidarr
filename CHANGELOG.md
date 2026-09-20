@@ -26,3 +26,30 @@ under **Unreleased** in the same commit as the change.
   API-key sign-in for upgrades from older installations, and made password hashing non-blocking.
 - Added rate limiting for failed owner-login attempts and an explicit unavailable state when the
   web interface cannot verify server authentication status.
+
+**Action required after upgrading**: existing Jellyfin connectors now need a Music Video library
+picked explicitly — the migration that split the resolved Jellyfin user id out of the music-library
+field clears the old auto-detected value, so the next artist sync for each Jellyfin connector will
+fail until you open Library Connectors and choose a library from the new picker.
+
+### Fixed
+
+- Closed a gap where creating the owner account via first-run setup did not close the one-time
+  bootstrap API-key reveal endpoint: the raw key stayed retrievable, unauthenticated, for the rest
+  of the 30-minute setup window even after an owner account had already been claimed.
+- Removed a timing side-channel in username/password sign-in: a wrong username used to skip the
+  password-hashing check entirely, while a wrong password always paid its full cost, making the two
+  distinguishable by response time despite an identical error message.
+- Fixed two library-connector sync bugs that could destroy previously-synced data: an artist sync
+  that legitimately (or transiently) returned zero results was deleting every previously-known
+  artist for that connector, and a video sync that failed partway through could leave every
+  previously-known video marked unavailable instead of leaving prior state untouched.
+- Fixed re-testing a Plex connector silently overwriting a manually-chosen Music library with the
+  server's own guess.
+- Fixed a Jellyfin video-inventory sync bug that could silently stop after the first page of results
+  when the server's response omitted a total-count field.
+- Fixed the sign-in screen showing a hard "Vidarr is unavailable" error for a user with an
+  already-valid stored API key whenever just the login-status check hit a transient failure.
+- Removed duplicated, untested thumbnail-fetching auth logic between the Plex and Jellyfin
+  connectors in favor of one shared implementation.
+- Capped unbounded memory growth in the failed-login rate limiter for long-running deployments.

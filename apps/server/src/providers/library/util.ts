@@ -49,5 +49,30 @@ export function createAuthedFetcher(
     return text ? JSON.parse(text) : null;
   }
 
-  return { get, send };
+  // For non-JSON responses (thumbnails) — same auth headers and timeout as
+  // get/send, but returns a raw buffer and treats 404 as "no thumbnail"
+  // rather than an error. Both Plex's and Jellyfin's fetchVideoThumbnail used
+  // to hand-build this same header/404/error/Buffer sequence independently,
+  // which meant the Jellyfin-12 MediaBrowser auth-scheme fix had to be
+  // applied in two places by hand — sharing it here means there's only one
+  // place left to change if either provider's auth format changes again.
+  async function getBinary(
+    config: LibraryConnector,
+    path: string,
+  ): Promise<{ contentType: string; data: Buffer } | null> {
+    const res = await fetch(`${baseUrl(config.host)}${path}`, {
+      headers: headers(config),
+      signal: providerRequestSignal(),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw new Error(`${providerLabel} request failed: ${res.status} ${res.statusText}`);
+    }
+    return {
+      contentType: res.headers.get('content-type') ?? 'image/jpeg',
+      data: Buffer.from(await res.arrayBuffer()),
+    };
+  }
+
+  return { get, send, getBinary };
 }

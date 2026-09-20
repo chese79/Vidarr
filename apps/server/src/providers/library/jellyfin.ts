@@ -1,5 +1,5 @@
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { baseUrl, createAuthedFetcher, providerRequestSignal } from './util.js';
+import { createAuthedFetcher } from './util.js';
 import type {
   FetchedLibraryArtist,
   FetchedLibraryVideo,
@@ -13,7 +13,7 @@ import type {
 // Jellyfin 12 disables the legacy X-Emby-Token header by default. The
 // MediaBrowser Authorization scheme is accepted by both current and older
 // Jellyfin releases, so use it for all connector requests.
-const { get: jellyfinGet, send: jellyfinSend } = createAuthedFetcher(
+const { get: jellyfinGet, send: jellyfinSend, getBinary: jellyfinGetBinary } = createAuthedFetcher(
   'Jellyfin',
   'Authorization',
   (token) => `MediaBrowser Token="${token}"`,
@@ -112,25 +112,20 @@ export const jellyfinProvider: LibraryConnectorProvider = {
           hasThumbnail: Boolean(item.ImageTags?.Primary),
         });
       }
-      if (items.length < limit || videos.length >= (body?.TotalRecordCount ?? videos.length)) break;
+      // A short page always means "last page" regardless of TotalRecordCount.
+      // Only trust the TotalRecordCount-based early-stop when Jellyfin
+      // actually sent one — falling back to `videos.length` here would make
+      // `videos.length >= videos.length` trivially true and silently cut the
+      // inventory off after the very first page whenever that field is
+      // missing.
+      const total = body?.TotalRecordCount;
+      if (items.length < limit || (typeof total === 'number' && videos.length >= total)) break;
     }
     return videos;
   },
 
   async fetchVideoThumbnail(config, externalId) {
-    const res = await fetch(
-      `${baseUrl(config.host)}/Items/${encodeURIComponent(externalId)}/Images/Primary?maxWidth=640&quality=85`,
-      {
-        headers: { Authorization: `MediaBrowser Token="${config.authToken ?? ''}"` },
-        signal: providerRequestSignal(),
-      },
-    );
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Jellyfin thumbnail request failed: ${res.status} ${res.statusText}`);
-    return {
-      contentType: res.headers.get('content-type') ?? 'image/jpeg',
-      data: Buffer.from(await res.arrayBuffer()),
-    };
+    return jellyfinGetBinary(config, `/Items/${encodeURIComponent(externalId)}/Images/Primary?maxWidth=640&quality=85`);
   },
 
   async listSections(config): Promise<LibrarySection[]> {

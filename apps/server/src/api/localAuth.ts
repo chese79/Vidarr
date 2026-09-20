@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../db/client.js';
 import { hashPassword, verifyPassword } from '../pipeline/password.js';
-import { BOOTSTRAP_WINDOW_MS } from '../pipeline/auth.js';
+import { BOOTSTRAP_WINDOW_MS, isInstanceClaimable } from '../pipeline/auth.js';
 
 const MIN_PASSWORD_LENGTH = 8;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -20,23 +20,6 @@ function validateCredentials(body: { username?: string; password?: string } | un
   return null;
 }
 
-function isOwnerSetupAllowed(settings: {
-  apiKey: string | null;
-  apiKeyGeneratedAt: Date | null;
-  apiKeyFirstUsedAt: Date | null;
-  adminUsername: string | null;
-  adminPasswordHash: string | null;
-} | null): boolean {
-  return Boolean(
-    settings?.apiKey &&
-    settings.apiKeyGeneratedAt &&
-    !settings.apiKeyFirstUsedAt &&
-    !settings.adminUsername &&
-    !settings.adminPasswordHash &&
-    Date.now() - settings.apiKeyGeneratedAt.getTime() <= BOOTSTRAP_WINDOW_MS
-  );
-}
-
 // Same relationship to apiKey as Google Sign-On (see api/googleAuth.ts): a
 // successful username/password login just hands the browser vidarr's real,
 // existing apiKey. Unlike Google's flow, there's no redirect leg — the
@@ -48,7 +31,7 @@ export async function localAuthRoutes(app: FastifyInstance) {
   app.get('/api/v1/auth/login/status', async () => {
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     const configured = Boolean(settings?.adminUsername && settings?.adminPasswordHash);
-    const setupAllowed = !configured && isOwnerSetupAllowed(settings);
+    const setupAllowed = !configured && isInstanceClaimable(settings);
     return { configured, setupAllowed };
   });
 
@@ -61,6 +44,15 @@ export async function localAuthRoutes(app: FastifyInstance) {
 
     const attemptKey = req.ip;
     const now = Date.now();
+    // Opportunistic sweep of every window that's already expired — this is
+    // the only place entries are ever removed besides a successful login, so
+    // without it an IP that fails once and never returns (bots/scanners
+    // probing this route) would leave a permanent Map entry for the life of
+    // the process. Cheap relative to the scrypt work this route already does
+    // per request.
+    for (const [key, entry] of loginAttempts) {
+      if (now - entry.windowStartedAt >= LOGIN_WINDOW_MS) loginAttempts.delete(key);
+    }
     const previous = loginAttempts.get(attemptKey);
     const attempt = !previous || now - previous.windowStartedAt >= LOGIN_WINDOW_MS
       ? { count: 0, windowStartedAt: now }
@@ -75,15 +67,19 @@ export async function localAuthRoutes(app: FastifyInstance) {
 
     // Same generic error for a wrong username and a wrong password — telling
     // them apart would let an attacker enumerate whether a given username is
-    // the configured one.
+    // the configured one. That has to hold for response *timing* too, not
+    // just the response body: `||` short-circuiting on the username check
+    // would skip the scrypt-based verifyPassword call entirely for a wrong
+    // username while still paying its cost for a wrong password, giving an
+    // attacker a measurable way to tell the two apart even though the JSON
+    // response is identical. Always run verifyPassword against the real
+    // stored hash so both failure paths cost the same.
     const invalid = () => reply.code(401).send({ error: 'Invalid username or password.' });
 
-    if (
-      typeof body?.username !== 'string' ||
-      typeof body.password !== 'string' ||
-      body.username !== settings.adminUsername ||
-      !(await verifyPassword(body.password, settings.adminPasswordHash))
-    ) {
+    const usernameMatches = typeof body?.username === 'string' && body.username === settings.adminUsername;
+    const suppliedPassword = typeof body?.password === 'string' ? body.password : '';
+    const passwordMatches = await verifyPassword(suppliedPassword, settings.adminPasswordHash);
+    if (!usernameMatches || !passwordMatches) {
       return invalid();
     }
 
@@ -104,7 +100,7 @@ export async function localAuthRoutes(app: FastifyInstance) {
     if (!settings?.apiKey) {
       return reply.code(503).send({ error: 'Vidarr is still initializing. Please try again.' });
     }
-    if (!isOwnerSetupAllowed(settings)) {
+    if (!isInstanceClaimable(settings)) {
       return reply.code(409).send({ error: 'Owner setup is no longer available. Sign in with the existing API key.' });
     }
 

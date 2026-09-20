@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { prisma } from '../../src/db/client.js';
 import { resetDb, ensureSettings } from '../support/db.js';
 import { authHeaders, TEST_API_KEY } from '../support/http.js';
+import * as passwordModule from '../../src/pipeline/password.js';
 
 // Username/password login is an alternative way to get vidarr's real apiKey
 // into a browser (see apps/server/src/api/localAuth.ts) — not a parallel
@@ -24,6 +25,11 @@ describe('local username/password login routes', () => {
 
   beforeEach(async () => {
     await resetDb();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   async function configureLogin(overrides: Partial<{ apiKey: string; username: string; password: string }> = {}) {
@@ -147,6 +153,34 @@ describe('local username/password login routes', () => {
       expect(settings?.adminUsername).toBeNull();
     });
 
+    // The sequential "claimed only once" test above would also pass with a
+    // naive findUnique-then-update (no real compare-and-swap) — it only
+    // proves a *second, later* attempt fails, not that two *simultaneous*
+    // attempts can't both slip through the isInstanceClaimable check before
+    // either has written. Promise.all here fires both at once, which is what
+    // actually exercises the atomic updateMany's WHERE-clause guard.
+    it('under true concurrency, exactly one of two simultaneous setup attempts succeeds', async () => {
+      await prepareFreshInstallation('race-key');
+      const [first, second] = await Promise.all([
+        app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/setup',
+          payload: { username: 'first-owner', password: 'correct horse battery staple' },
+        }),
+        app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/setup',
+          payload: { username: 'second-owner', password: 'correct horse battery staple' },
+        }),
+      ]);
+
+      const statuses = [first.statusCode, second.statusCode].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+      expect(['first-owner', 'second-owner']).toContain(settings?.adminUsername);
+    });
+
     it('closes owner setup after the bootstrap window expires', async () => {
       await ensureSettings({ apiKey: 'existing-key' });
       await prisma.settings.update({
@@ -260,6 +294,53 @@ describe('local username/password login routes', () => {
         payload: { username: 'admin', password: 'correct horse battery staple' },
       });
       expect(limited.statusCode).toBe(429);
+    });
+
+    // A `||` short-circuit that skips verifyPassword for a wrong username
+    // (while still paying its scrypt cost for a wrong password) would make
+    // the two failure modes distinguishable by response *timing* even though
+    // the JSON body is identical — undermining the exact invariant the
+    // previous test name promises. Asserting the call count is a reliable,
+    // non-flaky proxy for "the same work happens either way."
+    it('always runs password verification, even for a wrong username, so the two failures cost the same', async () => {
+      await configureLogin({ username: 'admin', password: 'correct horse battery staple' });
+      const verifySpy = vi.spyOn(passwordModule, 'verifyPassword');
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { username: 'not-admin', password: 'whatever' },
+      });
+
+      expect(verifySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('resets the rate limit once the 15-minute window has passed', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      await configureLogin();
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          payload: { username: 'admin', password: 'wrong password' },
+        });
+        expect(res.statusCode).toBe(401);
+      }
+      const limited = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { username: 'admin', password: 'correct horse battery staple' },
+      });
+      expect(limited.statusCode).toBe(429);
+
+      vi.setSystemTime(new Date(Date.now() + 15 * 60 * 1000 + 1));
+
+      const afterWindow = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { username: 'admin', password: 'correct horse battery staple' },
+      });
+      expect(afterWindow.statusCode).toBe(200);
     });
 
     it('reserves rate-limit slots before parallel password checks finish', async () => {

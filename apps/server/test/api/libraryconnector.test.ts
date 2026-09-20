@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { resetDb, ensureSettings, createLibraryConnector } from '../support/db.js';
@@ -20,6 +20,10 @@ describe('libraryconnector routes', () => {
   beforeEach(async () => {
     await resetDb();
     await ensureSettings({ apiKey: TEST_API_KEY });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('POST /api/v1/libraryconnector creates a connector', async () => {
@@ -178,6 +182,114 @@ describe('libraryconnector routes', () => {
       headers: authHeaders(),
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('does not wipe existing library artists when a sync returns zero artists', async () => {
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { userId: 'user-1', musicLibraryId: 'music-1' },
+    });
+    await prisma.libraryArtist.create({
+      data: {
+        connectorId: connector.id,
+        externalId: 'a1',
+        name: 'Old Artist',
+        normalizedName: 'old artist',
+        lastSyncedAt: new Date(0),
+      },
+    });
+
+    // An empty result from the remote server (auth hiccup, momentarily-empty
+    // response, a renamed section) must never be read as "the library is now
+    // empty" — that would wipe every previously-synced artist on one bad
+    // response.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ Items: [] }) }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/sync`,
+      headers: authHeaders(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().artistCount).toBe(0);
+
+    const remaining = await prisma.libraryArtist.findMany({ where: { connectorId: connector.id } });
+    expect(remaining).toHaveLength(1);
+  });
+
+  it('POST /:id/test does not overwrite an already-chosen musicLibraryId with its own guess', async () => {
+    const connector = await createLibraryConnector({ type: 'plex' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { musicLibraryId: 'manually-chosen-section' },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ MediaContainer: { Directory: [{ type: 'artist', key: 'guessed-section' }] } }),
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/test`,
+      headers: authHeaders(),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const updated = await prisma.libraryConnector.findUnique({ where: { id: connector.id } });
+    expect(updated?.musicLibraryId).toBe('manually-chosen-section');
+  });
+
+  it('rolls back the video-availability reset atomically when a sync fails partway through', async () => {
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { userId: 'user-1', musicLibraryId: 'music-1', videoLibraryId: 'video-1' },
+    });
+    await prisma.libraryVideo.create({
+      data: {
+        connectorId: connector.id,
+        externalId: 'v1',
+        title: 'Old Song',
+        normalizedTitle: 'old song',
+        artistName: 'Old Artist',
+        normalizedArtistName: 'old artist',
+        available: true,
+      },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        // fetchArtists
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ Items: [] }) })
+        // fetchVideos — one item with no Name, so normalizeTitle(undefined)
+        // throws while building the upsert batch, after the "mark everything
+        // unavailable" step has already been queued but before anything commits.
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({ Items: [{ Id: 'bad-video', Artists: ['Artist'] }], TotalRecordCount: 1 }),
+        }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/sync`,
+      headers: authHeaders(),
+    });
+    expect(res.statusCode).toBe(502);
+
+    const video = await prisma.libraryVideo.findUnique({
+      where: { connectorId_externalId: { connectorId: connector.id, externalId: 'v1' } },
+    });
+    expect(video?.available).toBe(true);
   });
 
   it('POST /api/v1/libraryconnector/:id/sync-play-counts propagates a real error as 502, not 500', async () => {

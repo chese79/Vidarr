@@ -95,6 +95,53 @@ describe('jellyfinProvider', () => {
     expect(fetchMock.mock.calls[2][0]).toBe('http://jellyfin:8096/Items/old-playlist');
   });
 
+  it('fetches a video thumbnail using the same MediaBrowser auth header as every other call', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'image/jpeg']]),
+      arrayBuffer: async () => new Uint8Array([9, 9]).buffer,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await jellyfinProvider.fetchVideoThumbnail!(connector(), 'video-7');
+
+    expect(result).toEqual({ contentType: 'image/jpeg', data: Buffer.from([9, 9]) });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://jellyfin:8096/Items/video-7/Images/Primary?maxWidth=640&quality=85',
+    );
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('MediaBrowser Token="token"');
+  });
+
+  it('returns null for a video with no thumbnail instead of throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    await expect(jellyfinProvider.fetchVideoThumbnail!(connector(), 'video-7')).resolves.toBeNull();
+  });
+
+  // Regression test for a real bug: when Jellyfin's response omits
+  // TotalRecordCount, the old stop condition fell back to comparing
+  // videos.length against itself (`videos.length >= videos.length`), which
+  // is trivially true — pagination silently stopped after the very first
+  // page even though a full page (more results pending) had just come back.
+  it('keeps paginating past a full page when TotalRecordCount is missing from the response', async () => {
+    // The page-size limit is hardcoded to 500 in fetchVideos — a page has to
+    // come back exactly that full for the old buggy stop condition
+    // (`items.length < limit`) to fall through to the broken
+    // TotalRecordCount fallback at all.
+    const fullPage = Array.from({ length: 500 }, (_, i) => ({ Id: `v${i}`, Name: `Song ${i}`, Artists: ['Artist'] }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ Items: fullPage })) // no TotalRecordCount
+      .mockResolvedValueOnce(jsonResponse({ Items: [{ Id: 'v500', Name: 'Song 500', Artists: ['Artist'] }] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const videos = await jellyfinProvider.fetchVideos!(connector());
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(videos).toHaveLength(501);
+    expect(videos[500].externalId).toBe('v500');
+  });
+
   it('preserves the existing playlist when creating its replacement fails', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}, 500));
     vi.stubGlobal('fetch', fetchMock);

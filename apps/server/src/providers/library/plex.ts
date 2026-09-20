@@ -1,5 +1,5 @@
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { baseUrl, createAuthedFetcher, providerRequestSignal } from './util.js';
+import { createAuthedFetcher } from './util.js';
 import type {
   FetchedLibraryArtist,
   FetchedLibraryVideo,
@@ -10,7 +10,7 @@ import type {
   PlaylistPushResult,
 } from './types.js';
 
-const { get: plexGet, send: plexSend } = createAuthedFetcher('Plex', 'X-Plex-Token');
+const { get: plexGet, send: plexSend, getBinary: plexGetBinary } = createAuthedFetcher('Plex', 'X-Plex-Token');
 
 // Plex has no first-class "music video" item type — vidarr's video library is
 // whatever Plex section (Movies / Home Videos / Other Videos) the user points
@@ -83,16 +83,7 @@ export const plexProvider: LibraryConnectorProvider = {
   },
 
   async fetchVideoThumbnail(config, externalId) {
-    const res = await fetch(`${baseUrl(config.host)}/library/metadata/${encodeURIComponent(externalId)}/thumb`, {
-      headers: { 'X-Plex-Token': config.authToken ?? '' },
-      signal: providerRequestSignal(),
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Plex thumbnail request failed: ${res.status} ${res.statusText}`);
-    return {
-      contentType: res.headers.get('content-type') ?? 'image/jpeg',
-      data: Buffer.from(await res.arrayBuffer()),
-    };
+    return plexGetBinary(config, `/library/metadata/${encodeURIComponent(externalId)}/thumb`);
   },
 
   async listSections(config): Promise<LibrarySection[]> {

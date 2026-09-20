@@ -104,14 +104,18 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
     if (!connector) return reply.code(404).send({ error: 'Connector not found' });
 
     const result = await getLibraryConnectorProvider(connector.type).testConnection(connector);
-    if (result.musicLibraryId || result.userId) {
-      await prisma.libraryConnector.update({
-        where: { id },
-        data: {
-          ...(result.musicLibraryId && { musicLibraryId: result.musicLibraryId }),
-          ...(result.userId && { userId: result.userId }),
-        },
-      });
+    // musicLibraryId is now a deliberate user choice (see the music-library
+    // picker in LibraryConnectorsPage.tsx) — only auto-fill it from Test when
+    // nothing has been picked yet. Plex's testConnection always guesses the
+    // first "artist" section, so persisting it unconditionally on every Test
+    // would silently overwrite a different section the user picked on
+    // purpose. userId is never user-chosen (it's resolved from `username`),
+    // so it's always safe, and desirable, to keep it fresh.
+    const updates: { musicLibraryId?: string; userId?: string } = {};
+    if (result.musicLibraryId && !connector.musicLibraryId) updates.musicLibraryId = result.musicLibraryId;
+    if (result.userId) updates.userId = result.userId;
+    if (Object.keys(updates).length) {
+      await prisma.libraryConnector.update({ where: { id }, data: updates });
     }
     return { ok: result.ok, message: result.message };
   });
@@ -144,9 +148,17 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           },
         }),
       ));
-      await prisma.libraryArtist.deleteMany({
-        where: { connectorId: id, lastSyncedAt: { lt: syncStartedAt } },
-      });
+      // Only prune rows the fetch didn't touch when the fetch actually
+      // returned something — an empty `artists` array almost always means a
+      // transient glitch (auth hiccup, momentarily-empty response, a renamed
+      // section) rather than "the library is now empty," and treating it as
+      // the latter would wipe every previously-synced artist for this
+      // connector on a single bad response.
+      if (artists.length > 0) {
+        await prisma.libraryArtist.deleteMany({
+          where: { connectorId: id, lastSyncedAt: { lt: syncStartedAt } },
+        });
+      }
 
       const provider = getLibraryConnectorProvider(connector.type);
       const videos = provider.fetchVideos && connector.videoLibraryId
@@ -162,40 +174,49 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             video.id,
           ]),
         );
-        await prisma.libraryVideo.updateMany({ where: { connectorId: id }, data: { available: false } });
-        await prisma.$transaction(videos.map((video) => {
-          const normalizedArtistName = normalizeTitle(video.artistName);
-          const normalizedTitle = normalizeTitle(video.title);
-          return prisma.libraryVideo.upsert({
-            where: { connectorId_externalId: { connectorId: id, externalId: video.externalId } },
-            update: {
-              title: video.title,
-              normalizedTitle,
-              artistName: video.artistName,
-              normalizedArtistName,
-              releaseYear: video.releaseYear ?? null,
-              path: video.path ?? null,
-              playCount: video.playCount ?? null,
-              hasThumbnail: video.hasThumbnail ?? false,
-              available: true,
-              lastSyncedAt: new Date(),
-              musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
-            },
-            create: {
-              connectorId: id,
-              externalId: video.externalId,
-              title: video.title,
-              normalizedTitle,
-              artistName: video.artistName,
-              normalizedArtistName,
-              releaseYear: video.releaseYear ?? null,
-              path: video.path ?? null,
-              playCount: video.playCount ?? null,
-              hasThumbnail: video.hasThumbnail ?? false,
-              musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
-            },
-          });
-        }));
+        // The "mark everything stale, then re-mark what's still there" reset
+        // must be one atomic transaction — if it were two separate
+        // statements and anything after the reset threw (a bad title from
+        // the remote server, a dropped connection mid-sync), the reset would
+        // already be committed with nothing to undo it, leaving every video
+        // for this connector marked unavailable until some future sync
+        // happens to succeed end-to-end.
+        await prisma.$transaction([
+          prisma.libraryVideo.updateMany({ where: { connectorId: id }, data: { available: false } }),
+          ...videos.map((video) => {
+            const normalizedArtistName = normalizeTitle(video.artistName);
+            const normalizedTitle = normalizeTitle(video.title);
+            return prisma.libraryVideo.upsert({
+              where: { connectorId_externalId: { connectorId: id, externalId: video.externalId } },
+              update: {
+                title: video.title,
+                normalizedTitle,
+                artistName: video.artistName,
+                normalizedArtistName,
+                releaseYear: video.releaseYear ?? null,
+                path: video.path ?? null,
+                playCount: video.playCount ?? null,
+                hasThumbnail: video.hasThumbnail ?? false,
+                available: true,
+                lastSyncedAt: new Date(),
+                musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
+              },
+              create: {
+                connectorId: id,
+                externalId: video.externalId,
+                title: video.title,
+                normalizedTitle,
+                artistName: video.artistName,
+                normalizedArtistName,
+                releaseYear: video.releaseYear ?? null,
+                path: video.path ?? null,
+                playCount: video.playCount ?? null,
+                hasThumbnail: video.hasThumbnail ?? false,
+                musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
+              },
+            });
+          }),
+        ]);
       }
 
       // Backfill vidarr's own Artist.genre from this connector's synced data

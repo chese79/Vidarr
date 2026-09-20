@@ -57,9 +57,16 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
     window.addEventListener('vidarr:unauthorized', onUnauthorized);
 
     async function initialize() {
+      // Both status checks are best-effort: a transient failure on either
+      // one must not block a returning user whose already-stored API key is
+      // still perfectly valid — that's checked independently below via
+      // getStoredApiKey()/tryKey() regardless of what these report. Without
+      // this fallback, a momentary hiccup on just the login-status endpoint
+      // would reject the whole Promise.all and land on the "Vidarr is
+      // unavailable" screen even for someone who didn't need it to succeed.
       const [googleStatus, loginStatus] = await Promise.all([
         api.googleAuth.status().catch(() => ({ configured: false })),
-        api.localAuth.status(),
+        api.localAuth.status().catch(() => ({ configured: false, setupAllowed: false })),
       ]);
       if (cancelled) return;
       setGoogleConfigured(googleStatus.configured);

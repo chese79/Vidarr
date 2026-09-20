@@ -67,6 +67,35 @@ describe('setup routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  // Regression test for a real gap: POST /api/v1/auth/setup can claim the
+  // owner account without ever making an authenticated request itself, so
+  // apiKeyFirstUsedAt stays null. Before this endpoint's claimability check
+  // was unified with isInstanceClaimable() (see pipeline/auth.ts), the
+  // bootstrap-key route only looked at apiKeyFirstUsedAt — meaning the raw
+  // API key stayed revealable, unauthenticated, for the rest of the
+  // 30-minute window even after an owner account already existed.
+  it('stops revealing the key the moment an owner account is claimed via /auth/setup, even before any authenticated request', async () => {
+    await prisma.settings.create({
+      data: { id: 1, apiKey: 'claimable-key', apiKeyGeneratedAt: new Date() },
+    });
+
+    const setup = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/setup',
+      payload: { username: 'owner', password: 'correct horse battery staple' },
+    });
+    expect(setup.statusCode).toBe(200);
+
+    // apiKeyFirstUsedAt is still null here — nothing has ever authenticated
+    // with the key yet — which is exactly the scenario that used to leave
+    // the bootstrap-key route open.
+    const settings = await prisma.settings.findUnique({ where: { id: 1 } });
+    expect(settings?.apiKeyFirstUsedAt).toBeNull();
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/setup/bootstrap-key' });
+    expect(res.statusCode).toBe(404);
+  });
+
   it('does not require an X-Api-Key header — the route itself is exempt from auth', async () => {
     await prisma.settings.create({
       data: { id: 1, apiKey: 'no-auth-needed', apiKeyGeneratedAt: new Date() },
