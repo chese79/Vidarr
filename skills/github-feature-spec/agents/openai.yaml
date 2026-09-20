@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Feature Spec"
+  short_description: "Create durable GitHub feature specifications"
+  default_prompt: "Use $github-feature-spec to turn this discussion into a dated, implementation-ready GitHub feature request."
