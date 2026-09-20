@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement Feature Spec"
+  short_description: "Implement tracked feature specifications safely"
+  default_prompt: "Use $implement-feature-spec to implement this tracked feature request with traceability, tests, and documentation."
