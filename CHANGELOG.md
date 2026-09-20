@@ -15,6 +15,23 @@ under **Unreleased** in the same commit as the change.
   request document gets implemented: read it, echo the request back in plain language before
   writing code, size it up and phase it if large, then verify and document once it lands.
 
+### Known gaps against `docs/requests/2026-09-19-ui-enhance.md` (tracked for a later phase)
+
+A code review of the Phase 1 Library redesign raised two gaps against the full request doc that are
+real but out of scope for Phase 1 to close — recorded here explicitly rather than left implicit:
+
+- The request doc's acceptance criteria place all official video thumbnails on the Artist Detail
+  page and keep the main Library page thumbnail-free. Phase 1 added the artist-centered list *above*
+  the pre-existing "Music videos on your media servers" thumbnail grid rather than replacing it or
+  moving it to the detail page — untangling that grid was an explicit Phase 1 scope trim (it isn't
+  part of the artist-centric redesign itself), but it does mean the Library page doesn't yet match
+  this requirement. Resolving it means folding that grid into the Artist Detail page rework already
+  planned for a later phase.
+- The request doc calls for independently monitoring/unmonitoring a single video from the Library
+  accordion. Phase 1's accordion is lazy-loaded and read-mostly by design, and — more fundamentally
+  — no API route exists yet to mutate an individual video's monitored state at all (only artist-level
+  monitoring). Adding that is part of the deferred video-state-model work, not a Phase 1 UI gap.
+
 ### Added
 
 - The Library page is now artist-centered (Phase 1 of `docs/requests/2026-09-19-ui-enhance.md`):
@@ -29,6 +46,8 @@ under **Unreleased** in the same commit as the change.
 - Added an inline "Edit" action to Indexers and Download Clients (matching the one already added to
   Library Connectors), so a wrong host, port, or credential can be corrected without deleting and
   re-adding the row.
+- Added "minimum known videos" and "minimum play count" filters to the Library page's filter bar —
+  the API and shared types already supported them, but the controls to reach them were missing.
 
 ### Changed
 
@@ -56,6 +75,20 @@ fail until you open Library Connectors and choose a library from the new picker.
 
 ### Fixed
 
+- The Library page's artist summary now counts a video as available (and includes its play count)
+  when it's matched to a still-available video on a connected Plex/Jellyfin server, not only when
+  Vidarr has a local file for it — previously a media-server-only video was reported as missing and
+  contributed nothing to an artist's play count.
+- The Library page's artist summary now filters, aggregates, and paginates at the database level
+  instead of loading every artist's full video/file/queue history into memory on every request —
+  fixes a real scalability gap for libraries with thousands of artists, found in a code review of
+  the Phase 1 redesign.
+- Hardened the server-proxied artist image endpoint against SSRF and unbounded resource use: a
+  stored poster URL is now restricted to http(s), rejected outright if it's a loopback/private/
+  link-local literal address, and its response is rejected if it isn't image content or exceeds a
+  10MB size cap (checked as the response streams in, not just via a trusted Content-Length header).
+  Found in the same code review — the endpoint previously did a bare, unbounded fetch of a
+  user-suppliable URL.
 - Closed a gap where creating the owner account via first-run setup did not close the one-time
   bootstrap API-key reveal endpoint: the raw key stayed retrievable, unauthenticated, for the rest
   of the 30-minute setup window even after an owner account had already been claimed.

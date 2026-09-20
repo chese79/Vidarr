@@ -461,6 +461,8 @@ export default function LibraryPage() {
   const monitored = params.get('monitored') as 'true' | 'false' | null;
   const letter = params.get('letter');
   const hasMissing = params.get('missing') === 'true';
+  const minKnownVideos = params.get('minKnownVideos') ?? '';
+  const minPlayCount = params.get('minPlayCount') ?? '';
   const page = Number(params.get('page') ?? '1');
 
   // Debounce the search box so typing doesn't fire a request per keystroke —
@@ -485,7 +487,7 @@ export default function LibraryPage() {
   }
 
   const summary = useQuery({
-    queryKey: ['artistSummary', search, genre, monitored, letter, hasMissing, page],
+    queryKey: ['artistSummary', search, genre, monitored, letter, hasMissing, minKnownVideos, minPlayCount, page],
     queryFn: () =>
       api.artists.summary({
         search: search || undefined,
@@ -493,6 +495,8 @@ export default function LibraryPage() {
         monitored: monitored === 'true' ? true : monitored === 'false' ? false : undefined,
         letter: letter || undefined,
         hasMissing: hasMissing || undefined,
+        minKnownVideos: minKnownVideos ? Number(minKnownVideos) : undefined,
+        minPlayCount: minPlayCount ? Number(minPlayCount) : undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -500,7 +504,9 @@ export default function LibraryPage() {
 
   const items = summary.data?.items ?? [];
   const totalPages = summary.data ? Math.max(1, Math.ceil(summary.data.total / PAGE_SIZE)) : 1;
-  const anyFilterActive = Boolean(search || genre || monitored || letter || hasMissing);
+  const anyFilterActive = Boolean(
+    search || genre || monitored || letter || hasMissing || minKnownVideos || minPlayCount,
+  );
   const allVisibleSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
 
   function toggleSelect(id: number) {
@@ -620,6 +626,28 @@ export default function LibraryPage() {
                 onChange={(e) => updateParams({ missing: e.target.checked ? 'true' : null, page: null })}
               />
               Has missing videos
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
+              Min known videos
+              <input
+                type="number"
+                min={0}
+                aria-label="Minimum known video count"
+                value={minKnownVideos}
+                onChange={(e) => updateParams({ minKnownVideos: e.target.value || null, page: null })}
+                style={{ width: 64 }}
+              />
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
+              Min play count
+              <input
+                type="number"
+                min={0}
+                aria-label="Minimum aggregate play count"
+                value={minPlayCount}
+                onChange={(e) => updateParams({ minPlayCount: e.target.value || null, page: null })}
+                style={{ width: 64 }}
+              />
             </label>
             {anyFilterActive && (
               <button type="button" className="secondary" onClick={clearAllFilters}>

@@ -127,6 +127,34 @@ export async function createLibraryConnector(
   });
 }
 
+export async function createLibraryVideo(
+  connectorId: number,
+  overrides: Partial<{
+    externalId: string;
+    title: string;
+    artistName: string;
+    normalizedArtistName: string;
+    normalizedTitle: string;
+    playCount: number | null;
+    available: boolean;
+    musicVideoId: number | null;
+  }> = {},
+) {
+  return prisma.libraryVideo.create({
+    data: {
+      connectorId,
+      externalId: overrides.externalId ?? 'ext-video-1',
+      title: overrides.title ?? 'Test Video',
+      normalizedTitle: overrides.normalizedTitle ?? (overrides.title ?? 'Test Video').toLowerCase(),
+      artistName: overrides.artistName ?? 'Test Artist',
+      normalizedArtistName: overrides.normalizedArtistName ?? (overrides.artistName ?? 'Test Artist').toLowerCase(),
+      playCount: overrides.playCount ?? null,
+      available: overrides.available ?? true,
+      musicVideoId: overrides.musicVideoId ?? null,
+    },
+  });
+}
+
 export async function createRecommendationProviderConfig(
   overrides: Partial<{ provider: string; enabled: boolean }> = {},
 ) {

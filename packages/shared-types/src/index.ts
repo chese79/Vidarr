@@ -73,7 +73,11 @@ export const CreateArtistSchema = z.object({
   monitored: z.boolean().default(false),
   rootFolderId: z.number().int(),
   qualityProfileId: z.number().int(),
-  posterUrl: z.string().nullable().optional(),
+  // .url() is only a syntax check — it doesn't restrict scheme or reject a
+  // private/internal host. Real SSRF hardening (protocol allowlist, literal
+  // private-IP rejection, timeout, size cap) happens at fetch time in
+  // pipeline/safeImageFetch.ts; this just rejects obvious garbage up front.
+  posterUrl: z.string().url().nullable().optional(),
   genre: z.string().nullable().optional(),
 });
 export type CreateArtist = z.infer<typeof CreateArtistSchema>;

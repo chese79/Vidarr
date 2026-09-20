@@ -12,8 +12,36 @@ import {
   createMusicVideo,
   createMusicVideoFile,
   createLibraryConnector,
+  createLibraryVideo,
 } from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
+
+// Mocks a fetch() Response carrying an image body, matching the shape
+// pipeline/safeImageFetch.ts actually reads from: a streamed `body` (via
+// getReader/read/cancel), not `arrayBuffer()` — the posterUrl proxy path
+// reads the stream incrementally to enforce its size cap.
+function mockImageResponse(
+  data: Uint8Array,
+  overrides: Partial<{ contentType: string; ok: boolean; contentLength: string }> = {},
+) {
+  let delivered = false;
+  const headers = new Map<string, string>([['content-type', overrides.contentType ?? 'image/jpeg']]);
+  if (overrides.contentLength) headers.set('content-length', overrides.contentLength);
+  return {
+    ok: overrides.ok ?? true,
+    headers,
+    body: {
+      getReader: () => ({
+        read: async () => {
+          if (delivered) return { done: true, value: undefined };
+          delivered = true;
+          return { done: false, value: data };
+        },
+        cancel: async () => {},
+      }),
+    },
+  };
+}
 
 describe('artist routes', () => {
   let app: FastifyInstance;
@@ -328,6 +356,45 @@ describe('artist routes', () => {
       const item = res.json().items.find((i: { id: number }) => i.id === artist.id);
       expect(item.hasImage).toBe(true);
     });
+
+    it('counts a media-server-matched video with no local file as available, and uses its play count', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Server Only Artist' });
+      const video = await createMusicVideo(artist.id, { title: 'Server Only', hasFile: false });
+      const connector = await createLibraryConnector({ enabled: true });
+      await createLibraryVideo(connector.id, { musicVideoId: video.id, available: true, playCount: 12 });
+
+      const res = await app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() });
+      const item = res.json().items.find((i: { id: number }) => i.id === artist.id);
+      expect(item).toMatchObject({
+        knownVideoCount: 1,
+        availableVideoCount: 1,
+        missingVideoCount: 0,
+        aggregatePlayCount: 12,
+      });
+    });
+
+    it('does not count a matched LibraryVideo that the last sync marked unavailable', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Stale Match Artist' });
+      const video = await createMusicVideo(artist.id, { title: 'Removed From Server', hasFile: false });
+      const connector = await createLibraryConnector({ enabled: true });
+      await createLibraryVideo(connector.id, { musicVideoId: video.id, available: false, playCount: 7 });
+
+      const res = await app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() });
+      const item = res.json().items.find((i: { id: number }) => i.id === artist.id);
+      expect(item).toMatchObject({ availableVideoCount: 0, missingVideoCount: 1, aggregatePlayCount: null });
+    });
+
+    it('prefers the locally synced file play count over a matched LibraryVideo when a file exists', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Both Sources Artist' });
+      const video = await createMusicVideo(artist.id, { title: 'Owned And Matched', hasFile: true });
+      await createMusicVideoFile(video.id, { playCount: 40 });
+      const connector = await createLibraryConnector({ enabled: true });
+      await createLibraryVideo(connector.id, { musicVideoId: video.id, available: true, playCount: 999 });
+
+      const res = await app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() });
+      const item = res.json().items.find((i: { id: number }) => i.id === artist.id);
+      expect(item.aggregatePlayCount).toBe(40);
+    });
   });
 
   describe('GET /api/v1/artist/:id/image', () => {
@@ -347,18 +414,64 @@ describe('artist routes', () => {
     it('proxies posterUrl when set, never redirecting the browser to the original URL', async () => {
       const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Poster Artist' });
       await prisma.artist.update({ where: { id: artist.id }, data: { posterUrl: 'https://imvdb.example/img.jpg' } });
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: true,
-          headers: new Map([['content-type', 'image/jpeg']]),
-          arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
-        }),
-      );
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockImageResponse(new Uint8Array([1, 2, 3]))));
 
       const res = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/image`, headers: authHeaders() });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toBe('image/jpeg');
+    });
+
+    it('refuses a posterUrl with a non-http(s) scheme instead of fetching it', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'File Scheme Artist' });
+      await prisma.artist.update({ where: { id: artist.id }, data: { posterUrl: 'file:///etc/passwd' } });
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const res = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/image`, headers: authHeaders() });
+      expect(res.statusCode).toBe(404);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses a posterUrl pointing at a loopback/private/link-local address instead of fetching it', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'SSRF Target Artist' });
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+
+      for (const target of [
+        'http://127.0.0.1:9/x',
+        'http://169.254.169.254/latest/meta-data/',
+        'http://192.168.1.5/x',
+        'http://localhost:9/x',
+      ]) {
+        await prisma.artist.update({ where: { id: artist.id }, data: { posterUrl: target } });
+        const res = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/image`, headers: authHeaders() });
+        expect(res.statusCode).toBe(404);
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses a posterUrl response whose content-type is not an image', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Non Image Response Artist' });
+      await prisma.artist.update({ where: { id: artist.id }, data: { posterUrl: 'https://imvdb.example/img.jpg' } });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(mockImageResponse(new TextEncoder().encode('<html></html>'), { contentType: 'text/html' })),
+      );
+
+      const res = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/image`, headers: authHeaders() });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('refuses a posterUrl response whose declared size exceeds the cap without reading the body', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Oversized Response Artist' });
+      await prisma.artist.update({ where: { id: artist.id }, data: { posterUrl: 'https://imvdb.example/img.jpg' } });
+      const response = mockImageResponse(new Uint8Array([1]), { contentLength: String(50 * 1024 * 1024) });
+      const readSpy = vi.spyOn(response.body, 'getReader');
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+
+      const res = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/image`, headers: authHeaders() });
+      expect(res.statusCode).toBe(404);
+      expect(readSpy).not.toHaveBeenCalled();
     });
 
     it('falls back to a matched connector image when posterUrl is unset', async () => {
