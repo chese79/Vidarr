@@ -199,32 +199,6 @@ select {
   background: linear-gradient(135deg, var(--bg), var(--border));
 }
 
-.library-video-section { margin: 24px 0 32px; }
-.section-heading { display: flex; align-items: baseline; gap: 10px; }
-.section-heading h3 { margin: 0 0 12px; }
-.section-heading span { color: var(--text-muted); }
-.library-video-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 16px;
-}
-.library-video-card {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-elevated);
-}
-.library-video-image { aspect-ratio: 16 / 9; background: #111; }
-.library-video-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.library-video-placeholder {
-  width: 100%; height: 100%; display: grid; place-items: center;
-  color: #777; font-size: 32px;
-}
-.library-video-metadata { display: flex; flex-direction: column; gap: 4px; padding: 12px; }
-.library-video-metadata strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.library-video-metadata span, .library-video-metadata small { color: var(--text-muted); }
-.library-video-metadata .status-owned { color: var(--success, #49a66b); }
-
 .video-info {
   flex: 1;
   min-width: 0;
@@ -445,3 +419,27 @@ select {
 
 .status-chip.available { color: var(--status-downloading); }
 .status-chip.missing { color: var(--status-missing); }
+
+/* Artist Detail page: a video's media-server matches (moved here from the
+   old whole-catalog grid on the Library page — see CHANGELOG). Each match is
+   a status-chip with an inline screenshot rather than a separate card grid,
+   since there's usually at most one match per video per connector. */
+.matched-video-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.matched-video-row .status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.matched-video-thumb {
+  width: 32px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 3px;
+  display: block;
+}

@@ -17,22 +17,30 @@ under **Unreleased** in the same commit as the change.
 
 ### Known gaps against `docs/requests/2026-09-19-ui-enhance.md` (tracked for a later phase)
 
-A code review of the Phase 1 Library redesign raised two gaps against the full request doc that are
-real but out of scope for Phase 1 to close — recorded here explicitly rather than left implicit:
+The two gaps below (video thumbnails living on the Library page, no per-video monitor control) were
+closed — see Changed/Added below. Closing them surfaced one new, honest tradeoff worth tracking:
 
-- The request doc's acceptance criteria place all official video thumbnails on the Artist Detail
-  page and keep the main Library page thumbnail-free. Phase 1 added the artist-centered list *above*
-  the pre-existing "Music videos on your media servers" thumbnail grid rather than replacing it or
-  moving it to the detail page — untangling that grid was an explicit Phase 1 scope trim (it isn't
-  part of the artist-centric redesign itself), but it does mean the Library page doesn't yet match
-  this requirement. Resolving it means folding that grid into the Artist Detail page rework already
-  planned for a later phase.
-- The request doc calls for independently monitoring/unmonitoring a single video from the Library
-  accordion. Phase 1's accordion is lazy-loaded and read-mostly by design, and — more fundamentally
-  — no API route exists yet to mutate an individual video's monitored state at all (only artist-level
-  monitoring). Adding that is part of the deferred video-state-model work, not a Phase 1 UI gap.
+- The old "Music videos on your media servers" grid also doubled as the only way to browse
+  media-server videos that aren't matched to any vidarr artist at all (available on the server, but
+  nothing in the catalog corresponds to them). Moving matched videos onto their artist's page has no
+  equivalent for *unmatched* ones — there's currently no view that lists them. Building one properly
+  means the confidence-classified reconciliation work already tracked as deferred (distinguishing "no
+  vidarr artist exists for this" from "matched with low confidence"), not a quick re-add of the old
+  grid.
+
+### Changed
+
+- The Library page no longer shows a flat grid of every media-server video. A video's media-server
+  matches (screenshot, connector name, play count) now show inline on its artist's page instead, next
+  to that specific video — matching the request doc's placement of official thumbnails on the Artist
+  Detail page rather than the main Library list.
 
 ### Added
+
+- Each video on the Artist Detail page, and in the Library page's per-artist accordion, now has a
+  real monitor/unmonitor checkbox instead of static "Monitored"/"Unmonitored" text — the API already
+  supported updating an individual video's monitored state; only the controls to reach it were
+  missing.
 
 - The Library page is now artist-centered (Phase 1 of `docs/requests/2026-09-19-ui-enhance.md`):
   a vertical A-Z letter rail for navigation, a filter bar (search, genre, monitored state, "has

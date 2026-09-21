@@ -255,12 +255,30 @@ export async function artistRoutes(app: FastifyInstance) {
     return { succeeded, failed };
   });
 
+  // Each video's `libraryVideos` carries only what the Artist Detail page's
+  // "available on your media server" display needs (id for the thumbnail
+  // proxy, playCount, connector name/type) — never the connector's raw
+  // credentials, and filtered to `available: true` so a stale sync result
+  // (removed from the server since the last sync) doesn't show as owned.
   app.get('/api/v1/artist/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const artist = await prisma.artist.findUnique({
       where: { id },
       include: {
-        musicVideos: { orderBy: { releaseYear: { sort: 'asc', nulls: 'last' } } },
+        musicVideos: {
+          orderBy: { releaseYear: { sort: 'asc', nulls: 'last' } },
+          include: {
+            libraryVideos: {
+              where: { available: true },
+              select: {
+                id: true,
+                hasThumbnail: true,
+                playCount: true,
+                connector: { select: { name: true, type: true } },
+              },
+            },
+          },
+        },
       },
     });
     if (!artist) return reply.code(404).send({ error: 'Artist not found' });

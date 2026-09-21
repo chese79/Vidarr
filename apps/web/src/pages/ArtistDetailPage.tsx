@@ -3,7 +3,35 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
-import type { YoutubeSourceType, IndexerSearchResult, MusicVideo } from '@vidarr/shared-types';
+import type { YoutubeSourceType, IndexerSearchResult, MusicVideo, MatchedLibraryVideo } from '@vidarr/shared-types';
+
+// A compact screenshot for one of a video's media-server matches — same
+// blob-proxy pattern as LibraryPage's LibraryVideoThumbnail (the endpoint
+// requires an X-Api-Key header a plain <img src> can't attach), just sized
+// for an inline badge rather than a grid card.
+function MatchedLibraryThumbnail({ match }: { match: MatchedLibraryVideo }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!match.hasThumbnail) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    api.libraryVideos
+      .thumbnail(match.id)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [match.id, match.hasThumbnail]);
+
+  return url ? <img src={url} alt="" className="matched-video-thumb" loading="lazy" /> : null;
+}
 
 function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -253,6 +281,12 @@ export default function ArtistDetailPage() {
     },
   });
 
+  const toggleVideoMonitored = useMutation({
+    mutationFn: ({ id, monitored }: { id: number; monitored: boolean }) =>
+      api.musicVideos.update(id, { monitored }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+  });
+
   const createVideo = useMutation({
     mutationFn: api.musicVideos.create,
     onSuccess: () => {
@@ -418,9 +452,33 @@ export default function ArtistDetailPage() {
                     Director: {mv.director}
                   </div>
                 )}
-                <div className="empty-state" style={{ padding: 0 }}>
-                  {mv.monitored ? 'Monitored' : 'Not monitored'} · {mv.hasFile ? 'Downloaded' : 'Wanted'}
+                <div className="empty-state" style={{ padding: 0, display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={mv.monitored}
+                      onChange={(e) =>
+                        toggleVideoMonitored.mutate({ id: mv.id, monitored: e.target.checked })
+                      }
+                      aria-label={`${mv.monitored ? 'Unmonitor' : 'Monitor'} ${mv.title}`}
+                    />
+                    Monitored
+                  </label>
+                  · {mv.hasFile ? 'Downloaded' : 'Wanted'}
                 </div>
+                {mv.libraryVideos.length > 0 && (
+                  <div className="matched-video-row">
+                    {mv.libraryVideos.map((match) => (
+                      <span key={match.id} className="status-chip available">
+                        <MatchedLibraryThumbnail match={match} />
+                        On {match.connector.name}
+                        {match.playCount != null
+                          ? ` · played ${match.playCount} ${match.playCount === 1 ? 'time' : 'times'}`
+                          : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="video-actions">
                 {grabStatus[mv.id] && <span>{grabStatus[mv.id]}</span>}

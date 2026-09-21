@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { ArtistSummary, ImvdbArtist, ImvdbVideoCandidate, LibraryVideo } from '@vidarr/shared-types';
+import type { ArtistSummary, ImvdbArtist, ImvdbVideoCandidate } from '@vidarr/shared-types';
 
 const RAIL_LETTERS = ['#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
 const PAGE_SIZE = 25;
@@ -75,9 +75,16 @@ function LetterRail({
 // second, lighter-weight one for Phase 1 (the payload here is a handful of
 // scalar fields per video, not large enough to justify a separate route).
 function ArtistAccordion({ artistId }: { artistId: number }) {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
+  });
+
+  const toggleVideoMonitored = useMutation({
+    mutationFn: ({ id, monitored }: { id: number; monitored: boolean }) =>
+      api.musicVideos.update(id, { monitored }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
   });
 
   if (isLoading) {
@@ -112,9 +119,15 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
           <span className={`status-chip ${mv.hasFile ? 'available' : 'missing'}`}>
             {mv.hasFile ? 'Available' : 'Missing'}
           </span>
-          <span className="empty-state" style={{ padding: 0 }}>
-            {mv.monitored ? 'Monitored' : 'Unmonitored'}
-          </span>
+          <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={mv.monitored}
+              onChange={(e) => toggleVideoMonitored.mutate({ id: mv.id, monitored: e.target.checked })}
+              aria-label={`${mv.monitored ? 'Unmonitor' : 'Monitor'} ${mv.title}`}
+            />
+            Monitored
+          </label>
           <Link to={`/artist/${artistId}`}>Details</Link>
         </div>
       ))}
@@ -186,29 +199,6 @@ function ArtistRow({
       {expanded && <ArtistAccordion artistId={artist.id} />}
     </div>
   );
-}
-
-function LibraryVideoThumbnail({ video }: { video: LibraryVideo }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!video.hasThumbnail) return;
-    let objectUrl: string | null = null;
-    let cancelled = false;
-    api.libraryVideos.thumbnail(video.id).then((blob) => {
-      if (cancelled) return;
-      objectUrl = URL.createObjectURL(blob);
-      setUrl(objectUrl);
-    }).catch(() => undefined);
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [video.id, video.hasThumbnail]);
-
-  return url
-    ? <img src={url} alt={`Screenshot from ${video.title}`} loading="lazy" />
-    : <div className="library-video-placeholder" aria-label="No screenshot available">▶</div>;
 }
 
 function AddArtistForm({ onDone }: { onDone: () => void }) {
@@ -443,7 +433,6 @@ export default function LibraryPage() {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
-  const libraryVideos = useQuery({ queryKey: ['libraryVideos'], queryFn: api.libraryVideos.list });
   const rootFolders = useQuery({ queryKey: ['rootFolders'], queryFn: api.rootFolders.list });
   const qualityProfiles = useQuery({
     queryKey: ['qualityProfiles'],
@@ -743,37 +732,6 @@ export default function LibraryPage() {
           )}
         </div>
       </div>
-
-      <section className="library-video-section">
-        <div className="section-heading">
-          <h3>Music videos on your media servers</h3>
-          <span>{libraryVideos.data?.length ?? 0}</span>
-        </div>
-        {libraryVideos.data?.length ? (
-          <div className="library-video-grid">
-            {libraryVideos.data.map((video) => (
-              <article className="library-video-card" key={video.id}>
-                <div className="library-video-image"><LibraryVideoThumbnail video={video} /></div>
-                <div className="library-video-metadata">
-                  <strong title={video.title}>{video.title}</strong>
-                  <span>{video.artistName}{video.releaseYear ? ` · ${video.releaseYear}` : ''}</span>
-                  <small>
-                    {video.connector.name}
-                    {video.playCount !== null ? ` · played ${video.playCount} ${video.playCount === 1 ? 'time' : 'times'}` : ''}
-                  </small>
-                  <small className={video.musicVideoId ? 'status-owned' : ''}>
-                    {video.musicVideoId ? 'Matched in Vidarr catalog' : 'Available on media server'}
-                  </small>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="empty-state">
-            No scanned music videos yet. Select a music-video library on a connector and sync it.
-          </p>
-        )}
-      </section>
     </div>
   );
 }

@@ -57,6 +57,7 @@ import type {
   LibraryVideo,
   ArtistSummaryList,
   BulkMonitorArtistsResult,
+  MatchedLibraryVideo,
 } from '@vidarr/shared-types';
 
 export interface ArtistSummaryParams {
@@ -136,7 +137,10 @@ async function requestBlob(path: string): Promise<Blob> {
 export const api = {
   artists: {
     list: () => request<Artist[]>('/artist'),
-    get: (id: number) => request<Artist & { musicVideos: MusicVideo[] }>(`/artist/${id}`),
+    get: (id: number) =>
+      request<Artist & { musicVideos: (MusicVideo & { libraryVideos: MatchedLibraryVideo[] })[] }>(
+        `/artist/${id}`,
+      ),
     create: (data: CreateArtist) =>
       request<Artist>('/artist', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: UpdateArtist) =>

@@ -345,6 +345,18 @@ export const LibraryArtistSchema = z.object({
 });
 export type LibraryArtist = z.infer<typeof LibraryArtistSchema>;
 
+// A video's media-server matches, as nested in GET /api/v1/artist/:id's
+// musicVideos — a small subset of LibraryVideoSchema below (no connector
+// credentials, no path) scoped to what the Artist Detail page needs to show
+// "this video is already on your server."
+export const MatchedLibraryVideoSchema = z.object({
+  id: z.number().int(),
+  hasThumbnail: z.boolean(),
+  playCount: z.number().int().nullable(),
+  connector: z.object({ name: z.string(), type: LibraryConnectorType }),
+});
+export type MatchedLibraryVideo = z.infer<typeof MatchedLibraryVideoSchema>;
+
 export const LibraryVideoSchema = z.object({
   id: z.number().int(),
   connectorId: z.number().int(),

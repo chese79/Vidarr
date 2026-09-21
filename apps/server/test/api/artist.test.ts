@@ -83,6 +83,33 @@ describe('artist routes', () => {
     expect(res.json()).toMatchObject({ id: artist.id, name: artist.name, musicVideos: [] });
   });
 
+  it('GET /api/v1/artist/:id includes each video\'s available, matched media-server videos', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id, { title: 'Matched Video', hasFile: false });
+    const connector = await createLibraryConnector({ name: 'My Jellyfin', type: 'jellyfin', enabled: true });
+    await createLibraryVideo(connector.id, {
+      musicVideoId: video.id,
+      available: true,
+      playCount: 9,
+      externalId: 'ext-a',
+    });
+    // A stale match from a previous sync (no longer available) shouldn't show as owned.
+    await createLibraryVideo(connector.id, {
+      musicVideoId: video.id,
+      available: false,
+      externalId: 'ext-b',
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}`, headers: authHeaders() });
+    expect(res.statusCode).toBe(200);
+    const returnedVideo = res.json().musicVideos.find((v: { id: number }) => v.id === video.id);
+    expect(returnedVideo.libraryVideos).toHaveLength(1);
+    expect(returnedVideo.libraryVideos[0]).toMatchObject({
+      playCount: 9,
+      connector: { name: 'My Jellyfin', type: 'jellyfin' },
+    });
+  });
+
   it('GET /api/v1/artist/:id 404s for a nonexistent id', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/artist/999999', headers: authHeaders() });
     expect(res.statusCode).toBe(404);
