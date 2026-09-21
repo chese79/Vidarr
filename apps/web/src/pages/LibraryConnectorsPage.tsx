@@ -101,6 +101,9 @@ function ConnectorRow({
   unmatchedVideos,
   expanded,
   onToggleExpand,
+  reviewVideos,
+  reviewExpanded,
+  onToggleReviewExpand,
   onTest,
   onSync,
   onSyncPlayCounts,
@@ -111,6 +114,9 @@ function ConnectorRow({
   unmatchedVideos: LibraryVideo[];
   expanded: boolean;
   onToggleExpand: () => void;
+  reviewVideos: LibraryVideo[];
+  reviewExpanded: boolean;
+  onToggleReviewExpand: () => void;
   onTest: () => void;
   onSync: () => void;
   onSyncPlayCounts: () => void;
@@ -118,6 +124,9 @@ function ConnectorRow({
 }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const invalidateVideos = () => queryClient.invalidateQueries({ queryKey: ['libraryVideos'] });
+  const confirmMatch = useMutation({ mutationFn: api.libraryVideos.confirmMatch, onSuccess: invalidateVideos });
+  const rejectMatch = useMutation({ mutationFn: api.libraryVideos.rejectMatch, onSuccess: invalidateVideos });
   const [name, setName] = useState(connector.name);
   const [host, setHost] = useState(connector.host);
   const [authToken, setAuthToken] = useState('');
@@ -153,7 +162,7 @@ function ConnectorRow({
   if (editing) {
     return (
       <tr>
-        <td colSpan={8}>
+        <td colSpan={9}>
           <div className="form-row" style={{ flexWrap: 'wrap' }}>
             <input placeholder="Name" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
             <input
@@ -230,6 +239,17 @@ function ConnectorRow({
             </span>
           )}
         </td>
+        <td>
+          {reviewVideos.length > 0 ? (
+            <button type="button" className="secondary" aria-expanded={reviewExpanded} onClick={onToggleReviewExpand}>
+              {reviewExpanded ? 'Hide' : 'Show'} {reviewVideos.length} to review
+            </button>
+          ) : (
+            <span className="empty-state" style={{ padding: 0 }}>
+              None
+            </span>
+          )}
+        </td>
         <td style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="secondary" aria-label={`Test ${connector.name}`} onClick={onTest}>
@@ -267,10 +287,10 @@ function ConnectorRow({
       </tr>
       {expanded && unmatchedVideos.length > 0 && (
         <tr>
-          <td colSpan={8}>
+          <td colSpan={9}>
             {/* Videos this connector reports as available with no corresponding
-                vidarr artist/video at all — distinct from a low-confidence match,
-                which needs the reconciliation work tracked in CHANGELOG.md. */}
+                vidarr artist/video at all — distinct from a fuzzy, unreviewed
+                match, which shows under "Needs review" below instead. */}
             <div className="unmatched-video-list" tabIndex={0} role="region" aria-label="Unmatched videos">
               {unmatchedVideos.map((v) => (
                 <div className="unmatched-video-row" key={v.id}>
@@ -281,6 +301,60 @@ function ConnectorRow({
                     {v.artistName}
                     {v.releaseYear ? ` · ${v.releaseYear}` : ''}
                   </span>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+      {reviewExpanded && reviewVideos.length > 0 && (
+        <tr>
+          <td colSpan={9}>
+            {/* A fuzzy match a sync proposed but didn't hit the exact-key fast
+                path — confidence label plus a side-by-side comparison so a
+                human can tell at a glance whether to keep it. */}
+            <div className="unmatched-video-list" tabIndex={0} role="region" aria-label="Matches needing review">
+              {reviewVideos.map((v) => (
+                <div className="unmatched-video-row review-row" key={v.id}>
+                  <span
+                    className={`status-chip ${v.matchConfidence === 'probable' ? 'available' : 'missing'}`}
+                  >
+                    {v.matchConfidence === 'probable' ? 'Probable' : 'Ambiguous'}
+                  </span>
+                  <span className="title" title={v.title}>
+                    {v.title}
+                  </span>
+                  <span className="empty-state" style={{ padding: 0 }}>
+                    {v.artistName}
+                    {v.releaseYear ? ` · ${v.releaseYear}` : ''}
+                  </span>
+                  <span aria-hidden="true">→</span>
+                  {v.matchedVideo && (
+                    <span className="title" title={v.matchedVideo.title}>
+                      {v.matchedVideo.title}
+                      <span className="empty-state" style={{ padding: 0 }}>
+                        {' '}
+                        — {v.matchedVideo.artistName}
+                        {v.matchedVideo.releaseYear ? ` · ${v.matchedVideo.releaseYear}` : ''}
+                      </span>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-label={`Confirm match for ${v.title}`}
+                    onClick={() => confirmMatch.mutate(v.id)}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-label={`Reject match for ${v.title}`}
+                    onClick={() => rejectMatch.mutate(v.id)}
+                  >
+                    Reject
+                  </button>
                 </div>
               ))}
             </div>
@@ -303,6 +377,7 @@ export default function LibraryConnectorsPage() {
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState<DiscoveredServer[] | null>(null);
   const [expandedUnmatched, setExpandedUnmatched] = useState<Set<number>>(new Set());
+  const [expandedReview, setExpandedReview] = useState<Set<number>>(new Set());
 
   const connectors = useQuery({
     queryKey: ['libraryConnectors'],
@@ -312,6 +387,15 @@ export default function LibraryConnectorsPage() {
 
   function toggleUnmatchedExpanded(connectorId: number) {
     setExpandedUnmatched((prev) => {
+      const next = new Set(prev);
+      if (next.has(connectorId)) next.delete(connectorId);
+      else next.add(connectorId);
+      return next;
+    });
+  }
+
+  function toggleReviewExpanded(connectorId: number) {
+    setExpandedReview((prev) => {
       const next = new Set(prev);
       if (next.has(connectorId)) next.delete(connectorId);
       else next.add(connectorId);
@@ -516,6 +600,7 @@ export default function LibraryConnectorsPage() {
               </th>
               <th>Music Video library</th>
               <th>Unmatched videos</th>
+              <th>Needs review</th>
               <th></th>
             </tr>
           </thead>
@@ -530,6 +615,11 @@ export default function LibraryConnectorsPage() {
                 }
                 expanded={expandedUnmatched.has(c.id)}
                 onToggleExpand={() => toggleUnmatchedExpanded(c.id)}
+                reviewVideos={
+                  libraryVideos.data?.filter((v) => v.connectorId === c.id && v.matchConfidence != null) ?? []
+                }
+                reviewExpanded={expandedReview.has(c.id)}
+                onToggleReviewExpand={() => toggleReviewExpanded(c.id)}
                 onTest={() => handleTest(c.id)}
                 onSync={() => handleSync(c.id)}
                 onSyncPlayCounts={() => handleSyncPlayCounts(c.id)}

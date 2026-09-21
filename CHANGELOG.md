@@ -5,6 +5,26 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — confidence-classified library reconciliation ("Phase 2b")
+
+Media-server syncing previously matched a scanned video to vidarr's catalog through exactly one
+exact, normalized artist+title key — anything else (a live version, a remaster, "(Official Video)"
+left in one title but not the other) was reported as fully unmatched even when a human would
+recognize it instantly.
+
+- A sync now also tries a fuzzy, title-similarity fallback (scoped to the same artist's known
+  videos) when the exact key misses, classifying what it finds as **probable** or **ambiguous**
+  rather than silently accepting or silently dropping it. An exact match is unaffected — still free,
+  still instant, still needs no review.
+- The Library Connectors page has a new **Needs review** column next to Unmatched videos: each
+  proposed match shows a confidence label and a side-by-side comparison (what the server reported vs.
+  what it's proposed to match), with Confirm/Reject actions. Confirming makes it behave exactly like
+  a normal match from then on; rejecting clears it and — this was the part missing entirely before —
+  the next sync won't just immediately re-propose the same rejected candidate.
+- Deliberately does not build the request doc's literal 12-state model as one enum, or add duration
+  as a matching signal (no field for it exists on either side, and no provider fetches one today) —
+  see the plan file's Phase 2b section for the full reasoning.
+
 ### Added — video ownership/acquisition state ("Phase 2a")
 
 Picks up the next item from Phase 1's deferred list: the video-state model and Artist Detail page
@@ -43,9 +63,9 @@ today). Deliberately does **not** build the request doc's full 12-value state en
   search click), `queued` (the download-queue status value is never actually written by any code path
   today — a grab goes straight to `downloading` once the client accepts it), and
   `awaiting-server-scan` (would need new timestamp-comparison logic).
-- Confidence-classified reconciliation (confident/probable/ambiguous/unmatched) is still fully
-  deferred — this phase only fixed the *existing* exact-match system so it stops silently dropping
-  good matches; it does not add probable/ambiguous tiers.
+- ~~Confidence-classified reconciliation~~ — DONE in "Phase 2b" below. This phase only fixed the
+  *existing* exact-match system so it stops silently dropping good matches; it did not yet add
+  probable/ambiguous tiers on its own.
 - Provider-neutral acquisition source records and YouTube/VEVO content validation beyond today's
   title/channel heuristic remain fully deferred, unchanged from before this phase.
 

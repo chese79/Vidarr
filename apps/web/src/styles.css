@@ -514,3 +514,12 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* "Needs review" rows carry more per-row content (a confidence chip, both
+   sides of the proposed match, two action buttons) than a plain unmatched
+   row — wrapping and vertical centering keep it legible at narrower widths
+   instead of forcing a long horizontal scroll. */
+.review-row {
+  flex-wrap: wrap;
+  align-items: center;
+}

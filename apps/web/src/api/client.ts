@@ -253,6 +253,8 @@ export const api = {
   libraryVideos: {
     list: () => request<LibraryVideo[]>('/libraryvideo'),
     thumbnail: (id: number) => requestBlob(`/libraryvideo/${id}/thumbnail`),
+    confirmMatch: (id: number) => request<LibraryVideo>(`/libraryvideo/${id}/confirm-match`, { method: 'POST' }),
+    rejectMatch: (id: number) => request<LibraryVideo>(`/libraryvideo/${id}/reject-match`, { method: 'POST' }),
   },
   playlists: {
     list: () => request<Playlist[]>('/playlist'),

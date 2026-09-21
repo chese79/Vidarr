@@ -389,6 +389,21 @@ export const MatchedLibraryVideoSchema = z.object({
 });
 export type MatchedLibraryVideo = z.infer<typeof MatchedLibraryVideoSchema>;
 
+// null for an exact-key match (needs no review) or no match at all — set
+// only alongside a fuzzy-matched musicVideoId. See pipeline/reconciliation.ts.
+export const MatchConfidence = z.enum(['probable', 'ambiguous']);
+export type MatchConfidence = z.infer<typeof MatchConfidence>;
+
+// The catalog side of a LibraryVideo's proposed match — just enough for a
+// "does this look right?" side-by-side comparison in the review UI, the
+// reverse pairing of MatchedLibraryVideoSchema above.
+export const MatchedMusicVideoSchema = z.object({
+  title: z.string(),
+  releaseYear: z.number().int().nullable(),
+  artistName: z.string(),
+});
+export type MatchedMusicVideo = z.infer<typeof MatchedMusicVideoSchema>;
+
 export const LibraryVideoSchema = z.object({
   id: z.number().int(),
   connectorId: z.number().int(),
@@ -401,6 +416,8 @@ export const LibraryVideoSchema = z.object({
   hasThumbnail: z.boolean(),
   available: z.boolean(),
   musicVideoId: z.number().int().nullable(),
+  matchConfidence: MatchConfidence.nullable(),
+  matchedVideo: MatchedMusicVideoSchema.nullable(),
   connector: z.object({ name: z.string(), type: LibraryConnectorType }),
 });
 export type LibraryVideo = z.infer<typeof LibraryVideoSchema>;

@@ -6,6 +6,7 @@ import { normalizeTitle } from '../pipeline/normalize.js';
 import { syncPlayCounts } from '../pipeline/playCountSync.js';
 import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discovery.js';
 import { refreshRecommendations } from '../pipeline/recommendations.js';
+import { matchLibraryVideo, type CanonicalVideo, type MatchConfidence } from '../pipeline/reconciliation.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
@@ -13,10 +14,47 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/v1/libraryvideo', async () => {
-    return prisma.libraryVideo.findMany({
+    const videos = await prisma.libraryVideo.findMany({
       where: { available: true, connector: { enabled: true } },
-      include: { connector: { select: { name: true, type: true } } },
+      include: {
+        connector: { select: { name: true, type: true } },
+        musicVideo: { select: { title: true, releaseYear: true, artist: { select: { name: true } } } },
+      },
       orderBy: [{ artistName: 'asc' }, { title: 'asc' }],
+    });
+    // matchedVideo lets the "Needs review" UI show a side-by-side comparison
+    // without a second query — only meaningful when matchConfidence is set
+    // (a fuzzy, unreviewed match); an exact/confident match doesn't need it.
+    return videos.map(({ musicVideo, ...video }) => ({
+      ...video,
+      matchedVideo: musicVideo
+        ? { title: musicVideo.title, releaseYear: musicVideo.releaseYear, artistName: musicVideo.artist.name }
+        : null,
+    }));
+  });
+
+  // Accepts a fuzzy match a sync proposed — clears matchConfidence so the row
+  // behaves exactly like an exact match everywhere else in the app from now
+  // on (computeVideoStatus and every other consumer only look at
+  // musicVideoId, never matchConfidence).
+  app.post<{ Params: { id: string } }>('/api/v1/libraryvideo/:id/confirm-match', async (req, reply) => {
+    const id = Number(req.params.id);
+    const video = await prisma.libraryVideo.findUnique({ where: { id } });
+    if (!video) return reply.code(404).send({ error: 'Library video not found' });
+    if (!video.musicVideoId) return reply.code(400).send({ error: 'This row has no proposed match to confirm' });
+    return prisma.libraryVideo.update({ where: { id }, data: { matchConfidence: null } });
+  });
+
+  // Rejects a fuzzy match: clears it and remembers it so the next sync's
+  // fuzzy fallback doesn't immediately re-propose the same candidate.
+  app.post<{ Params: { id: string } }>('/api/v1/libraryvideo/:id/reject-match', async (req, reply) => {
+    const id = Number(req.params.id);
+    const video = await prisma.libraryVideo.findUnique({ where: { id } });
+    if (!video) return reply.code(404).send({ error: 'Library video not found' });
+    if (!video.musicVideoId) return reply.code(400).send({ error: 'This row has no proposed match to reject' });
+    return prisma.libraryVideo.update({
+      where: { id },
+      data: { musicVideoId: null, matchConfidence: null, rejectedMusicVideoId: video.musicVideoId },
     });
   });
 
@@ -165,29 +203,26 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         ? await provider.fetchVideos(connector)
         : [];
       if (provider.fetchVideos && connector.videoLibraryId) {
-        const canonicalVideos = await prisma.musicVideo.findMany({
-          include: { artist: { select: { name: true } } },
-        });
-        const canonicalByName = new Map(
-          canonicalVideos.map((video) => [
-            `${normalizeTitle(video.artist.name)}::${normalizeTitle(video.title)}`,
-            video.id,
-          ]),
-        );
+        const canonicalVideos: CanonicalVideo[] = (
+          await prisma.musicVideo.findMany({
+            select: { id: true, title: true, releaseYear: true, artist: { select: { name: true } } },
+          })
+        ).map((video) => ({
+          id: video.id,
+          normalizedTitle: normalizeTitle(video.title),
+          normalizedArtistName: normalizeTitle(video.artist.name),
+          releaseYear: video.releaseYear,
+        }));
         // A prior sync's match must never be silently dropped just because
-        // *this* sync's exact-key lookup misses (an artist/video rename
-        // upstream, for instance) — without this, every LibraryVideo's
-        // musicVideoId was previously recomputed from scratch on every sync
-        // with no "keep what we already had" fallback, so a good match could
-        // revert to unmatched with no signal that it happened. A genuinely
-        // new match found this sync still always wins.
+        // *this* sync's search misses (an artist/video rename upstream, for
+        // instance) — see matchLibraryVideo's "previous" fallback. Also
+        // carries each row's rejectedMusicVideoId so a human's "not that
+        // one" decision from a past review sticks across syncs.
         const existingMatches = await prisma.libraryVideo.findMany({
           where: { connectorId: id },
-          select: { externalId: true, musicVideoId: true },
+          select: { externalId: true, musicVideoId: true, matchConfidence: true, rejectedMusicVideoId: true },
         });
-        const previousMatchByExternalId = new Map(
-          existingMatches.map((v) => [v.externalId, v.musicVideoId]),
-        );
+        const existingByExternalId = new Map(existingMatches.map((v) => [v.externalId, v]));
         // The "mark everything stale, then re-mark what's still there" reset
         // must be one atomic transaction — if it were two separate
         // statements and anything after the reset threw (a bad title from
@@ -200,6 +235,15 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           ...videos.map((video) => {
             const normalizedArtistName = normalizeTitle(video.artistName);
             const normalizedTitle = normalizeTitle(video.title);
+            const existing = existingByExternalId.get(video.externalId);
+            const match = matchLibraryVideo(
+              { normalizedArtistName, normalizedTitle, releaseYear: video.releaseYear ?? null },
+              canonicalVideos,
+              existing
+                ? { musicVideoId: existing.musicVideoId, matchConfidence: existing.matchConfidence as MatchConfidence | null }
+                : null,
+              existing?.rejectedMusicVideoId ?? null,
+            );
             return prisma.libraryVideo.upsert({
               where: { connectorId_externalId: { connectorId: id, externalId: video.externalId } },
               update: {
@@ -213,10 +257,8 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
                 hasThumbnail: video.hasThumbnail ?? false,
                 available: true,
                 lastSyncedAt: new Date(),
-                musicVideoId:
-                  canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ??
-                  previousMatchByExternalId.get(video.externalId) ??
-                  null,
+                musicVideoId: match.musicVideoId,
+                matchConfidence: match.matchConfidence,
               },
               create: {
                 connectorId: id,
@@ -229,7 +271,8 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
                 path: video.path ?? null,
                 playCount: video.playCount ?? null,
                 hasThumbnail: video.hasThumbnail ?? false,
-                musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
+                musicVideoId: match.musicVideoId,
+                matchConfidence: match.matchConfidence,
               },
             });
           }),

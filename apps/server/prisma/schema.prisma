@@ -58,7 +58,8 @@ model MusicVideo {
   queueItems     DownloadQueueItem[]
   history        History[]
   playlistItems  PlaylistItem[]
-  libraryVideos  LibraryVideo[]
+  libraryVideos  LibraryVideo[] @relation("LibraryVideoMatch")
+  rejectedByLibraryVideos LibraryVideo[] @relation("LibraryVideoRejectedMatch")
 
   @@unique([artistId, normalizedTitle])
 }
@@ -265,7 +266,17 @@ model LibraryVideo {
   available            Boolean          @default(true)
   lastSyncedAt         DateTime         @default(now())
   musicVideoId         Int?
-  musicVideo           MusicVideo?      @relation(fields: [musicVideoId], references: [id], onDelete: SetNull)
+  musicVideo           MusicVideo?      @relation("LibraryVideoMatch", fields: [musicVideoId], references: [id], onDelete: SetNull)
+  // Set (alongside matchConfidence) only for a fuzzy, non-exact match a sync
+  // proposed — null for an exact-key match, which needs no review. See
+  // pipeline/reconciliation.ts.
+  matchConfidence      String?
+  // A human-rejected candidate for this row, remembered so the next sync's
+  // fuzzy fallback doesn't immediately re-propose the same wrong match —
+  // confirmed via research that nothing previously remembered a past
+  // reconciliation decision at all.
+  rejectedMusicVideoId Int?
+  rejectedMusicVideo   MusicVideo?      @relation("LibraryVideoRejectedMatch", fields: [rejectedMusicVideoId], references: [id], onDelete: SetNull)
 
   @@unique([connectorId, externalId])
   @@index([normalizedArtistName, normalizedTitle])
