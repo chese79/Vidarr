@@ -5,6 +5,65 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — external code review findings (ownership correctness, validation bypass, race condition, SSRF)
+
+An external review of Phases 2a/2b/3 raised six issues; all six were independently verified against
+the actual current code (not taken on faith) before fixing. Every fix ships with regression tests
+covering the specific property that was broken, not just a happy-path check.
+
+- **Unconfirmed fuzzy library matches counted as owned.** A `probable`/`ambiguous` reconciliation
+  match (Phase 2b) wrote `LibraryVideo.musicVideoId` immediately, and nothing downstream —
+  `computeVideoStatus`, the Artist Detail API, the Library summary counts, or backlog search's
+  eligibility query — ever checked `matchConfidence`. A wrong fuzzy suggestion could silently mark a
+  genuinely missing video as present and suppress it from auto-search indefinitely, with no visible
+  sign anything was wrong. Ownership and search-eligibility now both require `matchConfidence: null`
+  (an exact-key match, or a fuzzy one a human has since confirmed via the Library Connectors "Needs
+  review" UI) — a pending suggestion no longer counts as owned until confirmed.
+- **Disabled library connectors' stale videos still counted as owned.** Disabling a Plex/Jellyfin
+  connector only flipped `LibraryConnector.enabled` — it never touched that connector's previously
+  synced `LibraryVideo` rows, and three separate queries (the Library summary's availability CTE, the
+  Artist Detail route, and backlog search's eligibility filter) read `LibraryVideo.available` without
+  checking the parent connector's `enabled` state. A disabled connector's last-known-available videos
+  therefore stayed "owned" forever and kept blocking search. All three now also require
+  `connector.enabled: true`, matching the pattern already used correctly elsewhere in the codebase for
+  the same relation.
+- **VEVO-tier YouTube candidates bypassed content-type validation entirely.** `autoSearchAndGrab`
+  auto-accepted any `vevo`-tier heuristic match without ever calling `validateCandidate` — but
+  `youtubeMatch.ts`'s VEVO-tier detection is a bare case-insensitive substring check on the channel
+  name ("vevo" appearing anywhere in it), not a verified-channel or IMVDb signal, so it's spoofable
+  and provided no real backstop against a lyric video, visualizer, or teaser uploaded to a
+  VEVO-named channel. Every heuristic-search candidate is now validated regardless of tier — a
+  genuine VEVO upload still accepts immediately in practice via `classifyCandidate`'s verified-channel
+  check. The IMVDb-sourced-link bypass is unchanged and is not a bug: it's the request doc's own
+  explicit carve-out ("Accept these automatically only when IMVDb explicitly identifies the exact item
+  as the official video"), now called out with a comment citing that line.
+- **Download-queue deduplication had a TOCTOU race, and `grabFromIndexer` could orphan a download.**
+  Both grab paths checked for an existing active queue item and created a new one as two separate,
+  unsynchronized steps — two near-simultaneous grab attempts for the same video (a double-click, a
+  retried request, a manual grab racing the scheduler) could both pass the check before either insert
+  landed, creating duplicate queue rows. `grabFromIndexer` additionally sent the download to the
+  external client *before* recording the queue row, so a failure in between left an actual external
+  download with zero local record of it. Fixed with a database-enforced partial unique index
+  (`DownloadQueueItem(musicVideoId) WHERE status IN ('queued','downloading')`, migration
+  `20260921045136_grab_queue_dedup_unique_index`) as the authoritative guard — the existing check is
+  now just a fast-path — and by reordering `grabFromIndexer` to create the queue row first, deleting
+  it if the external send then fails.
+- **Image proxy's SSRF blocklist was bypassable via a single redirect.** `safeImageFetch.ts` validated
+  a user-supplied poster URL against a private/reserved-address blocklist, then fetched it with
+  `fetch()`'s default `redirect: 'follow'` — a 3xx response could silently retarget the request at
+  `127.0.0.1`, an RFC1918 address, or the cloud-metadata address (`169.254.169.254`) with zero
+  re-validation, defeating the blocklist in one hop. Redirects are now followed manually, one hop at a
+  time (capped at 5), with every redirect target re-validated through the same check before it's ever
+  fetched. The separately-documented DNS-rebinding gap (a public hostname that itself resolves to a
+  private address) is unchanged — it remains a deliberately accepted limitation for this app's
+  single-admin-key threat model, not something this fix addresses.
+- **A bare `/\bcover\b/` title pattern rejected real official videos.** YouTube content-type
+  classification (Phase 3) rejected any title containing the word "cover" as a whole word — including
+  a legitimate official video whose actual title contains it (e.g. Bruce Springsteen's "Cover Me").
+  The check now only fires for actual fan-cover title conventions (parenthesized/bracketed, dash-
+  suffixed, or qualified as "acoustic cover"/"cover of X"/"cover version"), not any bare occurrence of
+  the word.
+
 ### Added — YouTube/VEVO acquisition validation and decision records ("Phase 3")
 
 Closes the last two items on the plan's deferred list: the request doc's "provider-neutral

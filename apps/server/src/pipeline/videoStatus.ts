@@ -8,7 +8,7 @@ export interface VideoStatusInput {
   monitored: boolean;
   ignored: boolean;
   artistMonitored: boolean;
-  libraryVideos: { available: boolean }[];
+  libraryVideos: { available: boolean; matchConfidence: string | null }[];
   queueItems: { status: string }[];
 }
 
@@ -18,8 +18,15 @@ export interface VideoStatusInput {
 // shows as "missing" can never drift from what auto-search will actually
 // attempt). See the Phase 2a plan for why this is orthogonal facts rather
 // than one 12-value enum.
+//
+// A probable/ambiguous fuzzy reconciliation match (Phase 2b) is a proposed
+// suggestion, not a confirmed one — only a matchConfidence of null (an exact
+// key match, or a fuzzy match a human has since confirmed via the review UI)
+// counts as real ownership. Otherwise an incorrect fuzzy suggestion would
+// mark a genuinely missing video as present and silently suppress it from
+// auto-search until someone happens to notice and review it.
 export function computeVideoStatus(input: VideoStatusInput): VideoStatus {
-  const availableOnServer = input.libraryVideos.some((lv) => lv.available);
+  const availableOnServer = input.libraryVideos.some((lv) => lv.available && lv.matchConfidence === null);
   const ownership = input.hasFile && availableOnServer
     ? 'both'
     : input.hasFile

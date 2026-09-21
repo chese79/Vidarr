@@ -52,6 +52,31 @@ describe('classifyCandidate', () => {
     expect(result.decision).not.toBe('reject');
   });
 
+  it('does not reject a real song title that happens to contain the bare word "cover"', () => {
+    // Regression: a bare /\bcover\b/ against the fully-normalized title
+    // (which strips all punctuation) previously rejected legitimate titles
+    // like Bruce Springsteen's "Cover Me" indiscriminately from any fan-cover
+    // upload. The cover check now only fires for actual fan-cover title
+    // conventions (parenthesized/bracketed/dashed/qualified "cover"), not a
+    // bare occurrence of the word.
+    const result = classifyCandidate(metadata({ title: 'Cover Me' }));
+    expect(result.decision).not.toBe('reject');
+  });
+
+  it('still rejects common fan-cover title conventions: parenthetical, dash-suffixed, and qualified', () => {
+    const titles = [
+      'Blinding Lights (Cover)',
+      'Blinding Lights [Acoustic Cover]',
+      'Blinding Lights - Cover',
+      'Acoustic Cover of Blinding Lights',
+      'Blinding Lights (Piano Cover)',
+      'Blinding Lights - Cover Version',
+    ];
+    for (const title of titles) {
+      expect(classifyCandidate(metadata({ title })).decision, title).toBe('reject');
+    }
+  });
+
   it('accepts a verified channel immediately, even with no other signal', () => {
     const result = classifyCandidate(metadata({ channelIsVerified: true }));
     expect(result.decision).toBe('accept');

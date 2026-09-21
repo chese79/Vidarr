@@ -1,0 +1,12 @@
+-- Hand-written (not schema-engine-generated): a partial unique index has no
+-- representation in schema.prisma's @@unique, since it needs a WHERE clause
+-- to only apply to "live" queue rows and let old queued/downloading|failed
+-- history for the same musicVideoId coexist. SQLite supports partial unique
+-- indexes directly, so this is expressed as raw SQL. See grab.ts's
+-- grabYoutubeVideo/grabFromIndexer for the create() calls this guards, and
+-- videoStatus.ts's hasActiveDownload() for the in-app check this backstops:
+-- that check-then-create was racy (two concurrent grabs for the same video
+-- could each pass the check before either insert landed), so this index is
+-- the authoritative guard and the app-level check is now just a fast-path
+-- that avoids the round-trip in the common non-racing case.
+CREATE UNIQUE INDEX "DownloadQueueItem_active_musicVideoId_key" ON "DownloadQueueItem"("musicVideoId") WHERE "status" IN ('queued', 'downloading');

@@ -82,7 +82,13 @@ export async function autoSearchAndGrab(
     // An IMVDb-sourced youtubeVideoId (see providers/metadata/imvdb.ts
     // getVideoDetails) is an editor-curated, exact match — a strictly better
     // source than our own heuristic search, so grab it directly and skip the
-    // search entirely when we already have it.
+    // search entirely when we already have it. This is the request doc's own
+    // carve-out ("Accept these automatically only when IMVDb explicitly
+    // identifies the exact item as the official video") — deliberately the
+    // only bypass of content-type validation; see the heuristic-match branch
+    // below, where a VEVO-tier result does NOT get the same bypass, since a
+    // heuristic search match (even from a VEVO-named channel) is not an
+    // IMVDb identification.
     if (musicVideo.youtubeVideoId) {
       try {
         await grabYoutubeVideo(musicVideoId);
@@ -100,16 +106,17 @@ export async function autoSearchAndGrab(
     try {
       const match = await findYoutubeMatch(musicVideo.artist.name, musicVideo.title);
       if (match) {
-        // A VEVO upload is already the doc's #2 preferred source tier
-        // (verified official/VEVO upload) — content-type validation exists
-        // to catch lyric videos/reactions/etc. slipping through a plain
-        // heuristic search, which a VEVO-channel result structurally can't
-        // be, so it skips straight to accepted, same as the IMVDb-sourced
-        // link above.
-        const validation: ClassificationResult =
-          match.tier === 'vevo'
-            ? { decision: 'accept', reason: 'VEVO upload' }
-            : await validateCandidate(match.candidate.youtubeVideoId);
+        // Every heuristic-search candidate is validated, VEVO tier included:
+        // youtubeMatch.ts's isVevo is a bare channel-name substring check
+        // ("vevo" appearing in the channel name), not a verified-channel or
+        // IMVDb signal, so it's spoofable and cannot bypass content-type
+        // classification on its own — the request doc lists "verified
+        // official/VEVO uploader" as a *positive signal* for scoring, not as
+        // grounds for an automatic accept (only an IMVDb-explicit match gets
+        // that, handled above). In practice a genuine VEVO upload's channel
+        // is normally YouTube-verified too, so it still accepts immediately
+        // via classifyCandidate's channelIsVerified check.
+        const validation: ClassificationResult = await validateCandidate(match.candidate.youtubeVideoId);
 
         if (validation.decision === 'accept') {
           await prisma.musicVideo.update({
@@ -172,7 +179,14 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
       ignored: false,
       hasFile: false,
       artist: { monitored: true },
-      libraryVideos: { none: { available: true } },
+      // Excludes a video only for a CONFIRMED library match — matchConfidence
+      // null means an exact-key match or one a human has since confirmed via
+      // the review UI. A probable/ambiguous fuzzy suggestion must not block
+      // backlog search on its own; see videoStatus.ts's computeVideoStatus
+      // for the same rule applied to the Artist Detail page. Also requires
+      // the match's connector still be enabled — a disabled connector's
+      // stale last-synced rows must not suppress search either.
+      libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
       queueItems: { none: { status: { in: ['queued', 'downloading'] } } },
     },
     select: { id: true },

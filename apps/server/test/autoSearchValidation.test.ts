@@ -115,7 +115,11 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     expect(history).toHaveLength(0);
   });
 
-  it('skips validation entirely for a VEVO-tier match and grabs directly', async () => {
+  it('validates a VEVO-tier match too, rather than accepting on tier alone', async () => {
+    // isVevo (youtubeMatch.ts) is a bare channel-name substring check, not a
+    // verified-channel or IMVDb signal — it must not bypass content-type
+    // classification, so this confirms validateCandidate is actually called
+    // and its verdict is honored even for a VEVO-tier candidate.
     const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
     const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
     const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
@@ -123,6 +127,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
       candidate: { youtubeVideoId: 'vevo-id', title: 'Blinding Lights', channel: 'TheWeekndVEVO' },
       tier: 'vevo',
     });
+    vi.mocked(validateCandidate).mockResolvedValue({ decision: 'accept', reason: 'Uploaded by a verified channel.' });
     vi.mocked(grabYoutubeVideo).mockResolvedValue({ path: '/media/x.mp4' } as never);
 
     const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Test Artist' });
@@ -132,6 +137,30 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const outcome = await autoSearchAndGrab(video.id);
 
     expect(outcome.grabbed).toBe(true);
-    expect(vi.mocked(validateCandidate)).not.toHaveBeenCalled();
+    expect(vi.mocked(validateCandidate)).toHaveBeenCalledWith('vevo-id');
+  });
+
+  it('rejects a VEVO-tier match whose title matches a reject pattern, same as any other tier', async () => {
+    const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
+    const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
+    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    vi.mocked(findYoutubeMatch).mockResolvedValue({
+      candidate: { youtubeVideoId: 'vevo-lyric-id', title: 'Blinding Lights (Lyrics)', channel: 'TheWeekndVEVO' },
+      tier: 'vevo',
+    });
+    vi.mocked(validateCandidate).mockResolvedValue({ decision: 'reject', reason: 'Title matches a lyric video pattern.' });
+
+    const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Test Artist' });
+    const video = await createMusicVideo(artist.id, { title: 'Blinding Lights' });
+
+    const { autoSearchAndGrab } = await import('../src/pipeline/autoSearch.js');
+    const outcome = await autoSearchAndGrab(video.id);
+
+    expect(outcome.grabbed).toBe(false);
+    expect(vi.mocked(grabYoutubeVideo)).not.toHaveBeenCalled();
+
+    const history = await prisma.history.findMany({ where: { musicVideoId: video.id } });
+    expect(history).toHaveLength(1);
+    expect(history[0].eventType).toBe('candidateRejected');
   });
 });

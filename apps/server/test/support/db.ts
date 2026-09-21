@@ -144,6 +144,7 @@ export async function createLibraryVideo(
     playCount: number | null;
     available: boolean;
     musicVideoId: number | null;
+    matchConfidence: string | null;
   }> = {},
 ) {
   return prisma.libraryVideo.create({
@@ -157,6 +158,7 @@ export async function createLibraryVideo(
       playCount: overrides.playCount ?? null,
       available: overrides.available ?? true,
       musicVideoId: overrides.musicVideoId ?? null,
+      matchConfidence: overrides.matchConfidence ?? null,
     },
   });
 }

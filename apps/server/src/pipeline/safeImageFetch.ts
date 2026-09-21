@@ -64,6 +64,13 @@ function parseSafeImageUrl(rawUrl: string): URL | null {
   return url;
 }
 
+// A redirect response is followed manually (see below) so each hop gets the
+// same private/reserved-host check as the original URL; this caps how many
+// hops we'll chase so a malicious or misconfigured server can't force an
+// unbounded (or infinite) redirect chain.
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
 // Fetches an arbitrary, user-supplied image URL under the same protections a
 // connector-configured host already gets (timeout via providerRequestSignal)
 // plus the extra hardening a fully external, untrusted URL needs: protocol
@@ -73,16 +80,45 @@ function parseSafeImageUrl(rawUrl: string): URL | null {
 // response as an image at all. Returns null for every failure mode rather
 // than throwing — callers treat "couldn't get an image this way" as
 // "try the next source," not an error.
+//
+// Redirects are followed manually, one hop at a time, instead of relying on
+// fetch()'s default `redirect: 'follow'`: undici would chase a 3xx's
+// Location header with zero revalidation, so a URL that itself passes the
+// private-host check could still redirect to 127.0.0.1 or the cloud-metadata
+// address and have that followed unchecked — a single-hop SSRF bypass of the
+// entire blocklist above. Every redirect target is re-parsed and re-checked
+// with the same parseSafeImageUrl() before it's ever fetched.
 export async function fetchImageSafely(rawUrl: string): Promise<{ contentType: string; data: Buffer } | null> {
-  const url = parseSafeImageUrl(rawUrl);
+  let url = parseSafeImageUrl(rawUrl);
   if (!url) return null;
 
   let res: Response;
-  try {
-    res = await fetch(url, { signal: providerRequestSignal() });
-  } catch {
-    return null;
+  for (let hop = 0; ; hop++) {
+    if (hop > MAX_REDIRECTS) return null;
+
+    try {
+      res = await fetch(url, { redirect: 'manual', signal: providerRequestSignal() });
+    } catch {
+      return null;
+    }
+
+    if (!REDIRECT_STATUSES.has(res.status)) break;
+
+    const location = res.headers.get('location');
+    if (!location) return null;
+
+    let nextUrl: URL;
+    try {
+      nextUrl = new URL(location, url);
+    } catch {
+      return null;
+    }
+
+    const validated = parseSafeImageUrl(nextUrl.href);
+    if (!validated) return null;
+    url = validated;
   }
+
   if (!res.ok || !res.body) return null;
 
   const contentType = res.headers.get('content-type') ?? '';

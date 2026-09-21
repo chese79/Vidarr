@@ -26,12 +26,23 @@ const REJECT_TITLE_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /\bkaraoke\b/, label: 'karaoke' },
   { pattern: /\bvisualizer\b/, label: 'visualizer' },
   { pattern: /\breaction\b/, label: 'reaction video' },
-  { pattern: /\bcover\b/, label: 'cover' },
   { pattern: /\blive at\b|\bconcert\b/, label: 'live/concert footage' },
   { pattern: /\binstrumental\b/, label: 'instrumental' },
   { pattern: /\btrailer\b|\bteaser\b/, label: 'trailer/teaser' },
   { pattern: /\bbehind the scenes\b/, label: 'behind-the-scenes' },
 ];
+
+// A bare /\bcover\b/ against the fully-normalized title (normalizeTitle
+// strips ALL punctuation to spaces) rejected legitimate official videos
+// whose actual title contains the word, e.g. "Cover Me" — indistinguishable
+// from a fan-cover tag once parentheses/dashes are gone. Fan covers are
+// conventionally labeled with "cover" set off from the song title itself
+// (parenthesized/bracketed, after a dash, or qualified as "acoustic cover"/
+// "cover of X"/"cover version") — that punctuation is exactly the signal
+// normalizeTitle destroys, so this checks the original (only case-folded)
+// title instead of the normalized one, specifically for this pattern.
+const COVER_PATTERN =
+  /\([^)]*\bcover\b[^)]*\)|\[[^\]]*\bcover\b[^\]]*\]|[-–—][^\n]*\bcover\b|\bcover\s+(?:of|version)\b|\b(?:acoustic|piano|guitar|vocal|drum|instrumental|male|female|full|fan)\s+cover\b/;
 
 // Metadata-only classification — no network/download beyond the metadata
 // fetch the caller already did. 'review' means neither a strong positive
@@ -49,6 +60,10 @@ export function classifyCandidate(metadata: YoutubeVideoMetadata): Classificatio
       decision: 'reject',
       reason: 'Description starts with "Provided to YouTube by" — a label-ingested audio upload, not an official video.',
     };
+  }
+
+  if (COVER_PATTERN.test(metadata.title.toLowerCase())) {
+    return { decision: 'reject', reason: 'Title matches a non-official-video pattern (cover).' };
   }
 
   const normalizedTitle = normalizeTitle(metadata.title);

@@ -22,21 +22,51 @@ describe('computeVideoStatus', () => {
     expect(computeVideoStatus(baseInput({ hasFile: true })).ownership).toBe('local');
   });
 
-  it('ownership: server when there is an available library match but no file', () => {
-    const status = computeVideoStatus(baseInput({ libraryVideos: [{ available: true }] }));
+  it('ownership: server when there is an available, confirmed library match but no file', () => {
+    const status = computeVideoStatus(
+      baseInput({ libraryVideos: [{ available: true, matchConfidence: null }] }),
+    );
     expect(status.ownership).toBe('server');
   });
 
-  it('ownership: both when there is a file and an available library match', () => {
+  it('ownership: both when there is a file and an available, confirmed library match', () => {
     const status = computeVideoStatus(
-      baseInput({ hasFile: true, libraryVideos: [{ available: true }] }),
+      baseInput({ hasFile: true, libraryVideos: [{ available: true, matchConfidence: null }] }),
     );
     expect(status.ownership).toBe('both');
   });
 
   it('a library match that is not available does not count toward ownership', () => {
-    const status = computeVideoStatus(baseInput({ libraryVideos: [{ available: false }] }));
+    const status = computeVideoStatus(
+      baseInput({ libraryVideos: [{ available: false, matchConfidence: null }] }),
+    );
     expect(status.ownership).toBe('none');
+  });
+
+  it('ownership: none for an unconfirmed probable fuzzy match — it is a suggestion, not owned', () => {
+    // The bug this guards: reconciliation.ts's fuzzy fallback (Phase 2b) can
+    // propose a wrong match. Until a human confirms it (which clears
+    // matchConfidence to null via the review UI), it must not count as
+    // ownership or it would silently mark a genuinely missing video as
+    // present and suppress it from auto-search.
+    const status = computeVideoStatus(
+      baseInput({ libraryVideos: [{ available: true, matchConfidence: 'probable' }] }),
+    );
+    expect(status.ownership).toBe('none');
+  });
+
+  it('ownership: none for an unconfirmed ambiguous fuzzy match, same as probable', () => {
+    const status = computeVideoStatus(
+      baseInput({ libraryVideos: [{ available: true, matchConfidence: 'ambiguous' }] }),
+    );
+    expect(status.ownership).toBe('none');
+  });
+
+  it('ownership: server once a probable match is confirmed (matchConfidence cleared to null)', () => {
+    const status = computeVideoStatus(
+      baseInput({ libraryVideos: [{ available: true, matchConfidence: null }] }),
+    );
+    expect(status.ownership).toBe('server');
   });
 
   it('acquisition: downloading when an active queue item exists', () => {
@@ -79,9 +109,18 @@ describe('computeVideoStatus', () => {
     expect(computeVideoStatus(baseInput({ ignored: true })).eligibleForAutoSearch).toBe(false);
   });
 
-  it('eligibleForAutoSearch: false when already available on the server', () => {
-    const status = computeVideoStatus(baseInput({ libraryVideos: [{ available: true }] }));
+  it('eligibleForAutoSearch: false when already available on the server (confirmed match)', () => {
+    const status = computeVideoStatus(
+      baseInput({ libraryVideos: [{ available: true, matchConfidence: null }] }),
+    );
     expect(status.eligibleForAutoSearch).toBe(false);
+  });
+
+  it('eligibleForAutoSearch: true when the only library match is an unconfirmed probable suggestion', () => {
+    const status = computeVideoStatus(
+      baseInput({ libraryVideos: [{ available: true, matchConfidence: 'probable' }] }),
+    );
+    expect(status.eligibleForAutoSearch).toBe(true);
   });
 
   it('eligibleForAutoSearch: false when a download is already active', () => {

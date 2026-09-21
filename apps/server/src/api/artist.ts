@@ -63,11 +63,18 @@ export async function artistRoutes(app: FastifyInstance) {
   // A video counts as "available" if it has a local file OR is matched
   // (`LibraryVideo.musicVideoId`) to a still-`available` row synced from an
   // enabled Plex/Jellyfin connector — see libraryconnector.ts's sync route
-  // for how that match is written. Play count prefers the locally-synced
-  // MusicVideoFile.playCount (kept current by pipeline/playCountSync.ts) and
-  // falls back to a matched LibraryVideo's playCount when there's no local
-  // file at all — never summed across both, and left `null` (not 0) when
-  // neither source has any play-count data for that artist's videos.
+  // for how that match is written. `matchConfidence IS NULL` requires the
+  // match to be an exact-key hit (or a fuzzy one a human has since
+  // confirmed) — a probable/ambiguous fuzzy suggestion is not yet a
+  // confirmed ownership fact, so it must not count here (a wrong suggestion
+  // would otherwise mark a genuinely missing video as present and suppress
+  // it from auto-search with no visible signal). `lc.enabled = 1` keeps a
+  // disabled connector's stale last-synced rows from counting at all. Play
+  // count prefers the locally-synced MusicVideoFile.playCount (kept current
+  // by pipeline/playCountSync.ts) and falls back to a matched LibraryVideo's
+  // playCount when there's no local file at all — never summed across both,
+  // and left `null` (not 0) when neither source has any play-count data for
+  // that artist's videos.
   app.get('/api/v1/artist/summary', async (req) => {
     const query = ArtistSummaryQuerySchema.parse(req.query);
 
@@ -95,7 +102,9 @@ export async function artistRoutes(app: FastifyInstance) {
         SELECT
           mv."artistId" AS "artistId",
           CASE WHEN mv."hasFile" = 1 OR EXISTS (
-            SELECT 1 FROM "LibraryVideo" lv WHERE lv."musicVideoId" = mv."id" AND lv."available" = 1
+            SELECT 1 FROM "LibraryVideo" lv
+            JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
+            WHERE lv."musicVideoId" = mv."id" AND lv."available" = 1 AND lv."matchConfidence" IS NULL AND lc."enabled" = 1
           ) THEN 1 ELSE 0 END AS "isAvailable",
           CASE WHEN EXISTS (
             SELECT 1 FROM "DownloadQueueItem" q
@@ -103,7 +112,9 @@ export async function artistRoutes(app: FastifyInstance) {
           ) THEN 1 ELSE 0 END AS "isDownloading",
           COALESCE(
             (SELECT f."playCount" FROM "MusicVideoFile" f WHERE f."musicVideoId" = mv."id"),
-            (SELECT MAX(lv2."playCount") FROM "LibraryVideo" lv2 WHERE lv2."musicVideoId" = mv."id" AND lv2."available" = 1)
+            (SELECT MAX(lv2."playCount") FROM "LibraryVideo" lv2
+             JOIN "LibraryConnector" lc2 ON lc2."id" = lv2."connectorId"
+             WHERE lv2."musicVideoId" = mv."id" AND lv2."available" = 1 AND lv2."matchConfidence" IS NULL AND lc2."enabled" = 1)
           ) AS "playCount"
         FROM "MusicVideo" mv
       ),
@@ -261,6 +272,13 @@ export async function artistRoutes(app: FastifyInstance) {
   // proxy, playCount, connector name/type) — never the connector's raw
   // credentials, and filtered to `available: true` so a stale sync result
   // (removed from the server since the last sync) doesn't show as owned.
+  // Also requires `matchConfidence: null` (an exact-key match, or a fuzzy
+  // one a human has since confirmed via the Library Connectors "Needs
+  // review" UI) — an unconfirmed probable/ambiguous fuzzy suggestion is not
+  // a confirmed ownership fact, and this page has no confidence-badge
+  // treatment for it, so showing it here would misrepresent it as owned.
+  // `connector: { enabled: true }` keeps a disabled connector's stale
+  // last-synced rows from counting as owned either.
   app.get('/api/v1/artist/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const artist = await prisma.artist.findUnique({
@@ -270,10 +288,11 @@ export async function artistRoutes(app: FastifyInstance) {
           orderBy: { releaseYear: { sort: 'asc', nulls: 'last' } },
           include: {
             libraryVideos: {
-              where: { available: true },
+              where: { available: true, matchConfidence: null, connector: { enabled: true } },
               select: {
                 id: true,
                 available: true,
+                matchConfidence: true,
                 hasThumbnail: true,
                 playCount: true,
                 connector: { select: { name: true, type: true } },

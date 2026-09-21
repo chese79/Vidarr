@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { Prisma, type DownloadQueueItem } from '@prisma/client';
 import { prisma, logActivity } from '../db/client.js';
 import { downloadVideo } from '../providers/youtube/ytdlp.js';
 import { getDownloadClientProvider } from '../providers/downloadclient/index.js';
@@ -24,14 +25,31 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     throw new Error('This video already has an active download.');
   }
 
-  const queueItem = await prisma.downloadQueueItem.create({
-    data: {
-      musicVideoId,
-      sourceType: 'youtube',
-      sourceRef: musicVideo.youtubeVideoId,
-      status: 'downloading',
-    },
-  });
+  // The hasActiveDownload() check above is a fast-path that avoids the DB
+  // round-trip in the common case, not the authoritative guard: two
+  // concurrent calls for the same musicVideoId can each pass it before
+  // either insert lands. The partial unique index added in migration
+  // 20260921045136_grab_queue_dedup_unique_index (on musicVideoId, WHERE
+  // status IN ('queued','downloading')) is what actually prevents a second
+  // live row, so a P2002 here means we lost that race — surface the exact
+  // same error the fast-path check above throws, so no caller can tell
+  // which guard caught it.
+  let queueItem: DownloadQueueItem;
+  try {
+    queueItem = await prisma.downloadQueueItem.create({
+      data: {
+        musicVideoId,
+        sourceType: 'youtube',
+        sourceRef: musicVideo.youtubeVideoId,
+        status: 'downloading',
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new Error('This video already has an active download.');
+    }
+    throw err;
+  }
 
   let downloadedPath: string | undefined;
   try {
@@ -86,17 +104,49 @@ export async function grabFromIndexer(
   const category = client.category || 'vidarr';
   const provider = getDownloadClientProvider(client.implementation);
 
-  const handle = await provider.addDownload(client, downloadUrl, category);
+  // The queue row is created BEFORE contacting the download client, not
+  // after: if anything throws between the two, an addDownload() call that
+  // actually reached the external client used to leave zero local record of
+  // it (an orphaned download). sourceRef starts as the downloadUrl itself —
+  // the only identifier available before the download client hands back its
+  // own handle — and is corrected to the real externalRef below once
+  // addDownload() returns. This create() is also the authoritative dedup
+  // guard (see grabYoutubeVideo's identical comment on the partial unique
+  // index); hasActiveDownload() above is only the fast-path.
+  let queueItem: DownloadQueueItem;
+  try {
+    queueItem = await prisma.downloadQueueItem.create({
+      data: {
+        musicVideoId,
+        sourceType: 'indexer',
+        sourceRef: downloadUrl,
+        downloadClientId,
+        status: 'downloading',
+        quality,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new Error('This video already has an active download.');
+    }
+    throw err;
+  }
 
-  await prisma.downloadQueueItem.create({
-    data: {
-      musicVideoId,
-      sourceType: 'indexer',
-      sourceRef: handle.externalRef,
-      downloadClientId,
-      status: 'downloading',
-      quality,
-    },
+  let handle;
+  try {
+    handle = await provider.addDownload(client, downloadUrl, category);
+  } catch (err) {
+    // addDownload() never confirmed the download was accepted, so drop the
+    // row rather than leave a "downloading" queue entry for a download that
+    // (as far as we know) was never actually sent — no dangling row should
+    // survive a failed send.
+    await prisma.downloadQueueItem.delete({ where: { id: queueItem.id } });
+    throw err;
+  }
+
+  await prisma.downloadQueueItem.update({
+    where: { id: queueItem.id },
+    data: { sourceRef: handle.externalRef },
   });
   await prisma.history.create({
     data: {
