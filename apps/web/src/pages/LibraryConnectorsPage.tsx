@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { DiscoveredServer, LibraryConnector, LibraryConnectorType, LibrarySection } from '@vidarr/shared-types';
+import type {
+  DiscoveredServer,
+  LibraryConnector,
+  LibraryConnectorType,
+  LibrarySection,
+  LibraryVideo,
+} from '@vidarr/shared-types';
 
 // The music and video sections are deliberately selected independently: one
 // seeds Discover, while the other contains vidarr's organized video files.
@@ -90,6 +96,9 @@ function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind:
 function ConnectorRow({
   connector,
   status,
+  unmatchedVideos,
+  expanded,
+  onToggleExpand,
   onTest,
   onSync,
   onSyncPlayCounts,
@@ -97,6 +106,9 @@ function ConnectorRow({
 }: {
   connector: LibraryConnector;
   status: string | undefined;
+  unmatchedVideos: LibraryVideo[];
+  expanded: boolean;
+  onToggleExpand: () => void;
   onTest: () => void;
   onSync: () => void;
   onSyncPlayCounts: () => void;
@@ -139,7 +151,7 @@ function ConnectorRow({
   if (editing) {
     return (
       <tr>
-        <td colSpan={7}>
+        <td colSpan={8}>
           <div className="form-row" style={{ flexWrap: 'wrap' }}>
             <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
             <input
@@ -181,42 +193,77 @@ function ConnectorRow({
   }
 
   return (
-    <tr>
-      <td>{connector.name}</td>
-      <td>{connector.type}</td>
-      <td>{connector.host}</td>
-      <td>{status ?? connector.lastSyncStatus ?? '—'}</td>
-      <td>
-        <LibraryPicker connector={connector} kind="music" />
-      </td>
-      <td>
-        <LibraryPicker connector={connector} kind="video" />
-      </td>
-      <td style={{ display: 'flex', gap: 6 }}>
-        <button className="secondary" onClick={onTest}>
-          Test
-        </button>
-        <button className="secondary" onClick={onSync}>
-          Sync
-        </button>
-        {connector.type !== 'subsonic' && (
-          <button
-            className="secondary"
-            onClick={onSyncPlayCounts}
-            disabled={!connector.videoLibraryId}
-            title={!connector.videoLibraryId ? 'Pick a music video library first' : undefined}
-          >
-            Sync Play Counts
+    <>
+      <tr>
+        <td>{connector.name}</td>
+        <td>{connector.type}</td>
+        <td>{connector.host}</td>
+        <td>{status ?? connector.lastSyncStatus ?? '—'}</td>
+        <td>
+          <LibraryPicker connector={connector} kind="music" />
+        </td>
+        <td>
+          <LibraryPicker connector={connector} kind="video" />
+        </td>
+        <td>
+          {unmatchedVideos.length > 0 ? (
+            <button type="button" className="secondary" onClick={onToggleExpand}>
+              {expanded ? 'Hide' : 'Show'} {unmatchedVideos.length} unmatched
+            </button>
+          ) : (
+            <span className="empty-state" style={{ padding: 0 }}>
+              None
+            </span>
+          )}
+        </td>
+        <td style={{ display: 'flex', gap: 6 }}>
+          <button className="secondary" onClick={onTest}>
+            Test
           </button>
-        )}
-        <button className="secondary" onClick={startEditing}>
-          Edit
-        </button>
-        <button className="secondary" onClick={onRemove}>
-          Remove
-        </button>
-      </td>
-    </tr>
+          <button className="secondary" onClick={onSync}>
+            Sync
+          </button>
+          {connector.type !== 'subsonic' && (
+            <button
+              className="secondary"
+              onClick={onSyncPlayCounts}
+              disabled={!connector.videoLibraryId}
+              title={!connector.videoLibraryId ? 'Pick a music video library first' : undefined}
+            >
+              Sync Play Counts
+            </button>
+          )}
+          <button className="secondary" onClick={startEditing}>
+            Edit
+          </button>
+          <button className="secondary" onClick={onRemove}>
+            Remove
+          </button>
+        </td>
+      </tr>
+      {expanded && unmatchedVideos.length > 0 && (
+        <tr>
+          <td colSpan={8}>
+            {/* Videos this connector reports as available with no corresponding
+                vidarr artist/video at all — distinct from a low-confidence match,
+                which needs the reconciliation work tracked in CHANGELOG.md. */}
+            <div className="unmatched-video-list">
+              {unmatchedVideos.map((v) => (
+                <div className="unmatched-video-row" key={v.id}>
+                  <span className="title" title={v.title}>
+                    {v.title}
+                  </span>
+                  <span className="empty-state" style={{ padding: 0 }}>
+                    {v.artistName}
+                    {v.releaseYear ? ` · ${v.releaseYear}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -231,11 +278,22 @@ export default function LibraryConnectorsPage() {
   const [status, setStatus] = useState<Record<number, string>>({});
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState<DiscoveredServer[] | null>(null);
+  const [expandedUnmatched, setExpandedUnmatched] = useState<Set<number>>(new Set());
 
   const connectors = useQuery({
     queryKey: ['libraryConnectors'],
     queryFn: api.libraryConnectors.list,
   });
+  const libraryVideos = useQuery({ queryKey: ['libraryVideos'], queryFn: api.libraryVideos.list });
+
+  function toggleUnmatchedExpanded(connectorId: number) {
+    setExpandedUnmatched((prev) => {
+      const next = new Set(prev);
+      if (next.has(connectorId)) next.delete(connectorId);
+      else next.add(connectorId);
+      return next;
+    });
+  }
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['libraryConnectors'] });
 
@@ -421,6 +479,7 @@ export default function LibraryConnectorsPage() {
                 <small style={{ display: 'block', fontWeight: 400 }}>(artist matching only)</small>
               </th>
               <th>Music Video library</th>
+              <th>Unmatched videos</th>
               <th></th>
             </tr>
           </thead>
@@ -430,6 +489,11 @@ export default function LibraryConnectorsPage() {
                 key={c.id}
                 connector={c}
                 status={status[c.id]}
+                unmatchedVideos={
+                  libraryVideos.data?.filter((v) => v.connectorId === c.id && v.musicVideoId == null) ?? []
+                }
+                expanded={expandedUnmatched.has(c.id)}
+                onToggleExpand={() => toggleUnmatchedExpanded(c.id)}
                 onTest={() => handleTest(c.id)}
                 onSync={() => handleSync(c.id)}
                 onSyncPlayCounts={() => handleSyncPlayCounts(c.id)}

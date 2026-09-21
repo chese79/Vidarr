@@ -443,3 +443,29 @@ select {
   border-radius: 3px;
   display: block;
 }
+
+/* Library Connectors page: videos a connector reports as available with no
+   matching vidarr artist/video at all — a plain list, not a thumbnail grid,
+   since this is a sync-diagnostic view rather than a browsing surface. */
+.unmatched-video-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.unmatched-video-row {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.unmatched-video-row .title {
+  min-width: 220px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -15,19 +15,6 @@ under **Unreleased** in the same commit as the change.
   request document gets implemented: read it, echo the request back in plain language before
   writing code, size it up and phase it if large, then verify and document once it lands.
 
-### Known gaps against `docs/requests/2026-09-19-ui-enhance.md` (tracked for a later phase)
-
-The two gaps below (video thumbnails living on the Library page, no per-video monitor control) were
-closed — see Changed/Added below. Closing them surfaced one new, honest tradeoff worth tracking:
-
-- The old "Music videos on your media servers" grid also doubled as the only way to browse
-  media-server videos that aren't matched to any vidarr artist at all (available on the server, but
-  nothing in the catalog corresponds to them). Moving matched videos onto their artist's page has no
-  equivalent for *unmatched* ones — there's currently no view that lists them. Building one properly
-  means the confidence-classified reconciliation work already tracked as deferred (distinguishing "no
-  vidarr artist exists for this" from "matched with low confidence"), not a quick re-add of the old
-  grid.
-
 ### Changed
 
 - The Library page no longer shows a flat grid of every media-server video. A video's media-server
@@ -41,6 +28,12 @@ closed — see Changed/Added below. Closing them surfaced one new, honest tradeo
   real monitor/unmonitor checkbox instead of static "Monitored"/"Unmonitored" text — the API already
   supported updating an individual video's monitored state; only the controls to reach it were
   missing.
+- The Library Connectors page now shows, per connector, how many synced media-server videos have no
+  matching vidarr artist/video at all, with an expandable list (title, artist, year) — closes the gap
+  left by removing the old flat grid, which was the only place this was visible before. This covers
+  definite non-matches only; reviewing a *low-confidence* match (something a sync did tentatively tie
+  to the wrong video) is still the separately-tracked, deferred confidence-classified-reconciliation
+  work — this list only ever contains videos with no candidate match whatsoever.
 
 - The Library page is now artist-centered (Phase 1 of `docs/requests/2026-09-19-ui-enhance.md`):
   a vertical A-Z letter rail for navigation, a filter bar (search, genre, monitored state, "has
