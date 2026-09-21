@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Resolved without new work
+
+- The Phase 1 plan deferred "true virtualization for thousands of artists" as a follow-up to real
+  pagination. It doesn't need separate work: the Library page requests 25 artists per page, and the
+  summary endpoint hard-caps `pageSize` at 200 server-side regardless of what's requested — the DOM
+  never holds more than a bounded page of rows no matter how large the catalog is. Windowed
+  rendering would only matter if the UI ever rendered an unbounded list at once, which it doesn't.
+
 ### Documentation
 
 - Defined the canonical artist and music-video catalog, authoritative source priority,
