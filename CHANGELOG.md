@@ -5,6 +5,35 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — YouTube/VEVO acquisition validation and decision records ("Phase 3")
+
+Closes the last two items on the plan's deferred list: the request doc's "provider-neutral
+acquisition source records" and "YouTube/VEVO content validation" turned out to be one piece of
+work — a validation decision *is* the acquisition-source record. Every YouTube candidate is now
+either accepted, rejected with a reason, or held for review; a rejection or review no longer
+vanishes with no trace.
+
+- Before grabbing a heuristically-matched YouTube candidate, vidarr now fetches its real metadata
+  (description, channel, verification status) and classifies it: an auto-generated "- Topic"
+  channel, a "Provided to YouTube by..." label upload, or a title matching a lyric/karaoke/
+  visualizer/reaction/cover/live/instrumental/trailer pattern is rejected outright; a verified
+  channel is accepted immediately; anything else is inconclusive from metadata alone.
+- An inconclusive candidate is resolved by downloading a bounded ~20-second low-quality sample clip
+  (not the full file — the request doc explicitly rules out downloading an entire file solely for
+  validation) and reusing the existing freeze-frame motion check against just that sample.
+- A rejected or held-for-review candidate is recorded as a History event with its reason, and no
+  longer silently falls through — the History page now shows that reason in a new Details column.
+  A VEVO-tier match still skips straight to grabbing, same as before, since VEVO is already the
+  doc's #2 preferred source tier and structurally can't be a lyric video or Topic-channel upload.
+- The YouTube channel/playlist poll job applies the same metadata-only rejection patterns before
+  grabbing (no bounded sample download there — a configured channel is a source the user already
+  trusts, a different context from an autonomous broad search); the existing post-download
+  `assertIsRealMusicVideo` check remains the final safety net either way.
+- Deliberately does not add duration-based validation (no expected duration exists on either side
+  to compare against, consistent with skipping duration in Phase 2b's reconciliation for the same
+  reason) or a separate "AcquisitionSource" table (the existing `History` model already has the
+  exact shape needed).
+
 ### Added — confidence-classified library reconciliation ("Phase 2b")
 
 Media-server syncing previously matched a scanned video to vidarr's catalog through exactly one
@@ -66,8 +95,8 @@ today). Deliberately does **not** build the request doc's full 12-value state en
 - ~~Confidence-classified reconciliation~~ — DONE in "Phase 2b" below. This phase only fixed the
   *existing* exact-match system so it stops silently dropping good matches; it did not yet add
   probable/ambiguous tiers on its own.
-- Provider-neutral acquisition source records and YouTube/VEVO content validation beyond today's
-  title/channel heuristic remain fully deferred, unchanged from before this phase.
+- ~~Provider-neutral acquisition source records and YouTube/VEVO content validation~~ — DONE in
+  "Phase 3" above.
 
 ### Resolved without new work
 

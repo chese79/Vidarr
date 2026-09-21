@@ -1,7 +1,8 @@
 import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from './normalize.js';
-import { listChannelVideos } from '../providers/youtube/ytdlp.js';
+import { listChannelVideos, getVideoMetadata } from '../providers/youtube/ytdlp.js';
 import { grabYoutubeVideo } from './grab.js';
+import { classifyCandidate } from './youtubeValidation.js';
 
 export interface YoutubeSyncResult {
   matched: number;
@@ -81,7 +82,32 @@ export async function pollAndGrabYoutubeSource(
 
   let grabbed = 0;
   for (const video of candidates) {
+    if (!video.youtubeVideoId) continue;
     try {
+      // Metadata-only check — no bounded sample-clip download here. Unlike
+      // autoSearchAndGrab's autonomous broad search, this channel is one the
+      // user already configured as this specific artist's own source, so
+      // only the strong content-type negatives (Topic channel, lyric video,
+      // etc.) are worth rejecting on; an inconclusive 'review' proceeds
+      // rather than adding friction to an already-trusted channel. The
+      // existing post-download assertIsRealMusicVideo (via grabYoutubeVideo)
+      // remains the safety net either way.
+      const classification = classifyCandidate(await getVideoMetadata(video.youtubeVideoId));
+      if (classification.decision === 'reject') {
+        await prisma.history.create({
+          data: {
+            musicVideoId: video.id,
+            eventType: 'candidateRejected',
+            data: JSON.stringify({
+              source: 'youtube',
+              youtubeVideoId: video.youtubeVideoId,
+              title: video.title,
+              reason: classification.reason,
+            }),
+          },
+        });
+        continue;
+      }
       await grabYoutubeVideo(video.id);
       grabbed++;
     } catch (err) {

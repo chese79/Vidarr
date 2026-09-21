@@ -100,6 +100,73 @@ export async function searchYoutube(query: string): Promise<YoutubeSearchCandida
     }));
 }
 
+export interface YoutubeVideoMetadata {
+  title: string;
+  channel: string;
+  description: string;
+  channelIsVerified: boolean;
+}
+
+// A single-video metadata fetch — no download, no --flat-playlist (which
+// omits description/verification entirely). Deliberately only called once,
+// on an already-chosen top candidate, not once per search result: cheap
+// relative to a download, but not free, so it isn't run across all 8.
+export async function getVideoMetadata(youtubeVideoId: string): Promise<YoutubeVideoMetadata> {
+  const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
+  const { stdout, stderr, code } = await runYtDlp(['--dump-json', '--skip-download', url]);
+  if (code !== 0) {
+    throw new Error(`yt-dlp metadata fetch failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+  }
+  const entry = JSON.parse(stdout.trim().split('\n')[0] || '{}');
+  return {
+    title: (entry.title ?? '') as string,
+    channel: (entry.channel || entry.uploader || '') as string,
+    description: (entry.description ?? '') as string,
+    // Only present in newer yt-dlp versions — absence must never itself
+    // count as a negative signal (handled by the caller, not defaulted to
+    // false-as-"unverified" here, to keep that judgment call in one place).
+    channelIsVerified: Boolean(entry.channel_is_verified),
+  };
+}
+
+const SAMPLE_CLIP_FORMAT = 'worst[height>=64]';
+const SAMPLE_CLIP_SECONDS = 20;
+
+// Downloads only the first ~20 seconds at the lowest available quality —
+// "bounded sampled-frame/motion analysis" per the request doc, used to
+// validate a candidate BEFORE committing to the real, full-quality download
+// that grabYoutubeVideo does. Caller is responsible for deleting the result.
+export async function downloadSampleClip(youtubeVideoId: string, destDir: string): Promise<string> {
+  const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
+  const args = [
+    '-f',
+    SAMPLE_CLIP_FORMAT,
+    '--download-sections',
+    `*0-${SAMPLE_CLIP_SECONDS}`,
+    '--force-keyframes-at-cuts',
+    '--merge-output-format',
+    'mp4',
+    '-P',
+    destDir,
+    '-o',
+    '%(id)s.sample.%(ext)s',
+    '--print',
+    'after_move:filepath',
+  ];
+  if (FFMPEG_PATH !== 'ffmpeg') {
+    args.push('--ffmpeg-location', path.dirname(FFMPEG_PATH));
+  }
+  args.push(url);
+  const { stdout, stderr, code } = await runYtDlp(args);
+  if (code !== 0) {
+    throw new Error(`yt-dlp sample download failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+  }
+  const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+  const filepath = lines[lines.length - 1];
+  if (!filepath) throw new Error('yt-dlp did not report a sample clip path');
+  return filepath;
+}
+
 const DEFAULT_FORMAT = 'bestvideo[height<=1080]+bestaudio/best';
 
 export async function downloadVideo(

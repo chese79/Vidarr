@@ -3,11 +3,32 @@ import { searchAllIndexers } from './search.js';
 import { grabFromIndexer, grabYoutubeVideo } from './grab.js';
 import { findYoutubeMatch } from './youtubeMatch.js';
 import { hasActiveDownload } from './videoStatus.js';
+import { validateCandidate, type ClassificationResult } from './youtubeValidation.js';
 
 export interface AutoSearchOutcome {
   musicVideoId: number;
   grabbed: boolean;
   reason: string;
+}
+
+// A rejected/held candidate previously vanished with no trace at all — this
+// is what the request doc means by "every candidate is accepted, rejected
+// with a reason, or held for manual review": reusing History (rather than a
+// new "AcquisitionSource" table — see the Phase 3 plan) so the decision is
+// at least visible on the existing History page, not silently dropped.
+async function recordCandidateDecision(
+  musicVideoId: number,
+  youtubeVideoId: string,
+  title: string,
+  result: ClassificationResult,
+): Promise<void> {
+  await prisma.history.create({
+    data: {
+      musicVideoId,
+      eventType: result.decision === 'reject' ? 'candidateRejected' : 'candidateHeldForReview',
+      data: JSON.stringify({ source: 'youtube', youtubeVideoId, title, reason: result.reason }),
+    },
+  });
 }
 
 // Picks the best release for a video and grabs it automatically. YouTube is
@@ -79,17 +100,34 @@ export async function autoSearchAndGrab(
     try {
       const match = await findYoutubeMatch(musicVideo.artist.name, musicVideo.title);
       if (match) {
-        await prisma.musicVideo.update({
-          where: { id: musicVideoId },
-          data: { youtubeVideoId: match.candidate.youtubeVideoId },
-        });
-        await grabYoutubeVideo(musicVideoId);
-        const sourceLabel = match.tier === 'vevo' ? 'VEVO' : 'YouTube';
-        return {
-          musicVideoId,
-          grabbed: true,
-          reason: `Grabbed via ${sourceLabel} (${match.candidate.title})`,
-        };
+        // A VEVO upload is already the doc's #2 preferred source tier
+        // (verified official/VEVO upload) — content-type validation exists
+        // to catch lyric videos/reactions/etc. slipping through a plain
+        // heuristic search, which a VEVO-channel result structurally can't
+        // be, so it skips straight to accepted, same as the IMVDb-sourced
+        // link above.
+        const validation: ClassificationResult =
+          match.tier === 'vevo'
+            ? { decision: 'accept', reason: 'VEVO upload' }
+            : await validateCandidate(match.candidate.youtubeVideoId);
+
+        if (validation.decision === 'accept') {
+          await prisma.musicVideo.update({
+            where: { id: musicVideoId },
+            data: { youtubeVideoId: match.candidate.youtubeVideoId },
+          });
+          await grabYoutubeVideo(musicVideoId);
+          const sourceLabel = match.tier === 'vevo' ? 'VEVO' : 'YouTube';
+          return {
+            musicVideoId,
+            grabbed: true,
+            reason: `Grabbed via ${sourceLabel} (${match.candidate.title})`,
+          };
+        }
+
+        await recordCandidateDecision(musicVideoId, match.candidate.youtubeVideoId, match.candidate.title, validation);
+        // fall through to indexer search below — a rejected/held YouTube
+        // candidate doesn't stop the search, it just isn't grabbed from here.
       }
     } catch (err) {
       await logActivity('warn', 'auto-search-youtube', err);

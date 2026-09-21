@@ -80,15 +80,18 @@ async function getDurationSeconds(filePath: string): Promise<number> {
 }
 
 const FREEZE_EVENT = /freeze_(start|duration):\s*([\d.]+)/g;
-const MAX_STATIC_FRACTION = 0.8; // >80% frozen ⇒ treat as a still image, not a real video
+export const MAX_STATIC_FRACTION = 0.8; // >80% frozen ⇒ treat as a still image, not a real video
 
-// A YouTube upload can be a real video-shaped file that's just album art held
-// on screen for the whole song — passes the video-stream/dimension check above
-// but has no actual motion. ffmpeg's freezedetect filter flags frozen spans;
-// if they cover most of the runtime, this isn't a real music video.
-export async function assertHasMotion(filePath: string): Promise<void> {
+// The actual ffmpeg freezedetect invocation + frozen-fraction math, shared by
+// assertHasMotion (the full-file, post-download check below) and Phase 3's
+// bounded pre-download sample check (pipeline/youtubeValidation.ts) — one
+// implementation of "how much of this file is a frozen still image" used by
+// both callers instead of two copies of the same ffmpeg-invocation logic.
+// Returns null (rather than 0) when duration can't be determined, so a
+// caller can tell "couldn't check" apart from "checked, found no freezing."
+export async function computeFrozenFraction(filePath: string): Promise<number | null> {
   const duration = await getDurationSeconds(filePath);
-  if (!duration) return; // can't determine — don't block the import over this alone
+  if (!duration) return null;
 
   const stderr = await new Promise<string>((resolve, reject) => {
     const child = spawn(FFMPEG_PATH, [
@@ -126,9 +129,20 @@ export async function assertHasMotion(filePath: string): Promise<void> {
     frozenSeconds += duration - openFreezeStart;
   }
 
-  if (frozenSeconds / duration > MAX_STATIC_FRACTION) {
+  return frozenSeconds / duration;
+}
+
+// A YouTube upload can be a real video-shaped file that's just album art held
+// on screen for the whole song — passes the video-stream/dimension check above
+// but has no actual motion. ffmpeg's freezedetect filter flags frozen spans;
+// if they cover most of the runtime, this isn't a real music video.
+export async function assertHasMotion(filePath: string): Promise<void> {
+  const frozenFraction = await computeFrozenFraction(filePath);
+  if (frozenFraction == null) return; // can't determine — don't block the import over this alone
+
+  if (frozenFraction > MAX_STATIC_FRACTION) {
     throw new NotAVideoError(
-      `Video is static for ${Math.round((frozenSeconds / duration) * 100)}% of its runtime — likely album art, not a real music video.`,
+      `Video is static for ${Math.round(frozenFraction * 100)}% of its runtime — likely album art, not a real music video.`,
     );
   }
 }
