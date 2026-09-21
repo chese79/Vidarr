@@ -31,7 +31,11 @@ export default function QueuePage() {
         The queue monitor runs automatically in the background — this list updates on its own
         every few seconds. "Refresh Now" forces an immediate check instead of waiting.
       </p>
-      {summary && <p className="empty-state">{summary}</p>}
+      {summary && (
+        <p className="empty-state" role="status">
+          {summary}
+        </p>
+      )}
 
       {queue.data?.length ? (
         <table>

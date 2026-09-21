@@ -269,7 +269,11 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
           </div>
         </form>
 
-        {error && <p className="empty-state">{error}</p>}
+        {error && (
+          <p className="empty-state" role="alert">
+            {error}
+          </p>
+        )}
         {googleConfigured && (
           <>
             <p className="empty-state" style={{ padding: '12px 0 4px', textAlign: 'center' }}>

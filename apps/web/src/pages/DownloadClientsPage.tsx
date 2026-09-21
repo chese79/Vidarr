@@ -57,10 +57,11 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
       <tr>
         <td colSpan={5}>
           <div className="form-row" style={{ flexWrap: 'wrap' }}>
-            <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-            <input placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} />
+            <input placeholder="Name" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input placeholder="Host" aria-label="Host" value={host} onChange={(e) => setHost(e.target.value)} />
             <input
               placeholder="Port"
+              aria-label="Port"
               type="number"
               value={port}
               onChange={(e) => setPort(e.target.value)}
@@ -68,9 +69,15 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
             />
             {client.implementation === 'qBittorrent' ? (
               <>
-                <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+                <input
+                  placeholder="Username"
+                  aria-label="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
                 <input
                   placeholder={client.hasPassword ? 'New password (leave blank to keep current)' : 'Password'}
+                  aria-label="Password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -79,6 +86,7 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
             ) : (
               <input
                 placeholder={client.hasApiKey ? 'New API key (leave blank to keep current)' : 'API key'}
+                aria-label="API key"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
               />
@@ -90,7 +98,11 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
               Cancel
             </button>
           </div>
-          {update.isError && <p className="empty-state">{(update.error as Error).message}</p>}
+          {update.isError && (
+            <p className="empty-state" role="alert">
+              {(update.error as Error).message}
+            </p>
+          )}
         </td>
       </tr>
     );
@@ -103,15 +115,15 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
       <td>
         {client.host}:{client.port}
       </td>
-      <td>{status ?? '—'}</td>
+      <td role="status">{status ?? '—'}</td>
       <td style={{ display: 'flex', gap: 6 }}>
-        <button className="secondary" onClick={onTest}>
+        <button className="secondary" aria-label={`Test ${client.name}`} onClick={onTest}>
           Test
         </button>
-        <button className="secondary" onClick={startEditing}>
+        <button className="secondary" aria-label={`Edit ${client.name}`} onClick={startEditing}>
           Edit
         </button>
-        <button className="secondary" onClick={onRemove}>
+        <button className="secondary" aria-label={`Remove ${client.name}`} onClick={onRemove}>
           Remove
         </button>
       </td>
@@ -181,17 +193,31 @@ export default function DownloadClientsPage() {
         }}
       >
         <div className="form-row">
-          <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <input
+            placeholder="Name"
+            aria-label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
           <select
             value={implementation}
+            aria-label="Implementation"
             onChange={(e) => setImplementation(e.target.value as DownloadClientImplementation)}
           >
             <option value="qBittorrent">qBittorrent</option>
             <option value="SABnzbd">SABnzbd</option>
           </select>
-          <input placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} required />
+          <input
+            placeholder="Host"
+            aria-label="Host"
+            value={host}
+            onChange={(e) => setHost(e.target.value)}
+            required
+          />
           <input
             placeholder="Port"
+            aria-label="Port"
             type="number"
             value={port}
             onChange={(e) => setPort(e.target.value)}
@@ -204,18 +230,25 @@ export default function DownloadClientsPage() {
             <>
               <input
                 placeholder="Username"
+                aria-label="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
               <input
                 placeholder="Password"
+                aria-label="Password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </>
           ) : (
-            <input placeholder="API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <input
+              placeholder="API key"
+              aria-label="API key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
           )}
           <button type="submit">Add</button>
         </div>
@@ -229,7 +262,9 @@ export default function DownloadClientsPage() {
               <th>Implementation</th>
               <th>Host</th>
               <th>Status</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>

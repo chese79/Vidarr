@@ -46,12 +46,14 @@ export default function QualityProfilesPage() {
         <div className="form-row">
           <input
             placeholder="Profile name"
+            aria-label="Profile name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
           />
           <select
             value={cutoffQualityId}
+            aria-label="Upgrade cutoff quality"
             onChange={(e) => setCutoffQualityId(Number(e.target.value))}
             required
           >
@@ -84,7 +86,9 @@ export default function QualityProfilesPage() {
             <tr>
               <th>Name</th>
               <th>Allowed Qualities</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +97,11 @@ export default function QualityProfilesPage() {
                 <td>{p.name}</td>
                 <td>{p.items.filter((i) => i.allowed).length} allowed</td>
                 <td>
-                  <button className="secondary" onClick={() => removeProfile.mutate(p.id)}>
+                  <button
+                    className="secondary"
+                    aria-label={`Remove ${p.name}`}
+                    onClick={() => removeProfile.mutate(p.id)}
+                  >
                     Remove
                   </button>
                 </td>

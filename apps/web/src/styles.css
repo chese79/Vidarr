@@ -6,6 +6,12 @@
   --text: #e6e8eb;
   --text-muted: #9aa0aa;
   --accent: #4f8cff;
+  /* A separate, darker shade for solid button fills — white text on --accent
+     itself is only ~3.2:1 (fails WCAG AA's 4.5:1 for normal text); this is
+     the same hue, just dark enough that white text clears ~5:1. --accent
+     itself stays as-is for links/focus rings/status text, where it's paired
+     with a dark background rather than white text and already reads fine. */
+  --button-bg: #3568d4;
   /* Status colors for the Library page's per-artist video counts — muted and
      colorblind-safe (distinguished by more than hue alone via the counts'
      own labels), sitting quietly next to --accent rather than competing
@@ -116,8 +122,23 @@ select {
   outline-offset: 2px;
 }
 
+/* Visually hides content while keeping it in the accessibility tree — for a
+   table header (an "Actions" column of buttons, say) that needs a name for
+   screen-reader table navigation but would be visual clutter on screen. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 button {
-  background: var(--accent);
+  background: var(--button-bg);
   border: none;
   color: white;
   padding: 8px 14px;
@@ -125,15 +146,21 @@ button {
   cursor: pointer;
 }
 
+/* Both rules below use --text-muted rather than the (decorative-only)
+   --border token: an input/select's typing area and a secondary button's
+   clickable extent are UI-component boundaries, which WCAG 1.4.11 requires
+   to hit 3:1 against their background — --border itself is only ~1.2-1.4:1
+   against --bg/--bg-elevated and stays fine for purely decorative dividers
+   (.card, table rules, etc.) that aren't conveying a control's shape. */
 button.secondary {
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid var(--text-muted);
 }
 
 input,
 select {
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--text-muted);
   border-radius: 6px;
   padding: 8px 10px;
 }
@@ -262,7 +289,10 @@ select {
 .letter-rail button.active {
   color: var(--accent);
   font-weight: 700;
-  background: rgba(79, 140, 255, 0.1);
+  /* 0.1 opacity measured at ~4.4:1 against this small (11px) text — just
+     under WCAG AA's 4.5:1. Halving it darkens the tint enough to clear 4.5:1
+     with margin (~4.8:1) while staying a barely-there highlight. */
+  background: rgba(79, 140, 255, 0.05);
 }
 
 .letter-rail button:not(:disabled):hover {

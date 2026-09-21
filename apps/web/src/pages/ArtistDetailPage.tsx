@@ -79,7 +79,11 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
       )}
       {results.isLoading && <p className="empty-state">Searching…</p>}
       {results.isError && <p className="empty-state">{(results.error as Error).message}</p>}
-      {grabMessage && <p className="empty-state">{grabMessage}</p>}
+      {grabMessage && (
+        <p className="empty-state" role="status">
+          {grabMessage}
+        </p>
+      )}
 
       {results.data?.length ? (
         <table>
@@ -90,7 +94,9 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
               <th>Quality</th>
               <th>Size</th>
               <th>Seeders</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -199,7 +205,9 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
               <th>Type</th>
               <th>URL</th>
               <th>Status</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -207,7 +215,7 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
               <tr key={s.id}>
                 <td>{s.type}</td>
                 <td>{s.url}</td>
-                <td>{status[s.id] ?? (s.lastPolledAt ? 'Synced' : 'Never synced')}</td>
+                <td role="status">{status[s.id] ?? (s.lastPolledAt ? 'Synced' : 'Never synced')}</td>
                 <td style={{ display: 'flex', gap: 6 }}>
                   <button className="secondary" onClick={() => handleSync(s.id)}>
                     Sync
@@ -367,7 +375,11 @@ export default function ArtistDetailPage() {
         </div>
       </div>
 
-      {monitorMessage && <p className="empty-state">{monitorMessage}</p>}
+      {monitorMessage && (
+        <p className="empty-state" role="status">
+          {monitorMessage}
+        </p>
+      )}
 
       <div className="form-row" style={{ alignItems: 'center' }}>
         <label htmlFor="artist-genre" className="empty-state" style={{ padding: 0 }}>
@@ -388,7 +400,11 @@ export default function ArtistDetailPage() {
         >
           {matchGenre.isPending ? 'Matching…' : 'Match Genre'}
         </button>
-        {genreMessage && <span className="empty-state">{genreMessage}</span>}
+        {genreMessage && (
+          <span className="empty-state" role="status">
+            {genreMessage}
+          </span>
+        )}
       </div>
 
       {showAdd && (
@@ -424,7 +440,11 @@ export default function ArtistDetailPage() {
           <button disabled={!selected.size || bulkSearching} onClick={handleBulkSearch}>
             {bulkSearching ? 'Searching…' : `Search Selected (${selected.size})`}
           </button>
-          {bulkMessage && <span className="empty-state">{bulkMessage}</span>}
+          {bulkMessage && (
+            <span className="empty-state" role="status">
+              {bulkMessage}
+            </span>
+          )}
         </div>
       )}
 
@@ -437,6 +457,7 @@ export default function ArtistDetailPage() {
                   type="checkbox"
                   checked={selected.has(mv.id)}
                   onChange={() => toggleOne(mv.id)}
+                  aria-label={`Select ${mv.title} for bulk search`}
                 />
               )}
               <VideoThumb url={mv.thumbnailUrl} />
@@ -460,7 +481,7 @@ export default function ArtistDetailPage() {
                       onChange={(e) =>
                         toggleVideoMonitored.mutate({ id: mv.id, monitored: e.target.checked })
                       }
-                      aria-label={`${mv.monitored ? 'Unmonitor' : 'Monitor'} ${mv.title}`}
+                      aria-label={`Monitored — ${mv.monitored ? 'unmonitor' : 'monitor'} ${mv.title}`}
                     />
                     Monitored
                   </label>
@@ -481,7 +502,7 @@ export default function ArtistDetailPage() {
                 )}
               </div>
               <div className="video-actions">
-                {grabStatus[mv.id] && <span>{grabStatus[mv.id]}</span>}
+                {grabStatus[mv.id] && <span role="status">{grabStatus[mv.id]}</span>}
                 {!mv.hasFile && mv.youtubeVideoId && (
                   <button className="secondary" onClick={() => handleGrab(mv.id)}>
                     Grab

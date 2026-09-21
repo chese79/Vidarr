@@ -37,12 +37,16 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <h1>vidarr</h1>
-        <nav>
-          {NAV_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end}>
-              {item.label}
-            </NavLink>
-          ))}
+        <nav aria-label="Primary">
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {NAV_ITEMS.map((item) => (
+              <li key={item.to}>
+                <NavLink to={item.to} end={item.end}>
+                  {item.label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
         </nav>
       </aside>
       <main className="content">

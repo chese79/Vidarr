@@ -37,6 +37,7 @@ export default function RootFoldersPage() {
         <div className="form-row">
           <input
             placeholder="e.g. D:\Media\Music Videos"
+            aria-label="Root folder path"
             value={path}
             onChange={(e) => setPath(e.target.value)}
             style={{ minWidth: 320 }}
@@ -51,7 +52,9 @@ export default function RootFoldersPage() {
           <thead>
             <tr>
               <th>Path</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -59,7 +62,11 @@ export default function RootFoldersPage() {
               <tr key={rf.id}>
                 <td>{rf.path}</td>
                 <td>
-                  <button className="secondary" onClick={() => removeFolder.mutate(rf.id)}>
+                  <button
+                    className="secondary"
+                    aria-label={`Remove ${rf.path}`}
+                    onClick={() => removeFolder.mutate(rf.id)}
+                  >
                     Remove
                   </button>
                 </td>

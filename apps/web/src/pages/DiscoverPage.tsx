@@ -73,7 +73,11 @@ export default function DiscoverPage() {
         </button>
       </div>
 
-      {refreshSummary && <p className="empty-state">{refreshSummary}</p>}
+      {refreshSummary && (
+        <p className="empty-state" role="status">
+          {refreshSummary}
+        </p>
+      )}
 
       {!canAdd && (
         <p className="empty-state">
@@ -88,7 +92,9 @@ export default function DiscoverPage() {
               <th>Artist</th>
               <th>Score</th>
               <th>Why</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -102,10 +108,18 @@ export default function DiscoverPage() {
                   )}
                 </td>
                 <td style={{ display: 'flex', gap: 6 }}>
-                  <button disabled={!canAdd} onClick={() => add.mutate({ id: r.id })}>
+                  <button
+                    disabled={!canAdd}
+                    aria-label={`Add ${r.artistName} to library`}
+                    onClick={() => add.mutate({ id: r.id })}
+                  >
                     Add to Library
                   </button>
-                  <button className="secondary" onClick={() => dismiss.mutate(r.id)}>
+                  <button
+                    className="secondary"
+                    aria-label={`Dismiss ${r.artistName}`}
+                    onClick={() => dismiss.mutate(r.id)}
+                  >
                     Dismiss
                   </button>
                 </td>

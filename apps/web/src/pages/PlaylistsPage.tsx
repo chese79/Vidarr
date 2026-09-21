@@ -82,6 +82,7 @@ function GeneratePlaylistPanel() {
       <div className="form-row">
         <input
           placeholder="Playlist name"
+          aria-label="Playlist name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           style={{ minWidth: 220 }}
@@ -90,6 +91,7 @@ function GeneratePlaylistPanel() {
         <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
             type="radio"
+            name="matchMode"
             checked={matchMode === 'all'}
             onChange={() => setMatchMode('all')}
           />
@@ -98,6 +100,7 @@ function GeneratePlaylistPanel() {
         <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
             type="radio"
+            name="matchMode"
             checked={matchMode === 'any'}
             onChange={() => setMatchMode('any')}
           />
@@ -113,6 +116,7 @@ function GeneratePlaylistPanel() {
         <input
           type="number"
           placeholder="Min year"
+          aria-label="Minimum year"
           value={yearMin}
           onChange={(e) => setYearMin(e.target.value)}
           disabled={!enableYear}
@@ -121,6 +125,7 @@ function GeneratePlaylistPanel() {
         <input
           type="number"
           placeholder="Max year"
+          aria-label="Maximum year"
           value={yearMax}
           onChange={(e) => setYearMax(e.target.value)}
           disabled={!enableYear}
@@ -135,6 +140,7 @@ function GeneratePlaylistPanel() {
         </label>
         <input
           placeholder="e.g. Rock"
+          aria-label="Genre"
           value={genre}
           onChange={(e) => setGenre(e.target.value)}
           disabled={!enableGenre}
@@ -158,6 +164,7 @@ function GeneratePlaylistPanel() {
           type="number"
           min={0}
           placeholder="e.g. 5"
+          aria-label="Minimum play count"
           value={minPlayCount}
           onChange={(e) => setMinPlayCount(e.target.value)}
           disabled={!enablePlayCount}
@@ -179,6 +186,7 @@ function GeneratePlaylistPanel() {
         </label>
         <select
           multiple
+          aria-label="Filter by artist"
           disabled={!enableArtists}
           value={artistIds.map(String)}
           onChange={(e) => setArtistIds([...e.target.selectedOptions].map((o) => Number(o.value)))}
@@ -203,6 +211,7 @@ function GeneratePlaylistPanel() {
         </label>
         <select
           multiple
+          aria-label="Filter by specific video"
           disabled={!enableVideos}
           value={videoIds.map(String)}
           onChange={(e) => setVideoIds([...e.target.selectedOptions].map((o) => Number(o.value)))}
@@ -224,7 +233,11 @@ function GeneratePlaylistPanel() {
           Enable at least one filter above.
         </span>
       )}
-      {result && <p className="empty-state">{result}</p>}
+      {result && (
+        <p className="empty-state" role="status">
+          {result}
+        </p>
+      )}
     </form>
   );
 }
@@ -285,10 +298,19 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
       <div className="page-header" style={{ marginBottom: 8 }}>
         <h3 style={{ margin: 0 }}>{playlist.name}</h3>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="secondary" onClick={() => setAdding((v) => !v)}>
+          <button
+            className="secondary"
+            aria-expanded={adding}
+            aria-controls={`playlist-${playlistId}-add-videos`}
+            onClick={() => setAdding((v) => !v)}
+          >
             {adding ? 'Done adding' : 'Add videos'}
           </button>
-          <button className="secondary" onClick={() => removePlaylist.mutate()}>
+          <button
+            className="secondary"
+            aria-label={`Delete playlist ${playlist.name}`}
+            onClick={() => removePlaylist.mutate()}
+          >
             Delete playlist
           </button>
         </div>
@@ -306,7 +328,11 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
                 </span>
               </div>
               <div className="video-actions">
-                <button className="secondary" onClick={() => removeItem.mutate(item.musicVideoId)}>
+                <button
+                  className="secondary"
+                  aria-label={`Remove ${item.musicVideo.title} from playlist`}
+                  onClick={() => removeItem.mutate(item.musicVideoId)}
+                >
                   Remove
                 </button>
               </div>
@@ -318,7 +344,7 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
       )}
 
       {adding && (
-        <div className="video-list" style={{ marginTop: 8 }}>
+        <div className="video-list" id={`playlist-${playlistId}-add-videos`} style={{ marginTop: 8 }}>
           {(downloaded.data ?? [])
             .filter((v) => !inPlaylist.has(v.id))
             .map((v) => (
@@ -330,7 +356,9 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
                   </span>
                 </div>
                 <div className="video-actions">
-                  <button onClick={() => addItem.mutate(v.id)}>Add</button>
+                  <button aria-label={`Add ${v.title} to playlist`} onClick={() => addItem.mutate(v.id)}>
+                    Add
+                  </button>
                 </div>
               </div>
             ))}
@@ -347,15 +375,15 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
             const sync = playlist.syncs.find((s) => s.connectorId === c.id);
             return (
               <div className="form-row" key={c.id} style={{ alignItems: 'center' }}>
-                <button
-                  className="secondary"
-                  onClick={() => handlePush(c.id)}
-                  disabled={!c.videoLibraryId}
-                  title={!c.videoLibraryId ? 'Pick a video library for this connector first' : undefined}
-                >
+                <button className="secondary" onClick={() => handlePush(c.id)} disabled={!c.videoLibraryId}>
                   Push to {c.name}
                 </button>
-                <span className="empty-state" style={{ padding: 0 }}>
+                {!c.videoLibraryId && (
+                  <span className="empty-state" style={{ padding: 0, fontSize: 12 }}>
+                    Pick a video library for this connector first.
+                  </span>
+                )}
+                <span className="empty-state" style={{ padding: 0 }} role="status">
                   {pushStatus[c.id] ?? (sync ? `Last: ${sync.lastPushStatus} (${sync.lastPushedAt})` : '—')}
                 </span>
               </div>
@@ -396,6 +424,7 @@ export default function PlaylistsPage() {
       <form className="form-row" onSubmit={handleSubmit}>
         <input
           placeholder="Playlist name"
+          aria-label="Playlist name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           style={{ minWidth: 240 }}

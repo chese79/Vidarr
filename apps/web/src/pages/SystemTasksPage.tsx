@@ -35,7 +35,7 @@ export default function SystemTasksPage() {
           <button className="secondary" onClick={() => backfill.mutate()} disabled={backfill.isPending}>
             {backfill.isPending ? 'Running…' : 'Regenerate library metadata files'}
           </button>
-          <span className="empty-state" style={{ padding: 0 }}>
+          <span className="empty-state" style={{ padding: 0 }} aria-live="polite">
             {backfill.isError
               ? `Failed: ${(backfill.error as Error).message}`
               : backfill.data
@@ -53,7 +53,9 @@ export default function SystemTasksPage() {
               <th>Interval</th>
               <th>Last Run</th>
               <th>Result</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -64,13 +66,24 @@ export default function SystemTasksPage() {
                 <td>{t.lastRunAt ? new Date(t.lastRunAt).toLocaleString() : 'Never'}</td>
                 <td>
                   {t.lastResult === 'failed' ? (
-                    <span title={t.lastError ?? undefined}>Failed</span>
+                    <>
+                      Failed
+                      {t.lastError && (
+                        <div className="empty-state" style={{ padding: '2px 0 0', fontSize: 12 }}>
+                          {t.lastError}
+                        </div>
+                      )}
+                    </>
                   ) : (
                     t.lastResult ?? '—'
                   )}
                 </td>
                 <td>
-                  <button className="secondary" onClick={() => runTask.mutate(t.name)}>
+                  <button
+                    className="secondary"
+                    aria-label={`Run ${t.name} now`}
+                    onClick={() => runTask.mutate(t.name)}
+                  >
                     Run Now
                   </button>
                 </td>

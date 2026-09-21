@@ -22,7 +22,13 @@ function SecuritySection({ apiKey }: { apiKey: string | null }) {
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Integration API key</h3>
       <div className="form-row" style={{ alignItems: 'center' }}>
-        <input readOnly type={revealed ? 'text' : 'password'} value={apiKey ?? ''} style={{ minWidth: 320 }} />
+        <input
+          readOnly
+          type={revealed ? 'text' : 'password'}
+          value={apiKey ?? ''}
+          aria-label="Integration API key"
+          style={{ minWidth: 320 }}
+        />
         <button type="button" className="secondary" onClick={() => setRevealed((v) => !v)}>
           {revealed ? 'Hide' : 'Show'}
         </button>
@@ -30,6 +36,16 @@ function SecuritySection({ apiKey }: { apiKey: string | null }) {
           {regenerate.isPending ? 'Regenerating…' : 'Regenerate'}
         </button>
       </div>
+      {regenerate.isSuccess && (
+        <p className="empty-state" role="status" style={{ padding: '6px 0 0' }}>
+          Key regenerated.
+        </p>
+      )}
+      {regenerate.isError && (
+        <p className="empty-state" role="alert" style={{ padding: '6px 0 0' }}>
+          Failed to regenerate: {(regenerate.error as Error).message}
+        </p>
+      )}
       <p className="empty-state" style={{ padding: '6px 0 0' }}>
         For scripts and third-party integrations that call Vidarr directly. You do not need this
         key to sign in to the web interface. Regenerating it signs out other browser sessions.
@@ -102,6 +118,16 @@ function GoogleSignOnSection({
       <button type="button" onClick={() => save.mutate()}>
         {save.isPending ? 'Saving…' : 'Save'}
       </button>
+      {save.isSuccess && (
+        <p className="empty-state" role="status" style={{ padding: '6px 0 0' }}>
+          Saved.
+        </p>
+      )}
+      {save.isError && (
+        <p className="empty-state" role="alert" style={{ padding: '6px 0 0' }}>
+          Failed to save: {(save.error as Error).message}
+        </p>
+      )}
       <p className="empty-state" style={{ padding: '8px 0 0' }}>
         In the Google Cloud Console, create an OAuth Client ID (type "Web application") and add this
         exact URL as an authorized redirect URI: <code>{redirectUri}</code>
@@ -181,7 +207,16 @@ function LocalLoginSection({ adminUsername }: { adminUsername: string | null }) 
         <button type="submit" disabled={save.isPending}>
           {save.isPending ? 'Saving…' : adminUsername ? 'Update login' : 'Set up login'}
         </button>
-        {formError && <p className="empty-state">{formError}</p>}
+        {formError && (
+          <p className="empty-state" role="alert">
+            {formError}
+          </p>
+        )}
+        {save.isSuccess && (
+          <p className="empty-state" role="status">
+            Saved.
+          </p>
+        )}
       </form>
     </div>
   );
@@ -232,11 +267,13 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
         <>
           <input
             placeholder="Client ID"
+            aria-label="Client ID"
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
           />
           <input
             placeholder={`Client Secret${config.hasClientSecret ? ' (leave blank to keep)' : ''}`}
+            aria-label="Client Secret"
             type="password"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
@@ -245,6 +282,7 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
       ) : config.provider === 'lastfm' ? (
         <input
           placeholder={`API key${config.hasApiKey ? ' (leave blank to keep)' : ''}`}
+          aria-label="API key"
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
@@ -254,9 +292,23 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
           No credentials required
         </span>
       )}
-      <button type="button" onClick={() => update.mutate()}>
+      <button
+        type="button"
+        aria-label={`Save ${PROVIDER_LABEL[config.provider] ?? config.provider} settings`}
+        onClick={() => update.mutate()}
+      >
         Save
       </button>
+      {update.isSuccess && (
+        <span className="empty-state" role="status" style={{ padding: 0 }}>
+          Saved.
+        </span>
+      )}
+      {update.isError && (
+        <span className="empty-state" role="alert" style={{ padding: 0 }}>
+          Failed: {(update.error as Error).message}
+        </span>
+      )}
     </div>
   );
 }
@@ -317,6 +369,7 @@ export default function SettingsPage() {
           });
         }}
       >
+        <h3 style={{ marginTop: 0 }}>Library</h3>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label htmlFor="imvdb-api-key">IMVDb API key</label>
           <input
@@ -357,6 +410,16 @@ export default function SettingsPage() {
           />
         </div>
         <button type="submit">Save</button>
+        {update.isSuccess && (
+          <p className="empty-state" role="status">
+            Saved.
+          </p>
+        )}
+        {update.isError && (
+          <p className="empty-state" role="alert">
+            Failed to save: {(update.error as Error).message}
+          </p>
+        )}
       </form>
 
       <SecuritySection apiKey={settings.data?.apiKey ?? null} />

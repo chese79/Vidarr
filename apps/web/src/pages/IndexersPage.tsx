@@ -25,6 +25,7 @@ function CategoriesCell({ indexer }: { indexer: Indexer }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="3020"
+        aria-label={`Categories for ${indexer.name}`}
         style={{ width: 90 }}
       />
       <button className="secondary" onClick={() => update.mutate()}>
@@ -78,15 +79,17 @@ function IndexerRow({ indexer, status, onTest, onRemove }: {
       <tr>
         <td colSpan={5}>
           <div className="form-row" style={{ flexWrap: 'wrap' }}>
-            <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input placeholder="Name" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
             <input
               placeholder="Base URL"
+              aria-label="Base URL"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               style={{ minWidth: 280 }}
             />
             <input
               placeholder={indexer.hasApiKey ? 'New API key (leave blank to keep current)' : 'API key'}
+              aria-label="API key"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
@@ -97,7 +100,11 @@ function IndexerRow({ indexer, status, onTest, onRemove }: {
               Cancel
             </button>
           </div>
-          {update.isError && <p className="empty-state">{(update.error as Error).message}</p>}
+          {update.isError && (
+            <p className="empty-state" role="alert">
+              {(update.error as Error).message}
+            </p>
+          )}
         </td>
       </tr>
     );
@@ -110,15 +117,15 @@ function IndexerRow({ indexer, status, onTest, onRemove }: {
       <td>
         <CategoriesCell indexer={indexer} />
       </td>
-      <td>{status ?? '—'}</td>
+      <td role="status">{status ?? '—'}</td>
       <td style={{ display: 'flex', gap: 6 }}>
-        <button className="secondary" onClick={onTest}>
+        <button className="secondary" aria-label={`Test ${indexer.name}`} onClick={onTest}>
           Test
         </button>
-        <button className="secondary" onClick={startEditing}>
+        <button className="secondary" aria-label={`Edit ${indexer.name}`} onClick={startEditing}>
           Edit
         </button>
-        <button className="secondary" onClick={onRemove}>
+        <button className="secondary" aria-label={`Remove ${indexer.name}`} onClick={onRemove}>
           Remove
         </button>
       </td>
@@ -189,9 +196,16 @@ export default function IndexersPage() {
         }}
       >
         <div className="form-row">
-          <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <input
+            placeholder="Name"
+            aria-label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
           <select
             value={implementation}
+            aria-label="Implementation"
             onChange={(e) => setImplementation(e.target.value as IndexerImplementation)}
           >
             <option value="Torznab">Torznab</option>
@@ -199,14 +213,21 @@ export default function IndexersPage() {
           </select>
           <input
             placeholder="Base URL, e.g. http://localhost:9117/api/v2.0/indexers/example/results/torznab"
+            aria-label="Base URL"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             style={{ minWidth: 340 }}
             required
           />
-          <input placeholder="API key" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+          <input
+            placeholder="API key"
+            aria-label="API key"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+          />
           <input
             placeholder="Categories"
+            aria-label="Categories"
             value={categories}
             onChange={(e) => setCategories(e.target.value)}
             style={{ width: 90 }}
@@ -223,7 +244,9 @@ export default function IndexersPage() {
               <th>Implementation</th>
               <th>Categories</th>
               <th>Status</th>
-              <th></th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>

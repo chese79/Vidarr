@@ -135,6 +135,7 @@ export default function ImportPage() {
         <form className="form-row" onSubmit={handlePreview}>
           <input
             placeholder="https://www.youtube.com/playlist?list=..."
+            aria-label="YouTube playlist URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             style={{ minWidth: 360 }}
@@ -144,13 +145,22 @@ export default function ImportPage() {
             {previewing ? 'Loading…' : 'Preview'}
           </button>
         </form>
-        {previewError && <p className="empty-state">{previewError}</p>}
+        {previewError && (
+          <p className="empty-state" role="alert">
+            {previewError}
+          </p>
+        )}
       </div>
 
       {groups && (
         <div className="card">
           <div className="form-row">
-            <select value={rootFolderId} onChange={(e) => setRootFolderId(Number(e.target.value))} required>
+            <select
+              value={rootFolderId}
+              aria-label="Root folder for new artists"
+              onChange={(e) => setRootFolderId(Number(e.target.value))}
+              required
+            >
               <option value="">Root folder (for new artists)…</option>
               {rootFolders.data?.map((rf) => (
                 <option key={rf.id} value={rf.id}>
@@ -160,6 +170,7 @@ export default function ImportPage() {
             </select>
             <select
               value={qualityProfileId}
+              aria-label="Quality profile for new artists"
               onChange={(e) => setQualityProfileId(Number(e.target.value))}
               required
             >
@@ -176,13 +187,17 @@ export default function ImportPage() {
           </div>
 
           {groups.map((g) => (
-            <div key={g.key} className="card" style={{ background: 'var(--bg)' }}>
+            // No background override here (was --bg, same as the page itself) —
+            // the group's only remaining boundary was the low-contrast .card
+            // border, making it indistinguishable from the page background.
+            <div key={g.key} className="card">
               <div className="form-row" style={{ alignItems: 'center', marginBottom: 8 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input
                     type="checkbox"
                     checked={g.monitor}
                     onChange={(e) => updateGroup(g.key, { monitor: e.target.checked })}
+                    aria-label={`Add ${g.artistName} to watch list`}
                   />
                   Add to watch list
                 </label>
@@ -193,6 +208,13 @@ export default function ImportPage() {
               </div>
 
               <table>
+                <thead>
+                  <tr>
+                    <th>Include</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {g.videos.map((v) => (
                     <tr key={v.youtubeVideoId}>
@@ -201,10 +223,11 @@ export default function ImportPage() {
                           type="checkbox"
                           checked={v.include}
                           onChange={(e) => updateVideo(g.key, v.youtubeVideoId, e.target.checked)}
+                          aria-label={v.title}
                         />
                       </td>
                       <td>{v.title}</td>
-                      {v.alreadyInLibrary && <td className="empty-state">already in library</td>}
+                      <td className="empty-state">{v.alreadyInLibrary ? 'already in library' : ''}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -214,7 +237,11 @@ export default function ImportPage() {
         </div>
       )}
 
-      {result && <p className="empty-state">{result}</p>}
+      {result && (
+        <p className="empty-state" role="status">
+          {result}
+        </p>
+      )}
     </div>
   );
 }

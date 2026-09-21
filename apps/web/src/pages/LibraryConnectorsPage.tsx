@@ -12,6 +12,7 @@ import type {
 // The music and video sections are deliberately selected independently: one
 // seeds Discover, while the other contains vidarr's organized video files.
 function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind: 'music' | 'video' }) {
+  const pickerLabel = `${kind === 'music' ? 'Music' : 'Music video'} library for ${connector.name}`;
   const queryClient = useQueryClient();
   const [sections, setSections] = useState<LibrarySection[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,11 +58,11 @@ function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind:
   if (!sections) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <button className="secondary" onClick={loadSections} disabled={loading}>
+        <button className="secondary" onClick={loadSections} disabled={loading} aria-label={pickerLabel}>
           {loading ? 'Loading…' : selectedId ? `Library #${selectedId}` : 'Choose…'}
         </button>
         {error && (
-          <span className="empty-state" style={{ padding: 0 }} title={error}>
+          <span className="empty-state" style={{ padding: 0 }} title={error} role="status">
             Failed to load libraries
           </span>
         )}
@@ -73,6 +74,7 @@ function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind:
     <select
       value={selectedId ?? ''}
       onChange={(e) => updateConnector.mutate(e.target.value)}
+      aria-label={pickerLabel}
     >
       <option value="">Select {kind === 'music' ? 'music' : 'music video'} library…</option>
       {visibleSections?.map((s) => (
@@ -153,9 +155,10 @@ function ConnectorRow({
       <tr>
         <td colSpan={8}>
           <div className="form-row" style={{ flexWrap: 'wrap' }}>
-            <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input placeholder="Name" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
             <input
               placeholder="Host, e.g. http://192.168.1.10:8096"
+              aria-label="Host"
               value={host}
               onChange={(e) => setHost(e.target.value)}
               style={{ minWidth: 220 }}
@@ -163,17 +166,24 @@ function ConnectorRow({
             {connector.type !== 'subsonic' && (
               <input
                 placeholder={`${connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key'}${connector.hasAuthToken ? ' (leave blank to keep)' : ''}`}
+                aria-label={connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key'}
                 type="password"
                 value={authToken}
                 onChange={(e) => setAuthToken(e.target.value)}
               />
             )}
             {(connector.type === 'jellyfin' || connector.type === 'subsonic') && (
-              <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              <input
+                placeholder="Username"
+                aria-label="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
             )}
             {connector.type === 'subsonic' && (
               <input
                 placeholder="New password (leave blank to keep current)"
+                aria-label="New password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -186,7 +196,11 @@ function ConnectorRow({
               Cancel
             </button>
           </div>
-          {update.isError && <p className="empty-state">{(update.error as Error).message}</p>}
+          {update.isError && (
+            <p className="empty-state" role="alert">
+              {(update.error as Error).message}
+            </p>
+          )}
         </td>
       </tr>
     );
@@ -198,7 +212,7 @@ function ConnectorRow({
         <td>{connector.name}</td>
         <td>{connector.type}</td>
         <td>{connector.host}</td>
-        <td>{status ?? connector.lastSyncStatus ?? '—'}</td>
+        <td role="status">{status ?? connector.lastSyncStatus ?? '—'}</td>
         <td>
           <LibraryPicker connector={connector} kind="music" />
         </td>
@@ -207,7 +221,7 @@ function ConnectorRow({
         </td>
         <td>
           {unmatchedVideos.length > 0 ? (
-            <button type="button" className="secondary" onClick={onToggleExpand}>
+            <button type="button" className="secondary" aria-expanded={expanded} onClick={onToggleExpand}>
               {expanded ? 'Hide' : 'Show'} {unmatchedVideos.length} unmatched
             </button>
           ) : (
@@ -216,29 +230,39 @@ function ConnectorRow({
             </span>
           )}
         </td>
-        <td style={{ display: 'flex', gap: 6 }}>
-          <button className="secondary" onClick={onTest}>
-            Test
-          </button>
-          <button className="secondary" onClick={onSync}>
-            Sync
-          </button>
-          {connector.type !== 'subsonic' && (
-            <button
-              className="secondary"
-              onClick={onSyncPlayCounts}
-              disabled={!connector.videoLibraryId}
-              title={!connector.videoLibraryId ? 'Pick a music video library first' : undefined}
-            >
-              Sync Play Counts
+        <td style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="secondary" aria-label={`Test ${connector.name}`} onClick={onTest}>
+              Test
             </button>
+            <button className="secondary" aria-label={`Sync ${connector.name}`} onClick={onSync}>
+              Sync
+            </button>
+            {connector.type !== 'subsonic' && (
+              <button
+                className="secondary"
+                aria-label={`Sync play counts for ${connector.name}`}
+                onClick={onSyncPlayCounts}
+                disabled={!connector.videoLibraryId}
+              >
+                Sync Play Counts
+              </button>
+            )}
+            <button className="secondary" aria-label={`Edit ${connector.name}`} onClick={startEditing}>
+              Edit
+            </button>
+            <button className="secondary" aria-label={`Remove ${connector.name}`} onClick={onRemove}>
+              Remove
+            </button>
+          </div>
+          {/* Visible text, not just a title tooltip on the disabled button above —
+              a keyboard/screen-reader user can't hover a disabled control to read
+              a title attribute, and this is the button's own necessary context. */}
+          {connector.type !== 'subsonic' && !connector.videoLibraryId && (
+            <span className="empty-state" style={{ padding: 0, fontSize: 12 }}>
+              Pick a music video library first to sync play counts.
+            </span>
           )}
-          <button className="secondary" onClick={startEditing}>
-            Edit
-          </button>
-          <button className="secondary" onClick={onRemove}>
-            Remove
-          </button>
         </td>
       </tr>
       {expanded && unmatchedVideos.length > 0 && (
@@ -247,7 +271,7 @@ function ConnectorRow({
             {/* Videos this connector reports as available with no corresponding
                 vidarr artist/video at all — distinct from a low-confidence match,
                 which needs the reconciliation work tracked in CHANGELOG.md. */}
-            <div className="unmatched-video-list">
+            <div className="unmatched-video-list" tabIndex={0} role="region" aria-label="Unmatched videos">
               {unmatchedVideos.map((v) => (
                 <div className="unmatched-video-row" key={v.id}>
                   <span className="title" title={v.title}>
@@ -387,9 +411,16 @@ export default function LibraryConnectorsPage() {
 
       <form className="card" onSubmit={handleSubmit}>
         <div className="form-row">
-          <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+          <input
+            placeholder="Name"
+            aria-label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
           <select
             value={type}
+            aria-label="Connector type"
             onChange={(e) => {
               setType(e.target.value as LibraryConnectorType);
               setDiscovered(null);
@@ -401,6 +432,7 @@ export default function LibraryConnectorsPage() {
           </select>
           <input
             placeholder="Host, e.g. http://192.168.1.10:32400"
+            aria-label="Host"
             value={host}
             onChange={(e) => setHost(e.target.value)}
             style={{ minWidth: 260 }}
@@ -417,6 +449,7 @@ export default function LibraryConnectorsPage() {
             {discovered.length ? (
               <select
                 defaultValue=""
+                aria-label="Discovered server"
                 onChange={(e) => {
                   const server = discovered.find((s) => s.host === e.target.value);
                   if (server) applyDiscovered(server);
@@ -442,6 +475,7 @@ export default function LibraryConnectorsPage() {
           {type !== 'subsonic' && (
           <input
               placeholder={type === 'plex' ? 'Plex token' : 'Jellyfin API key'}
+              aria-label={type === 'plex' ? 'Plex token' : 'Jellyfin API key'}
               type="password"
               value={authToken}
               onChange={(e) => setAuthToken(e.target.value)}
@@ -450,6 +484,7 @@ export default function LibraryConnectorsPage() {
           {(type === 'jellyfin' || type === 'subsonic') && (
             <input
               placeholder="Username"
+              aria-label="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
@@ -457,6 +492,7 @@ export default function LibraryConnectorsPage() {
           {type === 'subsonic' && (
             <input
               placeholder="Password"
+              aria-label="Password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

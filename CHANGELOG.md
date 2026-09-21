@@ -15,6 +15,42 @@ under **Unreleased** in the same commit as the change.
   request document gets implemented: read it, echo the request back in plain language before
   writing code, size it up and phase it if large, then verify and document once it lands.
 
+### Fixed — accessibility audit
+
+The Phase 1 plan named "a full accessibility audit beyond what Phase 1's new components establish
+on their own" as deferred work. A dimension-by-dimension audit across every page found and fixed:
+
+- **Contrast**: solid buttons' white-on-accent text measured ~3.2:1 against WCAG's 4.5:1 minimum —
+  button fills now use a separate, darker `--button-bg` token (~5:1). Input, select, and secondary
+  button borders measured ~1.2-1.4:1 against their background (WCAG requires 3:1 for a UI control's
+  boundary) — they now use `--text-muted` instead of the (still fine for purely decorative use)
+  `--border` token. The Library page's active letter-rail highlight measured ~4.4:1 for its 11px
+  text — its background tint is now lighter (darker composite) to clear 4.5:1. A batch-import
+  group's card background matched the page background, leaving only the low-contrast border to show
+  its boundary — the override is removed so it uses the normal, visible card background.
+- **Form labels**: dozens of inputs and selects across Library, Library Connectors, Indexers,
+  Download Clients, Quality Profiles, Root Folders, Playlists, Import, and Settings relied on
+  `placeholder` text alone, which isn't an accessible name and disappears once a value is entered.
+  All now have an explicit `aria-label` (or `<label>`).
+- **Status announcements**: sync/test/save/search results across nearly every page (connector
+  test/sync, indexer/download-client test, playlist generation and push, bulk import, artist
+  metadata refresh, genre match, provider save, owner-account save) updated on screen with no
+  `aria-live`/`role="status"`/`role="alert"`, so a screen-reader user had no way to know an action
+  they triggered had finished, or what happened. The main Settings form and the recommendation
+  provider rows previously gave no save feedback to anyone, sighted or not — they now show "Saved."
+  or the failure reason.
+- **Structural fixes**: the sidebar's primary navigation is now a real, named (`aria-label="Primary"`)
+  list instead of a flat, unnamed run of links; the Library artist list's `role="list"` now has
+  matching `role="listitem"` children; the playlist-generator's two match-mode radios now share a
+  `name` so they behave as a real radio group; disclosure buttons (Library artist rows, Library
+  Connectors' unmatched-videos toggle, a playlist's "Add videos" panel) now expose `aria-expanded`;
+  repeated same-label buttons (Run Now, Save, Test, Edit, Remove, Dismiss, Add to Library, and more)
+  now carry a per-row `aria-label` so they're distinguishable when a screen reader lists all buttons
+  on a page; empty table header cells for an actions column now have visually-hidden text; two
+  video-monitor checkboxes' accessible names dropped their own visible "Monitored" label text
+  (WCAG 2.5.3); a disabled button's only explanation lived in a `title` tooltip in two places (Sync
+  Play Counts, Push to library) — both now also show the reason as plain visible text.
+
 ### Changed
 
 - The Library page no longer shows a flat grid of every media-server video. A video's media-server

@@ -124,7 +124,7 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
               type="checkbox"
               checked={mv.monitored}
               onChange={(e) => toggleVideoMonitored.mutate({ id: mv.id, monitored: e.target.checked })}
-              aria-label={`${mv.monitored ? 'Unmonitor' : 'Monitor'} ${mv.title}`}
+              aria-label={`Monitored — ${mv.monitored ? 'unmonitor' : 'monitor'} ${mv.title}`}
             />
             Monitored
           </label>
@@ -151,7 +151,7 @@ function ArtistRow({
   onMonitorChange: (id: number, monitored: boolean) => void;
 }) {
   return (
-    <div className="artist-row">
+    <div className="artist-row" role="listitem">
       <div className="artist-row-header">
         <input
           type="checkbox"
@@ -182,6 +182,7 @@ function ArtistRow({
               type="checkbox"
               checked={artist.monitored}
               onChange={(e) => onMonitorChange(artist.id, e.target.checked)}
+              aria-label={`Monitored — ${artist.name}`}
             />
             Monitored
           </label>
@@ -306,7 +307,12 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
   }
 
   const rootFolderSelect = (
-    <select value={rootFolderId} onChange={(e) => setRootFolderId(Number(e.target.value))} required>
+    <select
+      value={rootFolderId}
+      onChange={(e) => setRootFolderId(Number(e.target.value))}
+      aria-label="Root folder"
+      required
+    >
       <option value="">Root folder…</option>
       {rootFolders.data?.map((rf) => (
         <option key={rf.id} value={rf.id}>
@@ -320,6 +326,7 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
     <select
       value={qualityProfileId}
       onChange={(e) => setQualityProfileId(Number(e.target.value))}
+      aria-label="Quality profile"
       required
     >
       <option value="">Quality profile…</option>
@@ -337,6 +344,7 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
         <button
           type="button"
           className={mode === 'imvdb' ? '' : 'secondary'}
+          aria-pressed={mode === 'imvdb'}
           onClick={() => setMode('imvdb')}
         >
           Search IMVDb
@@ -344,6 +352,7 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
         <button
           type="button"
           className={mode === 'manual' ? '' : 'secondary'}
+          aria-pressed={mode === 'manual'}
           onClick={() => setMode('manual')}
         >
           Add manually
@@ -365,7 +374,7 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
           </form>
 
           {searchError && (
-            <p className="empty-state">
+            <p className="empty-state" role="status">
               {searchError} (add your IMVDb API key in Settings if you haven't yet)
             </p>
           )}
@@ -391,7 +400,7 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
 
           {selected && (
             <>
-              <p className="empty-state">
+              <p className="empty-state" role="status">
                 {selected.name} —{' '}
                 {loadingVideos ? 'looking up videos…' : `${candidateVideos.length} video(s) found on IMVDb`}
               </p>
