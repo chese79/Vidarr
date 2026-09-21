@@ -174,6 +174,20 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             video.id,
           ]),
         );
+        // A prior sync's match must never be silently dropped just because
+        // *this* sync's exact-key lookup misses (an artist/video rename
+        // upstream, for instance) — without this, every LibraryVideo's
+        // musicVideoId was previously recomputed from scratch on every sync
+        // with no "keep what we already had" fallback, so a good match could
+        // revert to unmatched with no signal that it happened. A genuinely
+        // new match found this sync still always wins.
+        const existingMatches = await prisma.libraryVideo.findMany({
+          where: { connectorId: id },
+          select: { externalId: true, musicVideoId: true },
+        });
+        const previousMatchByExternalId = new Map(
+          existingMatches.map((v) => [v.externalId, v.musicVideoId]),
+        );
         // The "mark everything stale, then re-mark what's still there" reset
         // must be one atomic transaction — if it were two separate
         // statements and anything after the reset threw (a bad title from
@@ -199,7 +213,10 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
                 hasThumbnail: video.hasThumbnail ?? false,
                 available: true,
                 lastSyncedAt: new Date(),
-                musicVideoId: canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ?? null,
+                musicVideoId:
+                  canonicalByName.get(`${normalizedArtistName}::${normalizedTitle}`) ??
+                  previousMatchByExternalId.get(video.externalId) ??
+                  null,
               },
               create: {
                 connectorId: id,

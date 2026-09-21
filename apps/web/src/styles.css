@@ -449,6 +449,21 @@ select {
 
 .status-chip.available { color: var(--status-downloading); }
 .status-chip.missing { color: var(--status-missing); }
+/* Acquisition/ignore chips (Phase 2a video-state model) — reuse the existing
+   token set rather than adding new colors: ownership itself stays
+   available/missing above; these three are always independent, additive
+   badges (a video can be `available` AND show a stale `failed` chip from a
+   prior attempt, which is exactly why they're separate chips, not one
+   collapsed status). */
+.status-chip.downloading { color: var(--status-queued); }
+.status-chip.failed { color: var(--status-failed); }
+.status-chip.ignored { color: var(--status-review); }
+
+.video-status-row {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0;
+}
 
 /* Artist Detail page: a video's media-server matches (moved here from the
    old whole-catalog grid on the Library page — see CHANGELOG). Each match is

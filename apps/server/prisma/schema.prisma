@@ -45,6 +45,11 @@ model MusicVideo {
   director       String?
   genre          String? // user-editable "song tag" — see Artist.genre
   monitored      Boolean  @default(true)
+  // Independent of `monitored`: an explicit "don't act on this one" that
+  // always blocks acquisition (even a deliberate manual grab), whereas
+  // `monitored` only gates automatic backlog/upgrade search — see
+  // pipeline/videoStatus.ts.
+  ignored        Boolean  @default(false)
   hasFile        Boolean  @default(false)
   thumbnailUrl   String?
   addedAt        DateTime @default(now())

@@ -151,6 +151,7 @@ export const MusicVideoSchema = z.object({
   director: z.string().nullable(),
   genre: z.string().nullable(),
   monitored: z.boolean(),
+  ignored: z.boolean(),
   hasFile: z.boolean(),
   thumbnailUrl: z.string().nullable(),
   addedAt: z.string(),
@@ -166,9 +167,40 @@ export const CreateMusicVideoSchema = z.object({
   director: z.string().nullable().optional(),
   genre: z.string().nullable().optional(),
   monitored: z.boolean().default(true),
+  // Independent of `monitored` — see the schema.prisma comment on
+  // MusicVideo.ignored and pipeline/videoStatus.ts for how the two combine.
+  ignored: z.boolean().default(false),
   thumbnailUrl: z.string().nullable().optional(),
 });
 export type CreateMusicVideo = z.infer<typeof CreateMusicVideoSchema>;
+
+// --- Video ownership/acquisition state (Phase 2a) ---
+
+// Whether Vidarr has the file locally, it's available on a synced media
+// server, both, or neither — kept distinct from acquisition progress and
+// match confidence per the request doc's "must not be collapsed into one
+// misleading boolean" requirement. See pipeline/videoStatus.ts.
+export const VideoOwnership = z.enum(['local', 'server', 'both', 'none']);
+export type VideoOwnership = z.infer<typeof VideoOwnership>;
+
+// Active/most-recent DownloadQueueItem state for a video, or null when there
+// is none. 'queued' and 'importing' are deliberately not modeled — see the
+// Phase 2a plan Context for why (the DB status value is never actually
+// written for the former; the latter resolves synchronously in seconds).
+export const VideoAcquisition = z.enum(['downloading', 'failed']).nullable();
+export type VideoAcquisition = z.infer<typeof VideoAcquisition>;
+
+export const VideoStatusSchema = z.object({
+  ownership: VideoOwnership,
+  acquisition: VideoAcquisition,
+  // True only when an automatic backlog/upgrade search would attempt this
+  // video right now: video + artist both monitored, not ignored, not
+  // already owned, and no active download. A manual single-video grab is
+  // allowed even when this is false (see pipeline/videoStatus.ts) — it only
+  // ever respects `ignored` and an active download, never `monitored`.
+  eligibleForAutoSearch: z.boolean(),
+});
+export type VideoStatus = z.infer<typeof VideoStatusSchema>;
 
 export const UpdateMusicVideoSchema = CreateMusicVideoSchema.omit({ artistId: true }).partial();
 export type UpdateMusicVideo = z.infer<typeof UpdateMusicVideoSchema>;

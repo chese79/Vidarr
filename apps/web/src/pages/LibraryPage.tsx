@@ -2,10 +2,20 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import type { ArtistSummary, ImvdbArtist, ImvdbVideoCandidate } from '@vidarr/shared-types';
+import type { ArtistSummary, ImvdbArtist, ImvdbVideoCandidate, VideoOwnership } from '@vidarr/shared-types';
 
 const RAIL_LETTERS = ['#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
 const PAGE_SIZE = 25;
+
+// Matches ArtistDetailPage.tsx's OWNERSHIP_LABEL — kept local to each page
+// rather than centralized, following this codebase's existing pattern for
+// small presentation-only label maps (e.g. Discover's SOURCE_LABEL).
+const OWNERSHIP_LABEL: Record<VideoOwnership, string> = {
+  both: 'Local + Server',
+  local: 'Local',
+  server: 'On Server',
+  none: 'Missing',
+};
 
 function ArtistImage({ artist }: { artist: ArtistSummary }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -87,6 +97,12 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
   });
 
+  const toggleVideoIgnored = useMutation({
+    mutationFn: ({ id, ignored }: { id: number; ignored: boolean }) =>
+      api.musicVideos.update(id, { ignored }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+  });
+
   if (isLoading) {
     return (
       <div className="artist-accordion" role="region" aria-label="Videos">
@@ -116,9 +132,14 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
           <span className="title" title={mv.title}>
             {mv.title}
           </span>
-          <span className={`status-chip ${mv.hasFile ? 'available' : 'missing'}`}>
-            {mv.hasFile ? 'Available' : 'Missing'}
+          <span className={`status-chip ${mv.status.ownership === 'none' ? 'missing' : 'available'}`}>
+            {OWNERSHIP_LABEL[mv.status.ownership]}
           </span>
+          {mv.status.acquisition === 'downloading' && (
+            <span className="status-chip downloading">Downloading</span>
+          )}
+          {mv.status.acquisition === 'failed' && <span className="status-chip failed">Failed</span>}
+          {mv.ignored && <span className="status-chip ignored">Ignored</span>}
           <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
             <input
               type="checkbox"
@@ -127,6 +148,15 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
               aria-label={`Monitored — ${mv.monitored ? 'unmonitor' : 'monitor'} ${mv.title}`}
             />
             Monitored
+          </label>
+          <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
+            <input
+              type="checkbox"
+              checked={mv.ignored}
+              onChange={(e) => toggleVideoIgnored.mutate({ id: mv.id, ignored: e.target.checked })}
+              aria-label={`Ignored — ${mv.ignored ? 'un-ignore' : 'ignore'} ${mv.title}`}
+            />
+            Ignored
           </label>
           <Link to={`/artist/${artistId}`}>Details</Link>
         </div>
@@ -277,6 +307,7 @@ function AddArtistForm({ onDone }: { onDone: () => void }) {
           // rest of the artist's videos from being added.
           youtubeVideoId: video.youtubeVideoId ?? undefined,
           monitored: true,
+          ignored: false, // matches the schema default — see AddArtistForm's artist-create call above
         });
       } catch {
         // skip this one video (e.g. a rare youtubeVideoId collision) and keep going

@@ -85,6 +85,9 @@ export async function createMusicVideo(
     releaseYear: number | null;
     genre: string | null;
     hasFile: boolean;
+    monitored: boolean;
+    ignored: boolean;
+    youtubeVideoId: string | null;
   }> = {},
 ) {
   return prisma.musicVideo.create({
@@ -95,6 +98,9 @@ export async function createMusicVideo(
       releaseYear: overrides.releaseYear ?? null,
       genre: overrides.genre ?? null,
       hasFile: overrides.hasFile ?? false,
+      monitored: overrides.monitored ?? true,
+      ignored: overrides.ignored ?? false,
+      youtubeVideoId: overrides.youtubeVideoId ?? null,
     },
   });
 }

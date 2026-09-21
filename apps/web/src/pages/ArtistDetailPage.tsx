@@ -3,7 +3,20 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
-import type { YoutubeSourceType, IndexerSearchResult, MusicVideo, MatchedLibraryVideo } from '@vidarr/shared-types';
+import type {
+  YoutubeSourceType,
+  IndexerSearchResult,
+  MusicVideo,
+  MatchedLibraryVideo,
+  VideoOwnership,
+} from '@vidarr/shared-types';
+
+const OWNERSHIP_LABEL: Record<VideoOwnership, string> = {
+  both: 'Local + Server',
+  local: 'Local',
+  server: 'On Server',
+  none: 'Missing',
+};
 
 // A compact screenshot for one of a video's media-server matches — same
 // blob-proxy pattern as LibraryPage's LibraryVideoThumbnail (the endpoint
@@ -295,6 +308,12 @@ export default function ArtistDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
   });
 
+  const toggleVideoIgnored = useMutation({
+    mutationFn: ({ id, ignored }: { id: number; ignored: boolean }) =>
+      api.musicVideos.update(id, { ignored }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+  });
+
   const createVideo = useMutation({
     mutationFn: api.musicVideos.create,
     onSuccess: () => {
@@ -313,6 +332,11 @@ export default function ArtistDetailPage() {
       artistId,
       title,
       monitored: true,
+      // Matches the schema default — spelled out explicitly since the
+      // generated type still requires it even though the API applies the
+      // same default itself when omitted (same z.infer quirk as `monitored`
+      // elsewhere in this codebase).
+      ignored: false,
       releaseYear: releaseYear ? Number(releaseYear) : undefined,
       genre: videoGenre || undefined,
     });
@@ -485,7 +509,27 @@ export default function ArtistDetailPage() {
                     />
                     Monitored
                   </label>
-                  · {mv.hasFile ? 'Downloaded' : 'Wanted'}
+                  <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={mv.ignored}
+                      onChange={(e) =>
+                        toggleVideoIgnored.mutate({ id: mv.id, ignored: e.target.checked })
+                      }
+                      aria-label={`Ignored — ${mv.ignored ? 'un-ignore' : 'ignore'} ${mv.title}`}
+                    />
+                    Ignored
+                  </label>
+                </div>
+                <div className="video-status-row">
+                  <span className={`status-chip ${mv.status.ownership === 'none' ? 'missing' : 'available'}`}>
+                    {OWNERSHIP_LABEL[mv.status.ownership]}
+                  </span>
+                  {mv.status.acquisition === 'downloading' && (
+                    <span className="status-chip downloading">Downloading</span>
+                  )}
+                  {mv.status.acquisition === 'failed' && <span className="status-chip failed">Failed</span>}
+                  {mv.ignored && <span className="status-chip ignored">Ignored</span>}
                 </div>
                 {mv.libraryVideos.length > 0 && (
                   <div className="matched-video-row">
@@ -503,15 +547,27 @@ export default function ArtistDetailPage() {
               </div>
               <div className="video-actions">
                 {grabStatus[mv.id] && <span role="status">{grabStatus[mv.id]}</span>}
-                {!mv.hasFile && mv.youtubeVideoId && (
-                  <button className="secondary" onClick={() => handleGrab(mv.id)}>
-                    Grab
-                  </button>
+                {!mv.hasFile && mv.status.acquisition !== 'downloading' && !mv.ignored && (
+                  <>
+                    {mv.youtubeVideoId && (
+                      <button className="secondary" onClick={() => handleGrab(mv.id)}>
+                        Grab
+                      </button>
+                    )}
+                    <button className="secondary" onClick={() => setSearchingVideo(mv)}>
+                      Search
+                    </button>
+                  </>
                 )}
-                {!mv.hasFile && (
-                  <button className="secondary" onClick={() => setSearchingVideo(mv)}>
-                    Search
-                  </button>
+                {!mv.hasFile && mv.ignored && (
+                  <span className="empty-state" style={{ padding: 0, fontSize: 12 }}>
+                    Ignored — un-ignore to search or grab.
+                  </span>
+                )}
+                {!mv.hasFile && !mv.ignored && mv.status.acquisition === 'downloading' && (
+                  <span className="empty-state" style={{ padding: 0, fontSize: 12 }}>
+                    Already downloading.
+                  </span>
                 )}
               </div>
             </div>

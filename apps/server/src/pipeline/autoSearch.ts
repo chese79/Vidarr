@@ -2,6 +2,7 @@ import { prisma, logActivity } from '../db/client.js';
 import { searchAllIndexers } from './search.js';
 import { grabFromIndexer, grabYoutubeVideo } from './grab.js';
 import { findYoutubeMatch } from './youtubeMatch.js';
+import { hasActiveDownload } from './videoStatus.js';
 
 export interface AutoSearchOutcome {
   musicVideoId: number;
@@ -33,6 +34,19 @@ export async function autoSearchAndGrab(
       },
     },
   });
+
+  // These two checks apply no matter which caller reached this function
+  // (backlog search, quality upgrade, or a manual "search selected" bulk
+  // action) — unlike "owned by a monitored artist" or "already missing",
+  // which mean different things depending on the caller (a quality-upgrade
+  // candidate is *expected* to already have a file, for instance) and so are
+  // filtered by each caller's own candidate query instead of here.
+  if (musicVideo.ignored) {
+    return { musicVideoId, grabbed: false, reason: 'Video is ignored' };
+  }
+  if (await hasActiveDownload(musicVideoId)) {
+    return { musicVideoId, grabbed: false, reason: 'Already downloading' };
+  }
 
   const allowedQualities = new Map(
     musicVideo.artist.qualityProfile.items
@@ -107,9 +121,22 @@ export async function autoSearchAndGrab(
   return { musicVideoId, grabbed: true, reason: `Grabbed ${best.quality} from ${best.indexerName}` };
 }
 
+// The full "eligible for automatic search" gate — narrower than
+// autoSearchAndGrab's own ignored/active-download checks, since this is the
+// one caller where "owned by a monitored artist" and "not already available
+// anywhere" actually apply (a manual bulk-search or a quality-upgrade
+// candidate legitimately has a file already, so those checks live only
+// here, not inside the shared grab function).
 export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: number }> {
   const wanted = await prisma.musicVideo.findMany({
-    where: { monitored: true, hasFile: false },
+    where: {
+      monitored: true,
+      ignored: false,
+      hasFile: false,
+      artist: { monitored: true },
+      libraryVideos: { none: { available: true } },
+      queueItems: { none: { status: { in: ['queued', 'downloading'] } } },
+    },
     select: { id: true },
   });
 

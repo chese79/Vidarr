@@ -12,6 +12,7 @@ import { refreshArtistMetadata } from '../pipeline/metadataRefresh.js';
 import { matchStandardGenre } from '../pipeline/genreMatch.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
+import { computeVideoStatus } from '../pipeline/videoStatus.js';
 
 // Escapes SQLite LIKE's own wildcards so a search term containing "%" or "_"
 // is matched literally rather than as a pattern.
@@ -272,17 +273,33 @@ export async function artistRoutes(app: FastifyInstance) {
               where: { available: true },
               select: {
                 id: true,
+                available: true,
                 hasThumbnail: true,
                 playCount: true,
                 connector: { select: { name: true, type: true } },
               },
             },
+            queueItems: { select: { status: true } },
           },
         },
       },
     });
     if (!artist) return reply.code(404).send({ error: 'Artist not found' });
-    return artist;
+
+    return {
+      ...artist,
+      musicVideos: artist.musicVideos.map((mv) => ({
+        ...mv,
+        status: computeVideoStatus({
+          hasFile: mv.hasFile,
+          monitored: mv.monitored,
+          ignored: mv.ignored,
+          artistMonitored: artist.monitored,
+          libraryVideos: mv.libraryVideos,
+          queueItems: mv.queueItems,
+        }),
+      })),
+    };
   });
 
   app.post('/api/v1/artist', async (req, reply) => {

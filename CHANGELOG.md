@@ -5,6 +5,50 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — video ownership/acquisition state ("Phase 2a")
+
+Picks up the next item from Phase 1's deferred list: the video-state model and Artist Detail page
+rework, plus real search-eligibility gating and duplicate-queue-entry prevention (both explicitly
+named in the request doc, and confirmed by research for this phase to be completely unenforced
+today). Deliberately does **not** build the request doc's full 12-value state enum — see the
+"Known gaps" note below for why, and what's still deferred.
+
+- Each video on the Artist Detail page and in the Library accordion now shows real status badges —
+  ownership (Local / On Server / Local + Server / Missing), an active download or a past failure,
+  and an ignored flag — instead of the old flat "Downloaded"/"Wanted" text.
+- Added a per-video **Ignore** toggle, independent of Monitor: an ignored video is always skipped by
+  automatic search (even if monitored), and manual Search/Grab are disabled with a stated reason.
+  Unlike Monitor, Ignore is never bypassed by a manual action — it means "don't touch this one."
+- The scheduled backlog search now also checks that a video's **artist** is monitored, not just the
+  video itself — previously an individually-monitored video on an unmonitored artist was still
+  auto-searched, which contradicted the artist-level monitor toggle's whole purpose.
+- A video that's already actively downloading, or already available locally or on a synced media
+  server, is no longer picked up by automatic search again.
+- Grabbing a release (automatic or manual) now refuses to start a second download for a video that
+  already has one in progress — previously nothing prevented two overlapping grabs (a manual click
+  racing the scheduled backlog job, for instance) from creating duplicate queue entries.
+- Fixed a correctness bug in the Plex/Jellyfin sync's artist/video matching: a video's match to the
+  vidarr catalog was being recomputed from scratch on every single sync, so a previously-good match
+  would silently revert to unmatched the moment an artist or video title changed on either side, with
+  no signal that it happened. A sync now only overwrites a match when it finds a genuinely new one.
+
+### Known gaps against `docs/requests/2026-09-19-ui-enhance.md` (tracked for a later phase)
+
+- The request doc lists twelve video states in one enum, but also says availability, acquisition,
+  monitoring, and match quality "must not be collapsed into one misleading boolean" — which a single
+  12-value enum would itself do (a video can be available on the server *and* show a stale failed
+  download from an earlier attempt at a better copy; one enum value can't represent both). This phase
+  computes ownership/acquisition/ignored as independent facts instead. Three states from the doc's
+  list are still not built: `searching` (stays ephemeral, client-side-only state during an active
+  search click), `queued` (the download-queue status value is never actually written by any code path
+  today — a grab goes straight to `downloading` once the client accepts it), and
+  `awaiting-server-scan` (would need new timestamp-comparison logic).
+- Confidence-classified reconciliation (confident/probable/ambiguous/unmatched) is still fully
+  deferred — this phase only fixed the *existing* exact-match system so it stops silently dropping
+  good matches; it does not add probable/ambiguous tiers.
+- Provider-neutral acquisition source records and YouTube/VEVO content validation beyond today's
+  title/channel heuristic remain fully deferred, unchanged from before this phase.
+
 ### Resolved without new work
 
 - The Phase 1 plan deferred "true virtualization for thousands of artists" as a follow-up to real

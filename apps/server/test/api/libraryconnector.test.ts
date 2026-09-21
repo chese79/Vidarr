@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
-import { resetDb, ensureSettings, createLibraryConnector } from '../support/db.js';
+import {
+  resetDb,
+  ensureSettings,
+  createLibraryConnector,
+  createRootFolder,
+  createQuality,
+  createQualityProfile,
+  createArtist,
+  createMusicVideo,
+} from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
 import { prisma } from '../../src/db/client.js';
 
@@ -290,6 +299,124 @@ describe('libraryconnector routes', () => {
       where: { connectorId_externalId: { connectorId: connector.id, externalId: 'v1' } },
     });
     expect(video?.available).toBe(true);
+  });
+
+  it('preserves an existing LibraryVideo match across a sync where the title no longer resolves the exact-match key', async () => {
+    const rootFolder = await createRootFolder();
+    const quality = await createQuality();
+    const qualityProfile = await createQualityProfile(quality.id);
+    const artist = await createArtist(rootFolder.id, qualityProfile.id, { name: 'Test Artist' });
+    const video = await createMusicVideo(artist.id, { title: 'Original Title' });
+
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { userId: 'user-1', musicLibraryId: 'music-1', videoLibraryId: 'video-1' },
+    });
+
+    const artistsPage = { ok: true, status: 200, json: async () => ({ Items: [] }) };
+    const firstVideosPage = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        Items: [{ Id: 'ext-1', Name: 'Original Title', Artists: ['Test Artist'] }],
+        TotalRecordCount: 1,
+      }),
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(artistsPage).mockResolvedValueOnce(firstVideosPage));
+
+    const first = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/sync`,
+      headers: authHeaders(),
+    });
+    expect(first.statusCode).toBe(200);
+
+    const afterFirstSync = await prisma.libraryVideo.findUnique({
+      where: { connectorId_externalId: { connectorId: connector.id, externalId: 'ext-1' } },
+    });
+    expect(afterFirstSync?.musicVideoId).toBe(video.id);
+
+    // Second sync: same externalId, but the title reported by the server no
+    // longer matches (a rename upstream) — the exact-match key now misses.
+    const secondVideosPage = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        Items: [{ Id: 'ext-1', Name: 'Renamed Title', Artists: ['Test Artist'] }],
+        TotalRecordCount: 1,
+      }),
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(artistsPage).mockResolvedValueOnce(secondVideosPage));
+
+    const second = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/sync`,
+      headers: authHeaders(),
+    });
+    expect(second.statusCode).toBe(200);
+
+    const afterSecondSync = await prisma.libraryVideo.findUnique({
+      where: { connectorId_externalId: { connectorId: connector.id, externalId: 'ext-1' } },
+    });
+    // The previous match must be preserved, not silently dropped to null.
+    expect(afterSecondSync?.musicVideoId).toBe(video.id);
+    expect(afterSecondSync?.title).toBe('Renamed Title'); // other fields still refresh normally
+  });
+
+  it('a genuinely new match found this sync still overrides a stale previous one', async () => {
+    const rootFolder = await createRootFolder();
+    const quality = await createQuality();
+    const qualityProfile = await createQualityProfile(quality.id);
+    const artist = await createArtist(rootFolder.id, qualityProfile.id, { name: 'Test Artist' });
+    const oldVideo = await createMusicVideo(artist.id, { title: 'Old Match' });
+    const newVideo = await createMusicVideo(artist.id, { title: 'New Match' });
+
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { userId: 'user-1', musicLibraryId: 'music-1', videoLibraryId: 'video-1' },
+    });
+    // Seed a prior match directly, as if an earlier sync had matched to the old video.
+    await prisma.libraryVideo.create({
+      data: {
+        connectorId: connector.id,
+        externalId: 'ext-2',
+        title: 'New Match',
+        normalizedTitle: 'new match',
+        artistName: 'Test Artist',
+        normalizedArtistName: 'test artist',
+        available: true,
+        musicVideoId: oldVideo.id,
+      },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ Items: [] }) })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            Items: [{ Id: 'ext-2', Name: 'New Match', Artists: ['Test Artist'] }],
+            TotalRecordCount: 1,
+          }),
+        }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/sync`,
+      headers: authHeaders(),
+    });
+    expect(res.statusCode).toBe(200);
+
+    const updated = await prisma.libraryVideo.findUnique({
+      where: { connectorId_externalId: { connectorId: connector.id, externalId: 'ext-2' } },
+    });
+    expect(updated?.musicVideoId).toBe(newVideo.id);
   });
 
   it('POST /api/v1/libraryconnector/:id/sync-play-counts propagates a real error as 502, not 500', async () => {

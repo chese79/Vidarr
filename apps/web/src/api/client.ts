@@ -58,6 +58,7 @@ import type {
   ArtistSummaryList,
   BulkMonitorArtistsResult,
   MatchedLibraryVideo,
+  VideoStatus,
 } from '@vidarr/shared-types';
 
 export interface ArtistSummaryParams {
@@ -138,9 +139,11 @@ export const api = {
   artists: {
     list: () => request<Artist[]>('/artist'),
     get: (id: number) =>
-      request<Artist & { musicVideos: (MusicVideo & { libraryVideos: MatchedLibraryVideo[] })[] }>(
-        `/artist/${id}`,
-      ),
+      request<
+        Artist & {
+          musicVideos: (MusicVideo & { libraryVideos: MatchedLibraryVideo[]; status: VideoStatus })[];
+        }
+      >(`/artist/${id}`),
     create: (data: CreateArtist) =>
       request<Artist>('/artist', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: UpdateArtist) =>

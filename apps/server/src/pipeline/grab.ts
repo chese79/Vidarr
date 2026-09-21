@@ -7,6 +7,7 @@ import { getDownloadClientProvider } from '../providers/downloadclient/index.js'
 import { importDownloadedFile, type ImportResult } from './import.js';
 import { locateVideoFile } from './locateVideoFile.js';
 import { assertIsRealMusicVideo } from './validateVideoFile.js';
+import { hasActiveDownload } from './videoStatus.js';
 
 const STAGING_DIR = process.env.STAGING_DIR ?? path.join(os.tmpdir(), 'vidarr-staging');
 
@@ -14,6 +15,13 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
   const musicVideo = await prisma.musicVideo.findUniqueOrThrow({ where: { id: musicVideoId } });
   if (!musicVideo.youtubeVideoId) {
     throw new Error('This music video has no linked YouTube source.');
+  }
+  // Guards manual grabs too (musicvideo.ts's /grab and /grab-release call
+  // these functions directly, bypassing autoSearchAndGrab's own check) — no
+  // call site should ever be able to create a second live queue row for the
+  // same video.
+  if (await hasActiveDownload(musicVideoId)) {
+    throw new Error('This video already has an active download.');
   }
 
   const queueItem = await prisma.downloadQueueItem.create({
@@ -68,6 +76,12 @@ export async function grabFromIndexer(
   downloadUrl: string,
   quality: string,
 ): Promise<void> {
+  // Checked before contacting the download client at all — no point handing
+  // it a redundant job we're about to reject.
+  if (await hasActiveDownload(musicVideoId)) {
+    throw new Error('This video already has an active download.');
+  }
+
   const client = await prisma.downloadClient.findUniqueOrThrow({ where: { id: downloadClientId } });
   const category = client.category || 'vidarr';
   const provider = getDownloadClientProvider(client.implementation);
