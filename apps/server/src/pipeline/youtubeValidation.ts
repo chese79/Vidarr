@@ -48,7 +48,7 @@ const COVER_PATTERN =
 // fetch the caller already did. 'review' means neither a strong positive
 // nor negative signal fired; the caller decides whether to escalate to
 // resolveReview() below or just hold it.
-export function classifyCandidate(metadata: YoutubeVideoMetadata): ClassificationResult {
+export function classifyCandidate(metadata: YoutubeVideoMetadata, expectedTitle?: string): ClassificationResult {
   if (TOPIC_CHANNEL.test(metadata.channel.trim())) {
     return {
       decision: 'reject',
@@ -62,7 +62,8 @@ export function classifyCandidate(metadata: YoutubeVideoMetadata): Classificatio
     };
   }
 
-  if (COVER_PATTERN.test(metadata.title.toLowerCase())) {
+  const expectedContainsCover = expectedTitle != null && /\bcover\b/.test(normalizeTitle(expectedTitle));
+  if (!expectedContainsCover && COVER_PATTERN.test(metadata.title.toLowerCase())) {
     return { decision: 'reject', reason: 'Title matches a non-official-video pattern (cover).' };
   }
 
@@ -74,7 +75,10 @@ export function classifyCandidate(metadata: YoutubeVideoMetadata): Classificatio
   }
 
   if (metadata.channelIsVerified) {
-    return { decision: 'accept', reason: 'Uploaded by a verified channel.' };
+    return {
+      decision: 'review',
+      reason: 'Verified uploader is a strong positive signal, but visual validation is still required.',
+    };
   }
 
   return { decision: 'review', reason: 'No strong positive or negative signal from title/channel/description alone.' };
@@ -112,9 +116,9 @@ export async function resolveReview(youtubeVideoId: string): Promise<Classificat
 // Full orchestration for one already-chosen candidate: fetch its metadata,
 // classify, and escalate to the bounded sample check only for the 'review'
 // tier — the single entry point autoSearchAndGrab calls per candidate.
-export async function validateCandidate(youtubeVideoId: string): Promise<ClassificationResult> {
+export async function validateCandidate(youtubeVideoId: string, expectedTitle?: string): Promise<ClassificationResult> {
   const metadata = await getVideoMetadata(youtubeVideoId);
-  const classification = classifyCandidate(metadata);
+  const classification = classifyCandidate(metadata, expectedTitle);
   if (classification.decision !== 'review') return classification;
   return resolveReview(youtubeVideoId);
 }

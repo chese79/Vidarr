@@ -128,6 +128,12 @@ describe('computeVideoStatus', () => {
     expect(status.eligibleForAutoSearch).toBe(false);
   });
 
+  it('treats an uncertain remote submission as active and ineligible for automatic retry', () => {
+    const status = computeVideoStatus(baseInput({ queueItems: [{ status: 'submissionUnknown' }] }));
+    expect(status.acquisition).toBe('downloading');
+    expect(status.eligibleForAutoSearch).toBe(false);
+  });
+
   it('eligibleForAutoSearch: true again once a prior failed attempt is the only queue history', () => {
     // A failed attempt shouldn't permanently block future auto-search the
     // way an active download does.

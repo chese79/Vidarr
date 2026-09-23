@@ -1,7 +1,7 @@
 import { prisma } from '../db/client.js';
 import type { VideoStatus } from '@vidarr/shared-types';
 
-const ACTIVE_STATUSES = new Set(['queued', 'downloading']);
+const ACTIVE_STATUSES = new Set(['queued', 'downloading', 'submissionUnknown']);
 
 export interface VideoStatusInput {
   hasFile: boolean;
@@ -56,7 +56,7 @@ export function computeVideoStatus(input: VideoStatusInput): VideoStatus {
 // during Phase 2a research that no such check existed anywhere.
 export async function hasActiveDownload(musicVideoId: number): Promise<boolean> {
   const existing = await prisma.downloadQueueItem.findFirst({
-    where: { musicVideoId, status: { in: ['queued', 'downloading'] } },
+    where: { musicVideoId, status: { in: ['queued', 'downloading', 'submissionUnknown'] } },
     select: { id: true },
   });
   return existing != null;

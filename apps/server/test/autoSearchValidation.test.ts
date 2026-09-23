@@ -137,7 +137,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const outcome = await autoSearchAndGrab(video.id);
 
     expect(outcome.grabbed).toBe(true);
-    expect(vi.mocked(validateCandidate)).toHaveBeenCalledWith('vevo-id');
+    expect(vi.mocked(validateCandidate)).toHaveBeenCalledWith('vevo-id', 'Blinding Lights');
   });
 
   it('rejects a VEVO-tier match whose title matches a reject pattern, same as any other tier', async () => {

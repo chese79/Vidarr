@@ -113,10 +113,13 @@ export async function autoSearchAndGrab(
         // classification on its own — the request doc lists "verified
         // official/VEVO uploader" as a *positive signal* for scoring, not as
         // grounds for an automatic accept (only an IMVDb-explicit match gets
-        // that, handled above). In practice a genuine VEVO upload's channel
-        // is normally YouTube-verified too, so it still accepts immediately
-        // via classifyCandidate's channelIsVerified check.
-        const validation: ClassificationResult = await validateCandidate(match.candidate.youtubeVideoId);
+        // that, handled above). A verified uploader remains a strong positive
+        // signal, but still receives the bounded motion check so an unlabeled
+        // static-art upload cannot slip through.
+        const validation: ClassificationResult = await validateCandidate(
+          match.candidate.youtubeVideoId,
+          musicVideo.title,
+        );
 
         if (validation.decision === 'accept') {
           await prisma.musicVideo.update({
@@ -187,7 +190,7 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
       // the match's connector still be enabled — a disabled connector's
       // stale last-synced rows must not suppress search either.
       libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
-      queueItems: { none: { status: { in: ['queued', 'downloading'] } } },
+      queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown'] } } },
     },
     select: { id: true },
   });

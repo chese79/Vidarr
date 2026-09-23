@@ -166,7 +166,7 @@ model DownloadQueueItem {
   sourceRef        String
   downloadClientId Int?
   downloadClient   DownloadClient? @relation(fields: [downloadClientId], references: [id])
-  status           String // "queued" | "downloading" | "importing" | "failed"
+  status           String // "queued" | "downloading" | "submissionUnknown" | "importing" | "failed"
   progress         Float           @default(0)
   quality          String? // parsed at grab time; needed at import time since no file exists yet to read it from
   addedAt          DateTime        @default(now())

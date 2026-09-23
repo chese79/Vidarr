@@ -77,9 +77,10 @@ describe('classifyCandidate', () => {
     }
   });
 
-  it('accepts a verified channel immediately, even with no other signal', () => {
+  it('holds a verified channel for visual validation instead of accepting uploader status alone', () => {
     const result = classifyCandidate(metadata({ channelIsVerified: true }));
-    expect(result.decision).toBe('accept');
+    expect(result.decision).toBe('review');
+    expect(result.reason).toMatch(/visual validation/i);
   });
 
   it('an unverified channel with no negative signal lands in review, not accept or reject', () => {
@@ -89,6 +90,19 @@ describe('classifyCandidate', () => {
 
   it('a reject pattern takes priority over channel verification', () => {
     const result = classifyCandidate(metadata({ channelIsVerified: true, title: 'Blinding Lights (Lyrics)' }));
+    expect(result.decision).toBe('reject');
+  });
+
+  it('does not mistake a cover phrase in the canonical song title for a fan-cover marker', () => {
+    const result = classifyCandidate(
+      metadata({ title: 'The Strokes - Under Cover of Darkness (Official Video)' }),
+      'Under Cover of Darkness',
+    );
+    expect(result.decision).not.toBe('reject');
+  });
+
+  it('still rejects a cover marker when the canonical title itself does not contain cover', () => {
+    const result = classifyCandidate(metadata({ title: 'Blinding Lights - Acoustic Cover' }), 'Blinding Lights');
     expect(result.decision).toBe('reject');
   });
 });
@@ -187,5 +201,18 @@ describe('validateCandidate', () => {
     const result = await validateCandidate('abc123');
     expect(vi.mocked(ytdlp.downloadSampleClip)).toHaveBeenCalledWith('abc123', expect.any(String));
     expect(result.decision).toBe('accept');
+  });
+
+  it('runs the bounded motion check for a verified uploader too', async () => {
+    const ytdlp = await import('../src/providers/youtube/ytdlp.js');
+    const validate = await import('../src/pipeline/validateVideoFile.js');
+    vi.mocked(ytdlp.getVideoMetadata).mockResolvedValue(metadata({ channelIsVerified: true }));
+    vi.mocked(ytdlp.downloadSampleClip).mockResolvedValue('/tmp/sample.mp4');
+    vi.mocked(validate.computeFrozenFraction).mockResolvedValue(0.95);
+
+    const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
+    const result = await validateCandidate('verified-static-id', 'Blinding Lights');
+    expect(vi.mocked(ytdlp.downloadSampleClip)).toHaveBeenCalledWith('verified-static-id', expect.any(String));
+    expect(result.decision).toBe('reject');
   });
 });

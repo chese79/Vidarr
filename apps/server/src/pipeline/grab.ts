@@ -29,8 +29,8 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
   // round-trip in the common case, not the authoritative guard: two
   // concurrent calls for the same musicVideoId can each pass it before
   // either insert lands. The partial unique index added in migration
-  // 20260921045136_grab_queue_dedup_unique_index (on musicVideoId, WHERE
-  // status IN ('queued','downloading')) is what actually prevents a second
+  // 20260921045136_grab_queue_dedup_unique_index, later extended to include
+  // submissionUnknown, is what actually prevents a second
   // live row, so a P2002 here means we lost that race — surface the exact
   // same error the fast-path check above throws, so no caller can tell
   // which guard caught it.
@@ -136,11 +136,22 @@ export async function grabFromIndexer(
   try {
     handle = await provider.addDownload(client, downloadUrl, category);
   } catch (err) {
-    // addDownload() never confirmed the download was accepted, so drop the
-    // row rather than leave a "downloading" queue entry for a download that
-    // (as far as we know) was never actually sent — no dangling row should
-    // survive a failed send.
-    await prisma.downloadQueueItem.delete({ where: { id: queueItem.id } });
+    // A transport error is ambiguous: the client may have accepted the job
+    // before the response was lost. Retain the reservation so an automatic
+    // retry cannot submit a duplicate. The queue exposes this explicit state
+    // for manual reconciliation instead of pretending the request certainly
+    // failed or deleting the only local evidence of it.
+    await prisma.downloadQueueItem.update({
+      where: { id: queueItem.id },
+      data: { status: 'submissionUnknown' },
+    });
+    await prisma.history.create({
+      data: {
+        musicVideoId,
+        eventType: 'downloadSubmissionUnknown',
+        data: JSON.stringify({ error: (err as Error).message, downloadClient: client.name }),
+      },
+    });
     throw err;
   }
 

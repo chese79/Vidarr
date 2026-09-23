@@ -108,7 +108,7 @@ export async function artistRoutes(app: FastifyInstance) {
           ) THEN 1 ELSE 0 END AS "isAvailable",
           CASE WHEN EXISTS (
             SELECT 1 FROM "DownloadQueueItem" q
-            WHERE q."musicVideoId" = mv."id" AND q."status" IN ('queued', 'downloading', 'importing')
+            WHERE q."musicVideoId" = mv."id" AND q."status" IN ('queued', 'downloading', 'submissionUnknown', 'importing')
           ) THEN 1 ELSE 0 END AS "isDownloading",
           COALESCE(
             (SELECT f."playCount" FROM "MusicVideoFile" f WHERE f."musicVideoId" = mv."id"),

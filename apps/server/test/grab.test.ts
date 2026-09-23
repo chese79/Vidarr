@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import fs from 'node:fs/promises';
 import { prisma } from '../src/db/client.js';
 import { grabYoutubeVideo, grabFromIndexer } from '../src/pipeline/grab.js';
 import {
@@ -88,13 +89,30 @@ describe('duplicate-queue-entry prevention', () => {
     const items = await prisma.downloadQueueItem.findMany({ where: { musicVideoId: video.id } });
     expect(items).toHaveLength(1);
   });
+
+  it('blocks a retry while a prior download-client submission has an unknown outcome', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id);
+    await prisma.downloadQueueItem.create({
+      data: {
+        musicVideoId: video.id,
+        sourceType: 'indexer',
+        sourceRef: 'uncertain-request',
+        status: 'submissionUnknown',
+      },
+    });
+
+    await expect(
+      grabFromIndexer(video.id, 999999, 'http://example.test/retry.torrent', '1080p'),
+    ).rejects.toThrow('already has an active download');
+  });
 });
 
 // The hasActiveDownload() check-then-create in grab.ts is inherently racy on
 // its own (two calls can both pass the check before either insert lands) —
 // that's what migration 20260921045136_grab_queue_dedup_unique_index's
-// partial unique index on DownloadQueueItem(musicVideoId) WHERE status IN
-// ('queued','downloading') actually closes. These tests fire genuinely
+// partial unique index on DownloadQueueItem(musicVideoId) for every active
+// or submission-uncertain state actually closes. These tests fire genuinely
 // concurrent grabFromIndexer calls (via Promise.allSettled, not sequential
 // awaits) so the race window is real, not simulated.
 describe('grabFromIndexer — concurrent-grab dedup race', () => {
@@ -140,7 +158,7 @@ describe('grabFromIndexer — concurrent-grab dedup race', () => {
     expect(items).toHaveLength(1);
   });
 
-  it('deletes the queue row it just created, with no orphan left behind, when the download client rejects the download', async () => {
+  it('retains an explicit unknown submission when the client call fails ambiguously', async () => {
     const { getDownloadClientProvider } = await import('../src/providers/downloadclient/index.js');
     vi.mocked(getDownloadClientProvider).mockReturnValue({
       testConnection: vi.fn(),
@@ -156,14 +174,13 @@ describe('grabFromIndexer — concurrent-grab dedup race', () => {
       grabFromIndexer(video.id, client.id, 'http://example.test/release.torrent', '1080p'),
     ).rejects.toThrow('download client refused the job');
 
-    // The row was necessarily created before addDownload() was ever called
-    // (that ordering is the whole point of the fix — see grab.ts) — this
-    // asserts none of it survives the failure: no locally-unrecorded state
-    // AND no dangling "downloading" row either.
     const items = await prisma.downloadQueueItem.findMany({ where: { musicVideoId: video.id } });
-    expect(items).toHaveLength(0);
+    expect(items).toHaveLength(1);
+    expect(items[0].status).toBe('submissionUnknown');
+    expect(items[0].sourceRef).toBe('http://example.test/release.torrent');
     const history = await prisma.history.findMany({ where: { musicVideoId: video.id } });
-    expect(history).toHaveLength(0);
+    expect(history).toHaveLength(1);
+    expect(history[0].eventType).toBe('downloadSubmissionUnknown');
   });
 });
 
@@ -181,7 +198,7 @@ describe('DownloadQueueItem partial unique index (migration 20260921045136_grab_
     qualityProfileId = (await createQualityProfile(quality.id)).id;
   });
 
-  it('rejects a second row for the same musicVideoId while one is queued/downloading', async () => {
+  it('rejects a second row for the same musicVideoId while one is queued/downloading/submissionUnknown', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id);
 
@@ -197,6 +214,20 @@ describe('DownloadQueueItem partial unique index (migration 20260921045136_grab_
 
     const items = await prisma.downloadQueueItem.findMany({ where: { musicVideoId: video.id } });
     expect(items).toHaveLength(1);
+  });
+
+  it('keeps submissionUnknown under the active-job unique constraint', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id);
+    await prisma.downloadQueueItem.create({
+      data: { musicVideoId: video.id, sourceType: 'indexer', sourceRef: 'uncertain', status: 'submissionUnknown' },
+    });
+
+    await expect(
+      prisma.downloadQueueItem.create({
+        data: { musicVideoId: video.id, sourceType: 'indexer', sourceRef: 'retry', status: 'queued' },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
   });
 
   it('allows a new row once every prior row for that video is failed (the index only covers queued/downloading)', async () => {
@@ -232,5 +263,48 @@ describe('DownloadQueueItem partial unique index (migration 20260921045136_grab_
         data: { musicVideoId: videoB.id, sourceType: 'indexer', sourceRef: 'b', status: 'downloading' },
       }),
     ).resolves.toBeDefined();
+  });
+
+  it('reconciles duplicate legacy active rows before installing the unique index', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id);
+    const finalIndexSql = `CREATE UNIQUE INDEX "DownloadQueueItem_active_musicVideoId_key"
+      ON "DownloadQueueItem"("musicVideoId")
+      WHERE "status" IN ('queued', 'downloading', 'submissionUnknown')`;
+
+    await prisma.$executeRawUnsafe('DROP INDEX "DownloadQueueItem_active_musicVideoId_key"');
+    try {
+      const older = await prisma.downloadQueueItem.create({
+        data: { musicVideoId: video.id, sourceType: 'indexer', sourceRef: 'older', status: 'downloading' },
+      });
+      const newer = await prisma.downloadQueueItem.create({
+        data: { musicVideoId: video.id, sourceType: 'indexer', sourceRef: 'newer', status: 'queued' },
+      });
+
+      const migrationUrl = new URL(
+        '../prisma/migrations/20260921045135_reconcile_duplicate_active_downloads/migration.sql',
+        import.meta.url,
+      );
+      const migrationSql = (await fs.readFile(migrationUrl, 'utf8'))
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('--'))
+        .join('\n')
+        .trim()
+        .replace(/;$/, '');
+      await prisma.$executeRawUnsafe(migrationSql);
+      await prisma.$executeRawUnsafe(finalIndexSql);
+
+      const rows = await prisma.downloadQueueItem.findMany({
+        where: { musicVideoId: video.id },
+        orderBy: { id: 'asc' },
+      });
+      expect(rows.map((row) => [row.id, row.status])).toEqual([
+        [older.id, 'failed'],
+        [newer.id, 'queued'],
+      ]);
+    } finally {
+      await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS "DownloadQueueItem_active_musicVideoId_key"');
+      await prisma.$executeRawUnsafe(finalIndexSql);
+    }
   });
 });

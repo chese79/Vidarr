@@ -5,6 +5,20 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — follow-up acquisition and migration review
+
+- Reconcile legacy duplicate active queue rows before installing the active-download unique index,
+  preserving every row and marking older duplicate attempts failed so populated-database upgrades
+  cannot be stopped by data created by the old race condition.
+- Treat failed download-client submissions as ambiguous instead of certainly rejected: Vidarr keeps
+  a visible `submissionUnknown` queue/history record and blocks automatic retries that could submit
+  the same remote download twice.
+- Require bounded motion validation for heuristic YouTube results from verified and VEVO uploaders;
+  uploader verification remains a positive signal but no longer proves that an upload is a produced
+  music video rather than static artwork.
+- Compare cover markers with the canonical song title so legitimate titles such as “Under Cover of
+  Darkness” are not rejected while actual fan-cover suffixes remain blocked.
+
 ### Fixed — external code review findings (ownership correctness, validation bypass, race condition, SSRF)
 
 An external review of Phases 2a/2b/3 raised six issues; all six were independently verified against
@@ -32,9 +46,9 @@ covering the specific property that was broken, not just a happy-path check.
   `youtubeMatch.ts`'s VEVO-tier detection is a bare case-insensitive substring check on the channel
   name ("vevo" appearing anywhere in it), not a verified-channel or IMVDb signal, so it's spoofable
   and provided no real backstop against a lyric video, visualizer, or teaser uploaded to a
-  VEVO-named channel. Every heuristic-search candidate is now validated regardless of tier — a
-  genuine VEVO upload still accepts immediately in practice via `classifyCandidate`'s verified-channel
-  check. The IMVDb-sourced-link bypass is unchanged and is not a bug: it's the request doc's own
+  VEVO-named channel. Every heuristic-search candidate is now validated regardless of tier, including
+  bounded motion analysis even when its uploader is verified. The IMVDb-sourced-link bypass is
+  unchanged and is not a bug: it's the request doc's own
   explicit carve-out ("Accept these automatically only when IMVDb explicitly identifies the exact item
   as the official video"), now called out with a comment citing that line.
 - **Download-queue deduplication had a TOCTOU race, and `grabFromIndexer` could orphan a download.**
@@ -44,10 +58,10 @@ covering the specific property that was broken, not just a happy-path check.
   landed, creating duplicate queue rows. `grabFromIndexer` additionally sent the download to the
   external client *before* recording the queue row, so a failure in between left an actual external
   download with zero local record of it. Fixed with a database-enforced partial unique index
-  (`DownloadQueueItem(musicVideoId) WHERE status IN ('queued','downloading')`, migration
+  (`DownloadQueueItem(musicVideoId)` over all active/uncertain states, migrations
   `20260921045136_grab_queue_dedup_unique_index`) as the authoritative guard — the existing check is
-  now just a fast-path — and by reordering `grabFromIndexer` to create the queue row first, deleting
-  it if the external send then fails.
+  now just a fast-path — and by reordering `grabFromIndexer` to create the queue row first. Ambiguous
+  submission failures retain that row in `submissionUnknown` so retries cannot duplicate remote work.
 - **Image proxy's SSRF blocklist was bypassable via a single redirect.** `safeImageFetch.ts` validated
   a user-supplied poster URL against a private/reserved-address blocklist, then fetched it with
   `fetch()`'s default `redirect: 'follow'` — a 3xx response could silently retarget the request at
@@ -75,15 +89,15 @@ vanishes with no trace.
 - Before grabbing a heuristically-matched YouTube candidate, vidarr now fetches its real metadata
   (description, channel, verification status) and classifies it: an auto-generated "- Topic"
   channel, a "Provided to YouTube by..." label upload, or a title matching a lyric/karaoke/
-  visualizer/reaction/cover/live/instrumental/trailer pattern is rejected outright; a verified
-  channel is accepted immediately; anything else is inconclusive from metadata alone.
-- An inconclusive candidate is resolved by downloading a bounded ~20-second low-quality sample clip
+  visualizer/reaction/cover/live/instrumental/trailer pattern is rejected outright; remaining
+  candidates, including verified uploaders, require visual validation.
+- Such a candidate is resolved by downloading a bounded ~20-second low-quality sample clip
   (not the full file — the request doc explicitly rules out downloading an entire file solely for
   validation) and reusing the existing freeze-frame motion check against just that sample.
 - A rejected or held-for-review candidate is recorded as a History event with its reason, and no
   longer silently falls through — the History page now shows that reason in a new Details column.
-  A VEVO-tier match still skips straight to grabbing, same as before, since VEVO is already the
-  doc's #2 preferred source tier and structurally can't be a lyric video or Topic-channel upload.
+  VEVO-tier heuristic matches follow the same validation path; only an exact IMVDb-authoritative
+  source receives the specification's automatic-accept carve-out.
 - The YouTube channel/playlist poll job applies the same metadata-only rejection patterns before
   grabbing (no bounded sample download there — a configured channel is a source the user already
   trusts, a different context from an autonomous broad search); the existing post-download
