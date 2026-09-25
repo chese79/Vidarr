@@ -221,7 +221,11 @@ function ConnectorRow({
         <td>{connector.name}</td>
         <td>{connector.type}</td>
         <td>{connector.host}</td>
-        <td role="status">{status ?? connector.lastSyncStatus ?? '—'}</td>
+        <td role="status">
+          {connector.syncRunning
+            ? `Running ${connector.syncProcessed}/${connector.syncTotal ?? '?'} `
+            : status ?? connector.lastSyncStatus ?? '—'}
+        </td>
         <td>
           <LibraryPicker connector={connector} kind="music" />
         </td>
@@ -382,6 +386,7 @@ export default function LibraryConnectorsPage() {
   const connectors = useQuery({
     queryKey: ['libraryConnectors'],
     queryFn: api.libraryConnectors.list,
+    refetchInterval: 2000,
   });
   const libraryVideos = useQuery({ queryKey: ['libraryVideos'], queryFn: api.libraryVideos.list });
 

@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { Prisma, type DownloadQueueItem } from '@prisma/client';
 import { prisma, logActivity } from '../db/client.js';
-import { downloadVideo } from '../providers/youtube/ytdlp.js';
+import { downloadDirectVideo } from '../providers/youtube/ytdlp.js';
 import { getDownloadClientProvider } from '../providers/downloadclient/index.js';
 import { importDownloadedFile, type ImportResult } from './import.js';
 import { locateVideoFile } from './locateVideoFile.js';
@@ -13,10 +13,24 @@ import { hasActiveDownload } from './videoStatus.js';
 const STAGING_DIR = process.env.STAGING_DIR ?? path.join(os.tmpdir(), 'vidarr-staging');
 
 export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResult> {
-  const musicVideo = await prisma.musicVideo.findUniqueOrThrow({ where: { id: musicVideoId } });
-  if (!musicVideo.youtubeVideoId) {
-    throw new Error('This music video has no linked YouTube source.');
-  }
+  const musicVideo = await prisma.musicVideo.findUniqueOrThrow({
+    where: { id: musicVideoId },
+    include: {
+      acquisitionSources: {
+        where: { accepted: true },
+        orderBy: [{ authority: 'asc' }, { id: 'asc' }],
+      },
+    },
+  });
+  const directSource = musicVideo.acquisitionSources.find((source) => /^https?:\/\//i.test(source.url));
+  const source = directSource ?? (musicVideo.youtubeVideoId
+    ? {
+      provider: 'youtube',
+      externalId: musicVideo.youtubeVideoId,
+      url: `https://www.youtube.com/watch?v=${musicVideo.youtubeVideoId}`,
+    }
+    : null);
+  if (!source) throw new Error('This music video has no accepted direct acquisition source.');
   // Guards manual grabs too (musicvideo.ts's /grab and /grab-release call
   // these functions directly, bypassing autoSearchAndGrab's own check) — no
   // call site should ever be able to create a second live queue row for the
@@ -39,8 +53,8 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     queueItem = await prisma.downloadQueueItem.create({
       data: {
         musicVideoId,
-        sourceType: 'youtube',
-        sourceRef: musicVideo.youtubeVideoId,
+        sourceType: source.provider,
+        sourceRef: source.url,
         status: 'downloading',
       },
     });
@@ -55,7 +69,7 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
   try {
     await fs.mkdir(STAGING_DIR, { recursive: true });
     let lastProgressWrite = 0;
-    downloadedPath = await downloadVideo(musicVideo.youtubeVideoId, STAGING_DIR, undefined, (fraction) => {
+    downloadedPath = await downloadDirectVideo(source.url, STAGING_DIR, undefined, (fraction) => {
       const now = Date.now();
       if (now - lastProgressWrite < 1000) return; // throttle DB writes
       lastProgressWrite = now;

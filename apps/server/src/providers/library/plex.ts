@@ -76,6 +76,7 @@ export const plexProvider: LibraryConnectorProvider = {
       title: item.title as string,
       artistName: (item.grandparentTitle ?? item.parentTitle ?? item.originalTitle ?? 'Unknown Artist') as string,
       releaseYear: item.year as number | undefined,
+      durationSeconds: typeof item.duration === 'number' ? Math.round(item.duration / 1000) : undefined,
       path: item.Media?.[0]?.Part?.[0]?.file as string | undefined,
       playCount: item.viewCount as number | undefined,
       hasThumbnail: Boolean(item.thumb),
@@ -133,4 +134,9 @@ export const plexProvider: LibraryConnectorProvider = {
   },
 
   findLibraryItem,
+
+  async refreshVideoLibrary(config) {
+    if (!config.videoLibraryId) throw new Error('No video library selected for this Plex connector.');
+    await plexSend(config, 'GET', `/library/sections/${encodeURIComponent(config.videoLibraryId)}/refresh`);
+  },
 };

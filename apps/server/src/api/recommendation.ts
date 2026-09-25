@@ -36,6 +36,9 @@ export async function recommendationRoutes(app: FastifyInstance) {
         qualityProfileId: body.qualityProfileId,
       },
     });
+    await prisma.artistSource.create({
+      data: { artistId: artist.id, provider: 'recommendation', externalId: recommendation.mbid, origin: `recommendation:${id}` },
+    });
     await prisma.recommendation.update({ where: { id }, data: { addedArtistId: artist.id } });
     reply.code(201);
     return artist;

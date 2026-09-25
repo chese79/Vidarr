@@ -90,4 +90,14 @@ describe('runBacklogSearch — library-match exclusion filter', () => {
     expect(grabbed).toBe(0);
     expect(skipped).toBe(1);
   });
+
+  it('does not re-search a video while its imported file is awaiting the media-server scan', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Scanning Artist' });
+    const video = await createMusicVideo(artist.id, { title: 'Scanning Video' });
+    await prisma.musicVideo.update({ where: { id: video.id }, data: { awaitingServerScanAt: new Date() } });
+
+    const { skipped, grabbed } = await runBacklogSearch();
+    expect(grabbed).toBe(0);
+    expect(skipped).toBe(0);
+  });
 });

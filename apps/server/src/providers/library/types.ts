@@ -24,6 +24,7 @@ export interface FetchedLibraryVideo {
   title: string;
   artistName: string;
   releaseYear?: number;
+  durationSeconds?: number;
   path?: string;
   playCount?: number;
   hasThumbnail?: boolean;
@@ -73,4 +74,5 @@ export interface LibraryConnectorProvider {
   // pushPlaylist (uses .id) and pipeline/playCountSync.ts (uses .playCount),
   // so the actual item lookup/matching logic exists exactly once per provider.
   findLibraryItem?(config: LibraryConnector, item: PlaylistPushItem): Promise<LibraryItemMatch | null>;
+  refreshVideoLibrary?(config: LibraryConnector): Promise<void>;
 }

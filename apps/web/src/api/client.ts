@@ -69,6 +69,7 @@ export interface ArtistSummaryParams {
   minKnownVideos?: number;
   minPlayCount?: number;
   hasMissing?: boolean;
+  completeness?: 'complete' | 'unmatched' | 'activeDownloads';
   page?: number;
   pageSize?: number;
 }
@@ -141,9 +142,27 @@ export const api = {
     get: (id: number) =>
       request<
         Artist & {
-          musicVideos: (MusicVideo & { libraryVideos: MatchedLibraryVideo[]; status: VideoStatus })[];
+          musicVideos: (MusicVideo & {
+            libraryVideos: MatchedLibraryVideo[];
+            status: VideoStatus;
+            acquisitionSources: Array<{
+              id: number; provider: string; url: string; authority: string; confidence: string; accepted: boolean;
+            }>;
+          })[];
+          summary: { known: number; available: number; missing: number; monitored: number; aggregatePlayCount: number | null };
+          unmatchedInventory: Array<{
+            id: number; title: string; releaseYear: number | null; durationSeconds: number | null;
+            matchConfidence: string | null; musicVideoId: number | null;
+            connector: { name: string; type: string };
+          }>;
         }
-      >(`/artist/${id}`),
+        >(`/artist/${id}`),
+    videos: (id: number) => request<Array<{
+      id: number; title: string; releaseYear: number | null; director: string | null;
+      durationSeconds: number | null; monitored: boolean; ignored: boolean; hasFile: boolean;
+      libraryVideos: Array<{ available: boolean; matchConfidence: string | null; playCount: number | null }>;
+      status: VideoStatus;
+    }>>(`/artist/${id}/videos`),
     create: (data: CreateArtist) =>
       request<Artist>('/artist', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: UpdateArtist) =>
@@ -163,6 +182,7 @@ export const api = {
       if (params.minKnownVideos !== undefined) qs.set('minKnownVideos', String(params.minKnownVideos));
       if (params.minPlayCount !== undefined) qs.set('minPlayCount', String(params.minPlayCount));
       if (params.hasMissing) qs.set('hasMissing', 'true');
+      if (params.completeness) qs.set('completeness', params.completeness);
       if (params.page !== undefined) qs.set('page', String(params.page));
       if (params.pageSize !== undefined) qs.set('pageSize', String(params.pageSize));
       const query = qs.toString();
@@ -173,10 +193,18 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ ids, monitored }),
       }),
+    bulkSearchMissing: (ids: number[]) => request<BulkSearchResult>('/artist/bulk-search-missing', {
+      method: 'POST', body: JSON.stringify({ ids }),
+    }),
+    searchAllMissing: () => request<BulkSearchResult>('/artist/search-all-missing', { method: 'POST' }),
     // Not routed through request() — this needs the X-Api-Key header attached
     // as a fetch header (an <img src> can't do that), same reasoning as
     // libraryVideos.thumbnail below.
     image: (id: number) => requestBlob(`/artist/${id}/image`),
+    refreshMetadata: (id: number) => request<{ videosAdded: number; videosUpdated: number; videosFlaggedForReview: number }>(`/artist/${id}/refresh-metadata`, { method: 'POST' }),
+    reconcile: (id: number) => request<{ confident: number; review: number; unmatched: number }>(`/artist/${id}/reconcile`, { method: 'POST' }),
+    monitorVideos: (id: number, mode: 'all' | 'none' | 'missing') => request<{ updated: number }>(`/artist/${id}/monitor-videos`, { method: 'POST', body: JSON.stringify({ mode }) }),
+    searchMissing: (id: number) => request<BulkSearchResult>(`/artist/${id}/search-missing`, { method: 'POST' }),
   },
   musicVideos: {
     list: (opts?: { artistId?: number; hasFile?: boolean }) => {
@@ -211,6 +239,8 @@ export const api = {
     list: () => request<RootFolder[]>('/rootfolder'),
     create: (data: CreateRootFolder) =>
       request<RootFolder>('/rootfolder', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<CreateRootFolder>) =>
+      request<RootFolder>(`/rootfolder/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/rootfolder/${id}`, { method: 'DELETE' }),
   },
   settings: {

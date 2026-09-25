@@ -1,7 +1,7 @@
 import { prisma } from '../db/client.js';
 import type { VideoStatus } from '@vidarr/shared-types';
 
-const ACTIVE_STATUSES = new Set(['queued', 'downloading', 'submissionUnknown']);
+const ACTIVE_STATUSES = new Set(['queued', 'downloading', 'submissionUnknown', 'importing']);
 
 export interface VideoStatusInput {
   hasFile: boolean;
@@ -9,7 +9,8 @@ export interface VideoStatusInput {
   ignored: boolean;
   artistMonitored: boolean;
   libraryVideos: { available: boolean; matchConfidence: string | null }[];
-  queueItems: { status: string }[];
+  queueItems: { status: string; progress?: number }[];
+  awaitingServerScanAt?: Date | null;
 }
 
 // The single place ownership/acquisition/eligibility get derived from raw
@@ -35,20 +36,24 @@ export function computeVideoStatus(input: VideoStatusInput): VideoStatus {
         ? 'server'
         : 'none';
 
-  const acquisition = input.queueItems.some((q) => ACTIVE_STATUSES.has(q.status))
-    ? 'downloading'
-    : input.queueItems.some((q) => q.status === 'failed')
-      ? 'failed'
-      : null;
+  const active = input.queueItems.find((q) => ACTIVE_STATUSES.has(q.status));
+  const acquisition = active
+    ? active.status as 'queued' | 'downloading' | 'submissionUnknown' | 'importing'
+    : input.awaitingServerScanAt
+      ? 'awaitingServerScan'
+      : input.queueItems.some((q) => q.status === 'failed')
+        ? 'failed'
+        : null;
 
   const eligibleForAutoSearch =
     input.monitored &&
     input.artistMonitored &&
     !input.ignored &&
     ownership === 'none' &&
-    acquisition !== 'downloading';
+    !active &&
+    !input.awaitingServerScanAt;
 
-  return { ownership, acquisition, eligibleForAutoSearch };
+  return { ownership, acquisition, eligibleForAutoSearch, progress: active?.progress ?? null };
 }
 
 // Guards every grab path (automatic and manual) against creating a second
@@ -56,7 +61,7 @@ export function computeVideoStatus(input: VideoStatusInput): VideoStatus {
 // during Phase 2a research that no such check existed anywhere.
 export async function hasActiveDownload(musicVideoId: number): Promise<boolean> {
   const existing = await prisma.downloadQueueItem.findFirst({
-    where: { musicVideoId, status: { in: ['queued', 'downloading', 'submissionUnknown'] } },
+    where: { musicVideoId, status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } },
     select: { id: true },
   });
   return existing != null;

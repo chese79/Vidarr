@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
 import { renderNamingFormat } from '@vidarr/shared-types';
 import { placeFile, replaceFile, type TransferMode } from './transfer.js';
 import { writeLibraryMetadata } from './libraryConvention.js';
 import { isPathWithinRoot } from './pathContainment.js';
+import { getLibraryConnectorProvider } from '../providers/library/index.js';
 
 export interface ImportResult {
   path: string;
@@ -22,7 +23,7 @@ export async function importDownloadedFile(
 ): Promise<ImportResult> {
   const musicVideo = await prisma.musicVideo.findUniqueOrThrow({
     where: { id: musicVideoId },
-    include: { artist: { include: { rootFolder: true } } },
+    include: { artist: { include: { rootFolder: { include: { targetConnector: true } } } } },
   });
   const settings = await prisma.settings.findUniqueOrThrow({ where: { id: 1 } });
   const existingFile = await prisma.musicVideoFile.findUnique({ where: { musicVideoId } });
@@ -94,7 +95,10 @@ export async function importDownloadedFile(
       originalFilename: path.basename(sourcePath),
     },
   });
-  await prisma.musicVideo.update({ where: { id: musicVideoId }, data: { hasFile: true } });
+  await prisma.musicVideo.update({
+    where: { id: musicVideoId },
+    data: { hasFile: true, awaitingServerScanAt: rootFolder.targetConnector ? new Date() : null },
+  });
   await prisma.history.create({
     data: {
       musicVideoId,
@@ -106,6 +110,15 @@ export async function importDownloadedFile(
       }),
     },
   });
+
+  if (rootFolder.targetConnector) {
+    try {
+      const provider = getLibraryConnectorProvider(rootFolder.targetConnector.type);
+      if (provider.refreshVideoLibrary) await provider.refreshVideoLibrary(rootFolder.targetConnector);
+    } catch (err) {
+      await logActivity('warn', 'media-server-refresh', err);
+    }
+  }
 
   return { path: destPath, sizeBytes: BigInt(stat.size) };
 }

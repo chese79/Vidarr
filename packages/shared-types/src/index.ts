@@ -42,11 +42,13 @@ export const RootFolderSchema = z.object({
   freeSpaceBytes: z.number().int().nullable(),
   accessible: z.boolean(),
   lastCheckedAt: z.string().nullable(),
+  targetConnectorId: z.number().int().nullable(),
 });
 export type RootFolder = z.infer<typeof RootFolderSchema>;
 
 export const CreateRootFolderSchema = z.object({
   path: z.string().min(1),
+  targetConnectorId: z.number().int().nullable().optional(),
 });
 export type CreateRootFolder = z.infer<typeof CreateRootFolderSchema>;
 
@@ -60,6 +62,8 @@ export const ArtistSchema = z.object({
   qualityProfileId: z.number().int(),
   posterUrl: z.string().nullable(),
   genre: z.string().nullable(),
+  metadataRefreshedAt: z.string().nullable(),
+  reconciledAt: z.string().nullable(),
   addedAt: z.string(),
 });
 export type Artist = z.infer<typeof ArtistSchema>;
@@ -98,6 +102,8 @@ export const ArtistSummarySchema = z.object({
   availableVideoCount: z.number().int(),
   missingVideoCount: z.number().int(),
   downloadingVideoCount: z.number().int(),
+  monitoredVideoCount: z.number().int(),
+  unmatchedVideoCount: z.number().int(),
   // Distinct from 0 — an artist with videos but no known play-count data
   // anywhere is `null`, not "played zero times".
   aggregatePlayCount: z.number().int().nullable(),
@@ -124,6 +130,7 @@ export const ArtistSummaryQuerySchema = z.object({
   minKnownVideos: z.coerce.number().int().min(0).optional(),
   minPlayCount: z.coerce.number().int().min(0).optional(),
   hasMissing: z.enum(['true']).optional(),
+  completeness: z.enum(['complete', 'unmatched', 'activeDownloads']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
@@ -134,6 +141,11 @@ export const BulkMonitorArtistsBodySchema = z.object({
   monitored: z.boolean(),
 });
 export type BulkMonitorArtistsBody = z.infer<typeof BulkMonitorArtistsBodySchema>;
+
+export const BulkArtistIdsBodySchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(1000),
+});
+export type BulkArtistIdsBody = z.infer<typeof BulkArtistIdsBodySchema>;
 
 export const BulkMonitorArtistsResultSchema = z.object({
   succeeded: z.array(z.number().int()),
@@ -148,12 +160,15 @@ export const MusicVideoSchema = z.object({
   imvdbVideoId: z.string().nullable(),
   youtubeVideoId: z.string().nullable(),
   releaseYear: z.number().int().nullable(),
+  durationSeconds: z.number().int().nullable(),
   director: z.string().nullable(),
   genre: z.string().nullable(),
   monitored: z.boolean(),
   ignored: z.boolean(),
   hasFile: z.boolean(),
   thumbnailUrl: z.string().nullable(),
+  catalogStatus: z.string(),
+  awaitingServerScanAt: z.string().nullable(),
   addedAt: z.string(),
 });
 export type MusicVideo = z.infer<typeof MusicVideoSchema>;
@@ -164,6 +179,7 @@ export const CreateMusicVideoSchema = z.object({
   imvdbVideoId: z.string().nullable().optional(),
   youtubeVideoId: z.string().nullable().optional(),
   releaseYear: z.number().int().nullable().optional(),
+  durationSeconds: z.number().int().positive().nullable().optional(),
   director: z.string().nullable().optional(),
   genre: z.string().nullable().optional(),
   monitored: z.boolean().default(true),
@@ -187,7 +203,14 @@ export type VideoOwnership = z.infer<typeof VideoOwnership>;
 // is none. 'queued' and 'importing' are deliberately not modeled — see the
 // Phase 2a plan Context for why (the DB status value is never actually
 // written for the former; the latter resolves synchronously in seconds).
-export const VideoAcquisition = z.enum(['downloading', 'failed']).nullable();
+export const VideoAcquisition = z.enum([
+  'queued',
+  'downloading',
+  'submissionUnknown',
+  'importing',
+  'awaitingServerScan',
+  'failed',
+]).nullable();
 export type VideoAcquisition = z.infer<typeof VideoAcquisition>;
 
 export const VideoStatusSchema = z.object({
@@ -199,6 +222,7 @@ export const VideoStatusSchema = z.object({
   // allowed even when this is false (see pipeline/videoStatus.ts) — it only
   // ever respects `ignored` and an active download, never `monitored`.
   eligibleForAutoSearch: z.boolean(),
+  progress: z.number().min(0).max(1).nullable(),
 });
 export type VideoStatus = z.infer<typeof VideoStatusSchema>;
 
@@ -307,6 +331,9 @@ export const LibraryConnectorSchema = z.object({
   lastSyncedAt: z.string().nullable(),
   lastSyncStatus: z.string().nullable(),
   lastSyncError: z.string().nullable(),
+  syncRunning: z.boolean(),
+  syncProcessed: z.number().int(),
+  syncTotal: z.number().int().nullable(),
 });
 export type LibraryConnector = z.infer<typeof LibraryConnectorSchema>;
 
@@ -385,6 +412,8 @@ export const MatchedLibraryVideoSchema = z.object({
   id: z.number().int(),
   hasThumbnail: z.boolean(),
   playCount: z.number().int().nullable(),
+  durationSeconds: z.number().int().nullable(),
+  matchConfidence: z.enum(['probable', 'ambiguous']).nullable().optional(),
   connector: z.object({ name: z.string(), type: LibraryConnectorType }),
 });
 export type MatchedLibraryVideo = z.infer<typeof MatchedLibraryVideoSchema>;
@@ -411,6 +440,7 @@ export const LibraryVideoSchema = z.object({
   title: z.string(),
   artistName: z.string(),
   releaseYear: z.number().int().nullable(),
+  durationSeconds: z.number().int().nullable(),
   path: z.string().nullable(),
   playCount: z.number().int().nullable(),
   hasThumbnail: z.boolean(),
@@ -494,6 +524,8 @@ export const ImvdbVideoCandidateSchema = z.object({
   thumbnailUrl: z.string().nullable(),
   director: z.string().nullable(),
   youtubeVideoId: z.string().nullable(),
+  durationSeconds: z.number().int().nullable(),
+  sources: z.array(z.object({ provider: z.string(), externalId: z.string().nullable(), url: z.string() })),
 });
 export type ImvdbVideoCandidate = z.infer<typeof ImvdbVideoCandidateSchema>;
 

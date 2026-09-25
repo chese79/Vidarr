@@ -18,6 +18,19 @@ const OWNERSHIP_LABEL: Record<VideoOwnership, string> = {
   none: 'Missing',
 };
 
+function ArtistHeaderImage({ artistId, name }: { artistId: number; name: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    api.artists.image(artistId).then((blob) => {
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    }).catch(() => undefined);
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [artistId]);
+  return <div className="artist-image">{url ? <img src={url} alt={`${name} artwork`} /> : name.charAt(0)}</div>;
+}
+
 // A compact screenshot for one of a video's media-server matches — same
 // blob-proxy pattern as LibraryPage's LibraryVideoThumbnail (the endpoint
 // requires an X-Api-Key header a plain <img src> can't attach), just sized
@@ -264,6 +277,7 @@ export default function ArtistDetailPage() {
   const [monitorMessage, setMonitorMessage] = useState<string | null>(null);
   const [bulkSearching, setBulkSearching] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [artistActionMessage, setArtistActionMessage] = useState<string | null>(null);
 
   const artist = useQuery({
     queryKey: ['artist', artistId],
@@ -311,6 +325,44 @@ export default function ArtistDetailPage() {
   const toggleVideoIgnored = useMutation({
     mutationFn: ({ id, ignored }: { id: number; ignored: boolean }) =>
       api.musicVideos.update(id, { ignored }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+  });
+
+  const refreshMetadata = useMutation({
+    mutationFn: () => api.artists.refreshMetadata(artistId),
+    onSuccess: (result) => {
+      setArtistActionMessage(`${result.videosAdded} added, ${result.videosUpdated} updated, ${result.videosFlaggedForReview} flagged for review`);
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    },
+    onError: (error) => setArtistActionMessage(`Refresh failed: ${(error as Error).message}`),
+  });
+  const reconcile = useMutation({
+    mutationFn: () => api.artists.reconcile(artistId),
+    onSuccess: (result) => {
+      setArtistActionMessage(`${result.confident} confirmed, ${result.review} need review, ${result.unmatched} unmatched`);
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    },
+  });
+  const monitorVideos = useMutation({
+    mutationFn: (mode: 'all' | 'none' | 'missing') => api.artists.monitorVideos(artistId, mode),
+    onSuccess: (result) => {
+      setArtistActionMessage(`${result.updated} video(s) updated`);
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    },
+  });
+  const searchMissing = useMutation({
+    mutationFn: () => api.artists.searchMissing(artistId),
+    onSuccess: (result) => {
+      setArtistActionMessage(`${result.grabbed} grabbed, ${result.skipped} skipped`);
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    },
+  });
+  const confirmMatch = useMutation({
+    mutationFn: api.libraryVideos.confirmMatch,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+  });
+  const rejectMatch = useMutation({
+    mutationFn: api.libraryVideos.rejectMatch,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
   });
 
@@ -385,7 +437,17 @@ export default function ArtistDetailPage() {
   return (
     <div>
       <div className="page-header">
-        <h2>{artist.data.name}</h2>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <ArtistHeaderImage artistId={artistId} name={artist.data.name} />
+          <div>
+            <h2>{artist.data.name}</h2>
+            <div className="artist-meta">
+              {artist.data.imvdbArtistId ? `IMVDb: ${artist.data.imvdbArtistId}` : 'No IMVDb match'} ·{' '}
+              {artist.data.summary.aggregatePlayCount ?? 'unknown'} plays · {artist.data.summary.available}/{artist.data.summary.known} available ·{' '}
+              {artist.data.summary.missing} missing · {artist.data.summary.monitored} monitored
+            </div>
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
             <input
@@ -398,6 +460,16 @@ export default function ArtistDetailPage() {
           <button onClick={() => setShowAdd((v) => !v)}>Add Video</button>
         </div>
       </div>
+
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <button className="secondary" onClick={() => refreshMetadata.mutate()} disabled={refreshMetadata.isPending}>Refresh IMVDb</button>
+        <button className="secondary" onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>Reconcile inventory</button>
+        <button className="secondary" onClick={() => monitorVideos.mutate('all')}>Monitor all</button>
+        <button className="secondary" onClick={() => monitorVideos.mutate('none')}>Unmonitor all</button>
+        <button className="secondary" onClick={() => monitorVideos.mutate('missing')}>Monitor missing</button>
+        <button onClick={() => searchMissing.mutate()} disabled={searchMissing.isPending || !artist.data.monitored}>Search missing monitored</button>
+      </div>
+      {artistActionMessage && <p role="status" className="empty-state">{artistActionMessage}</p>}
 
       {monitorMessage && (
         <p className="empty-state" role="status">
@@ -497,6 +569,12 @@ export default function ArtistDetailPage() {
                     Director: {mv.director}
                   </div>
                 )}
+                <div className="empty-state" style={{ padding: 0 }}>
+                  {mv.durationSeconds != null
+                    ? `Duration: ${Math.floor(mv.durationSeconds / 60)}:${String(mv.durationSeconds % 60).padStart(2, '0')}`
+                    : 'Duration unknown'}
+                  {' · '}{mv.catalogStatus === 'removedReview' ? 'Removed from latest IMVDb catalog — review' : 'In current catalog'}
+                </div>
                 <div className="empty-state" style={{ padding: 0, display: 'flex', gap: 6, alignItems: 'center' }}>
                   <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     <input
@@ -526,28 +604,44 @@ export default function ArtistDetailPage() {
                     {OWNERSHIP_LABEL[mv.status.ownership]}
                   </span>
                   {mv.status.acquisition === 'downloading' && (
-                    <span className="status-chip downloading">Downloading</span>
+                    <span className="status-chip downloading">Downloading{mv.status.progress != null ? ` ${Math.round(mv.status.progress * 100)}%` : ''}</span>
                   )}
+                  {mv.status.acquisition === 'queued' && <span className="status-chip downloading">Queued</span>}
+                  {mv.status.acquisition === 'importing' && <span className="status-chip downloading">Importing</span>}
+                  {mv.status.acquisition === 'submissionUnknown' && <span className="status-chip failed">Submission unknown</span>}
+                  {mv.status.acquisition === 'awaitingServerScan' && <span className="status-chip downloading">Awaiting server scan</span>}
                   {mv.status.acquisition === 'failed' && <span className="status-chip failed">Failed</span>}
                   {mv.ignored && <span className="status-chip ignored">Ignored</span>}
                 </div>
                 {mv.libraryVideos.length > 0 && (
                   <div className="matched-video-row">
                     {mv.libraryVideos.map((match) => (
-                      <span key={match.id} className="status-chip available">
+                      <span key={match.id} className={`status-chip ${match.matchConfidence ? 'failed' : 'available'}`}>
                         <MatchedLibraryThumbnail match={match} />
                         On {match.connector.name}
                         {match.playCount != null
                           ? ` · played ${match.playCount} ${match.playCount === 1 ? 'time' : 'times'}`
                           : ''}
+                        {match.matchConfidence ? ` · ${match.matchConfidence} match` : ''}
+                        {match.matchConfidence && (
+                          <>
+                            <button className="secondary" onClick={() => confirmMatch.mutate(match.id)}>Confirm</button>
+                            <button className="secondary" onClick={() => rejectMatch.mutate(match.id)}>Reject</button>
+                          </>
+                        )}
                       </span>
                     ))}
+                  </div>
+                )}
+                {mv.acquisitionSources.length > 0 && (
+                  <div className="empty-state" style={{ padding: 0 }}>
+                    Sources: {mv.acquisitionSources.map((source) => `${source.provider} (${source.authority})`).join(', ')}
                   </div>
                 )}
               </div>
               <div className="video-actions">
                 {grabStatus[mv.id] && <span role="status">{grabStatus[mv.id]}</span>}
-                {!mv.hasFile && mv.status.acquisition !== 'downloading' && !mv.ignored && (
+                {!mv.hasFile && (mv.status.acquisition == null || mv.status.acquisition === 'failed') && !mv.ignored && (
                   <>
                     {mv.youtubeVideoId && (
                       <button className="secondary" onClick={() => handleGrab(mv.id)}>
@@ -564,7 +658,7 @@ export default function ArtistDetailPage() {
                     Ignored — un-ignore to search or grab.
                   </span>
                 )}
-                {!mv.hasFile && !mv.ignored && mv.status.acquisition === 'downloading' && (
+                {!mv.hasFile && !mv.ignored && mv.status.acquisition != null && mv.status.acquisition !== 'failed' && (
                   <span className="empty-state" style={{ padding: 0, fontSize: 12 }}>
                     Already downloading.
                   </span>
@@ -575,6 +669,19 @@ export default function ArtistDetailPage() {
         </div>
       ) : (
         <p className="empty-state">No music videos yet.</p>
+      )}
+
+      {artist.data.unmatchedInventory.length > 0 && (
+        <div className="card">
+          <h3>Inventory needing review</h3>
+          {artist.data.unmatchedInventory.map((item) => (
+            <div key={item.id} className="form-row">
+              <span>{item.title} ({item.releaseYear ?? 'year unknown'}) · {item.connector.name}</span>
+              {item.matchConfidence && <button onClick={() => confirmMatch.mutate(item.id)}>Confirm proposed match</button>}
+              {item.musicVideoId && <button className="secondary" onClick={() => rejectMatch.mutate(item.id)}>Reject</button>}
+            </div>
+          ))}
+        </div>
       )}
 
       {searchingVideo && (

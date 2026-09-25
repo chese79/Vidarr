@@ -83,6 +83,22 @@ describe('artist routes', () => {
     expect(res.json()).toMatchObject({ id: artist.id, name: artist.name, musicVideos: [] });
   });
 
+  it('GET /api/v1/artist/:id/videos returns the lightweight accordion catalog with derived status', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id, { title: 'Accordion Video' });
+    await prisma.musicVideo.update({ where: { id: video.id }, data: { director: 'Director' } });
+
+    const res = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/videos`, headers: authHeaders() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([expect.objectContaining({
+      id: video.id,
+      title: 'Accordion Video',
+      director: 'Director',
+      status: expect.objectContaining({ ownership: 'none', eligibleForAutoSearch: true }),
+    })]);
+    expect(res.json()[0]).not.toHaveProperty('acquisitionSources');
+  });
+
   it('GET /api/v1/artist/:id includes each video\'s available, matched media-server videos', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id, { title: 'Matched Video', hasFile: false });

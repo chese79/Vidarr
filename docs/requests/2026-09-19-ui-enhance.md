@@ -2,6 +2,27 @@
 
 Requested: 2026-09-19
 
+Implementation completed: 2026-09-25
+
+## Implementation record
+
+The request is implemented across the artist-centered Library and Artist Detail pages, catalog and
+inventory APIs, acquisition pipeline, and media-server integrations. The completion pass added the
+remaining provider-neutral provenance, IMVDb upsert/removal-review behavior, duration-aware
+reconciliation, explicit acquisition phases, unmatched review, selected/global searches, connector
+scan progress, and target-connector refresh workflow. A dedicated lightweight artist-video endpoint
+serves lazy accordions without loading full detail, artwork, or provenance payloads.
+
+Database changes are additive and shipped in Prisma migration
+`20260925120000_complete_ui_enhance`. Existing artist/video monitoring and ignore choices are
+preserved; provider omissions and unmonitoring never delete catalog records or media. Imported files
+targeting a connector remain in an awaiting-scan state until inventory reconciliation confirms them.
+
+Verification covers migration deployment, production server and web builds, the full server suite,
+and focused regressions for explicit acquisition phases, scan-wait search suppression, lightweight
+accordion data, reconciliation, connector failure safety, search eligibility, queue idempotence,
+YouTube validation, filtering, artwork proxying, and play-count behavior.
+
 ## Objective
 
 Transform Vidarr into an artist-centered music-video library manager comparable to Sonarr's

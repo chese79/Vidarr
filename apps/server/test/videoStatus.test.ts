@@ -130,7 +130,20 @@ describe('computeVideoStatus', () => {
 
   it('treats an uncertain remote submission as active and ineligible for automatic retry', () => {
     const status = computeVideoStatus(baseInput({ queueItems: [{ status: 'submissionUnknown' }] }));
-    expect(status.acquisition).toBe('downloading');
+    expect(status.acquisition).toBe('submissionUnknown');
+    expect(status.eligibleForAutoSearch).toBe(false);
+  });
+
+  it.each(['queued', 'importing'] as const)('reports the %s acquisition phase directly', (phase) => {
+    const status = computeVideoStatus(baseInput({ queueItems: [{ status: phase, progress: 42 }] }));
+    expect(status.acquisition).toBe(phase);
+    expect(status.progress).toBe(42);
+    expect(status.eligibleForAutoSearch).toBe(false);
+  });
+
+  it('reports an imported file awaiting its media-server scan', () => {
+    const status = computeVideoStatus(baseInput({ awaitingServerScanAt: new Date() }));
+    expect(status.acquisition).toBe('awaitingServerScan');
     expect(status.eligibleForAutoSearch).toBe(false);
   });
 

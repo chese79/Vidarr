@@ -80,27 +80,26 @@ function LetterRail({
   );
 }
 
-// Lazily loaded on first expand and cached by react-query after that —
-// reuses the existing full artist-detail endpoint rather than adding a
-// second, lighter-weight one for Phase 1 (the payload here is a handful of
-// scalar fields per video, not large enough to justify a separate route).
+// Lazily loaded on first expand and cached by react-query after that. The
+// accordion endpoint deliberately omits artwork, provenance, and review
+// payloads so expanding artist rows stays lightweight on large libraries.
 function ArtistAccordion({ artistId }: { artistId: number }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
-    queryKey: ['artist', artistId],
-    queryFn: () => api.artists.get(artistId),
+    queryKey: ['artistVideos', artistId],
+    queryFn: () => api.artists.videos(artistId),
   });
 
   const toggleVideoMonitored = useMutation({
     mutationFn: ({ id, monitored }: { id: number; monitored: boolean }) =>
       api.musicVideos.update(id, { monitored }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artistVideos', artistId] }),
   });
 
   const toggleVideoIgnored = useMutation({
     mutationFn: ({ id, ignored }: { id: number; ignored: boolean }) =>
       api.musicVideos.update(id, { ignored }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artistVideos', artistId] }),
   });
 
   if (isLoading) {
@@ -113,7 +112,7 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
     );
   }
 
-  if (!data?.musicVideos.length) {
+  if (!data?.length) {
     return (
       <div className="artist-accordion" role="region" aria-label="Videos">
         <span className="empty-state" style={{ padding: 0 }}>
@@ -126,20 +125,33 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
 
   return (
     <div className="artist-accordion" role="region" aria-label="Videos">
-      {data.musicVideos.map((mv) => (
+      {data.map((mv) => (
         <div className="artist-accordion-video" key={mv.id}>
           <span className="year">{mv.releaseYear ?? '—'}</span>
           <span className="title" title={mv.title}>
             {mv.title}
           </span>
+          <span className="artist-meta">
+            {mv.director ? `Dir. ${mv.director}` : 'Director unknown'}
+            {mv.durationSeconds != null ? ` · ${Math.floor(mv.durationSeconds / 60)}:${String(mv.durationSeconds % 60).padStart(2, '0')}` : ''}
+          </span>
           <span className={`status-chip ${mv.status.ownership === 'none' ? 'missing' : 'available'}`}>
             {OWNERSHIP_LABEL[mv.status.ownership]}
           </span>
           {mv.status.acquisition === 'downloading' && (
-            <span className="status-chip downloading">Downloading</span>
+            <span className="status-chip downloading">Downloading{mv.status.progress != null ? ` ${Math.round(mv.status.progress * 100)}%` : ''}</span>
           )}
+          {mv.status.acquisition === 'queued' && <span className="status-chip downloading">Queued</span>}
+          {mv.status.acquisition === 'importing' && <span className="status-chip downloading">Importing</span>}
+          {mv.status.acquisition === 'submissionUnknown' && <span className="status-chip failed">Submission unknown</span>}
+          {mv.status.acquisition === 'awaitingServerScan' && <span className="status-chip downloading">Awaiting server scan</span>}
           {mv.status.acquisition === 'failed' && <span className="status-chip failed">Failed</span>}
           {mv.ignored && <span className="status-chip ignored">Ignored</span>}
+          <span className="artist-meta">
+            {mv.libraryVideos.some((item) => item.playCount != null)
+              ? `${Math.max(...mv.libraryVideos.map((item) => item.playCount ?? 0))} plays`
+              : 'plays unknown'}
+          </span>
           <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
             <input
               type="checkbox"
@@ -200,6 +212,8 @@ function ArtistRow({
           <span>
             {artist.availableVideoCount}/{artist.knownVideoCount} known
           </span>
+          <span>{artist.monitoredVideoCount} monitored</span>
+          {artist.unmatchedVideoCount > 0 && <span className="missing">{artist.unmatchedVideoCount} unmatched</span>}
           {artist.missingVideoCount > 0 && <span className="missing">{artist.missingVideoCount} missing</span>}
           {artist.downloadingVideoCount > 0 && (
             <span className="downloading">{artist.downloadingVideoCount} downloading</span>
@@ -490,6 +504,7 @@ export default function LibraryPage() {
   const monitored = params.get('monitored') as 'true' | 'false' | null;
   const letter = params.get('letter');
   const hasMissing = params.get('missing') === 'true';
+  const completeness = (params.get('completeness') ?? '') as '' | 'complete' | 'unmatched' | 'activeDownloads';
   const minKnownVideos = params.get('minKnownVideos') ?? '';
   const minPlayCount = params.get('minPlayCount') ?? '';
   const page = Number(params.get('page') ?? '1');
@@ -516,7 +531,7 @@ export default function LibraryPage() {
   }
 
   const summary = useQuery({
-    queryKey: ['artistSummary', search, genre, monitored, letter, hasMissing, minKnownVideos, minPlayCount, page],
+    queryKey: ['artistSummary', search, genre, monitored, letter, hasMissing, completeness, minKnownVideos, minPlayCount, page],
     queryFn: () =>
       api.artists.summary({
         search: search || undefined,
@@ -524,6 +539,7 @@ export default function LibraryPage() {
         monitored: monitored === 'true' ? true : monitored === 'false' ? false : undefined,
         letter: letter || undefined,
         hasMissing: hasMissing || undefined,
+        completeness: completeness || undefined,
         minKnownVideos: minKnownVideos ? Number(minKnownVideos) : undefined,
         minPlayCount: minPlayCount ? Number(minPlayCount) : undefined,
         page,
@@ -534,7 +550,7 @@ export default function LibraryPage() {
   const items = summary.data?.items ?? [];
   const totalPages = summary.data ? Math.max(1, Math.ceil(summary.data.total / PAGE_SIZE)) : 1;
   const anyFilterActive = Boolean(
-    search || genre || monitored || letter || hasMissing || minKnownVideos || minPlayCount,
+    search || genre || monitored || letter || hasMissing || completeness || minKnownVideos || minPlayCount,
   );
   const allVisibleSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
 
@@ -587,6 +603,20 @@ export default function LibraryPage() {
       setSelectedIds(new Set());
     },
   });
+  const bulkSearch = useMutation({
+    mutationFn: () => api.artists.bulkSearchMissing([...selectedIds]),
+    onSuccess: (result) => {
+      setBulkMessage(`${result.grabbed} grabbed, ${result.skipped} skipped`);
+      queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
+    },
+  });
+  const searchAll = useMutation({
+    mutationFn: api.artists.searchAllMissing,
+    onSuccess: (result) => {
+      setBulkMessage(`${result.grabbed} grabbed, ${result.skipped} skipped across all eligible videos`);
+      queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
+    },
+  });
 
   function clearAllFilters() {
     setSearchInput('');
@@ -597,9 +627,10 @@ export default function LibraryPage() {
     <div>
       <div className="page-header">
         <h2>Library</h2>
-        <button onClick={() => setShowAdd((v) => !v)} disabled={!canAdd}>
-          Add Artist
-        </button>
+        <div className="form-row">
+          <button className="secondary" onClick={() => searchAll.mutate()} disabled={searchAll.isPending}>Search all eligible</button>
+          <button onClick={() => setShowAdd((v) => !v)} disabled={!canAdd}>Add Artist</button>
+        </div>
       </div>
 
       {!canAdd && (
@@ -610,6 +641,12 @@ export default function LibraryPage() {
       )}
 
       {showAdd && <AddArtistForm onDone={() => setShowAdd(false)} />}
+
+      {bulkMessage && (
+        <p className="empty-state" role="status">
+          {bulkMessage}
+        </p>
+      )}
 
       <div className="library-layout">
         <LetterRail
@@ -633,11 +670,22 @@ export default function LibraryPage() {
               onChange={(e) => updateParams({ genre: e.target.value || null, page: null })}
             >
               <option value="">All genres</option>
+              <option value="__unknown__">Unknown genre</option>
               {genreOptions.map((g) => (
                 <option key={g} value={g}>
                   {g}
                 </option>
               ))}
+            </select>
+            <select
+              aria-label="Filter by library completeness"
+              value={completeness}
+              onChange={(e) => updateParams({ completeness: e.target.value || null, page: null })}
+            >
+              <option value="">Completeness: any</option>
+              <option value="complete">Complete</option>
+              <option value="unmatched">Unmatched inventory</option>
+              <option value="activeDownloads">Active downloads</option>
             </select>
             <select
               aria-label="Filter by monitored state"
@@ -707,14 +755,12 @@ export default function LibraryPage() {
               >
                 Unmonitor
               </button>
+              <button type="button" onClick={() => bulkSearch.mutate()} disabled={bulkSearch.isPending}>
+                Search missing
+              </button>
               <button type="button" className="secondary" onClick={() => setSelectedIds(new Set())}>
                 Clear selection
               </button>
-              {bulkMessage && (
-                <span className="empty-state" style={{ padding: 0 }} role="status">
-                  {bulkMessage}
-                </span>
-              )}
             </div>
           )}
 

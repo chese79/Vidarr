@@ -53,6 +53,10 @@ export async function autoSearchAndGrab(
       artist: {
         include: { qualityProfile: { include: { items: { include: { quality: true } } } } },
       },
+      acquisitionSources: {
+        where: { accepted: true, authority: 'authoritative' },
+        orderBy: { id: 'asc' },
+      },
     },
   });
 
@@ -89,13 +93,14 @@ export async function autoSearchAndGrab(
     // below, where a VEVO-tier result does NOT get the same bypass, since a
     // heuristic search match (even from a VEVO-named channel) is not an
     // IMVDb identification.
-    if (musicVideo.youtubeVideoId) {
+    const authoritativeSource = musicVideo.acquisitionSources[0];
+    if (authoritativeSource || musicVideo.youtubeVideoId) {
       try {
         await grabYoutubeVideo(musicVideoId);
         return {
           musicVideoId,
           grabbed: true,
-          reason: `Grabbed via IMVDb-sourced YouTube link (${musicVideo.title})`,
+          reason: `Grabbed via IMVDb-sourced ${authoritativeSource?.provider ?? 'YouTube'} link (${musicVideo.title})`,
         };
       } catch (err) {
         await logActivity('warn', 'auto-search-youtube', err);
@@ -122,10 +127,32 @@ export async function autoSearchAndGrab(
         );
 
         if (validation.decision === 'accept') {
-          await prisma.musicVideo.update({
-            where: { id: musicVideoId },
-            data: { youtubeVideoId: match.candidate.youtubeVideoId },
-          });
+          const url = `https://www.youtube.com/watch?v=${match.candidate.youtubeVideoId}`;
+          await prisma.$transaction([
+            prisma.musicVideo.update({
+              where: { id: musicVideoId },
+              data: { youtubeVideoId: match.candidate.youtubeVideoId },
+            }),
+            prisma.acquisitionSource.upsert({
+              where: { musicVideoId_provider_url: { musicVideoId, provider: 'youtube', url } },
+              update: {
+                externalId: match.candidate.youtubeVideoId,
+                authority: match.tier === 'vevo' ? 'verified' : 'heuristic',
+                confidence: 'confirmed',
+                accepted: true,
+              },
+              create: {
+                musicVideoId,
+                provider: 'youtube',
+                externalId: match.candidate.youtubeVideoId,
+                url,
+                authority: match.tier === 'vevo' ? 'verified' : 'heuristic',
+                confidence: 'confirmed',
+                discoveryOrigin: 'youtube-search',
+                accepted: true,
+              },
+            }),
+          ]);
           await grabYoutubeVideo(musicVideoId);
           const sourceLabel = match.tier === 'vevo' ? 'VEVO' : 'YouTube';
           return {
@@ -181,6 +208,7 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
       monitored: true,
       ignored: false,
       hasFile: false,
+      awaitingServerScanAt: null,
       artist: { monitored: true },
       // Excludes a video only for a CONFIRMED library match — matchConfidence
       // null means an exact-key match or one a human has since confirmed via
@@ -190,7 +218,7 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
       // the match's connector still be enabled — a disabled connector's
       // stale last-synced rows must not suppress search either.
       libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
-      queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown'] } } },
+      queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
     },
     select: { id: true },
   });

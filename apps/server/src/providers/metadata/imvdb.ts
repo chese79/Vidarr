@@ -12,6 +12,8 @@ export interface ImvdbVideoCandidate {
   thumbnailUrl: string | null;
   director: string | null;
   youtubeVideoId: string | null;
+  durationSeconds: number | null;
+  sources: { provider: string; externalId: string | null; url: string }[];
 }
 
 // IMVDb's nginx rejects requests with no/non-browser User-Agent with a bare 400
@@ -47,12 +49,23 @@ function toCandidate(v: any): ImvdbVideoCandidate {
     thumbnailUrl: v.image?.b ?? v.image?.l ?? null,
     director: null, // not present on search results — fetched separately, see getVideoDetails
     youtubeVideoId: null, // ditto
+    durationSeconds: null,
+    sources: [],
   };
 }
 
 export interface VideoDetails {
   director: string | null;
   youtubeVideoId: string | null;
+  durationSeconds: number | null;
+  sources: { provider: string; externalId: string | null; url: string }[];
+}
+
+function sourceUrl(provider: string, value: string): string {
+  if (/^https?:\/\//i.test(value)) return value;
+  if (provider === 'youtube') return `https://www.youtube.com/watch?v=${value}`;
+  if (provider === 'vimeo') return `https://vimeo.com/${value}`;
+  return value;
 }
 
 // Director and source links aren't included in /search/videos results, only
@@ -69,10 +82,20 @@ export async function getVideoDetails(apiKey: string, imvdbVideoId: string): Pro
   try {
     const body = await imvdbGet(apiKey, `/video/${imvdbVideoId}?include=credits,sources`);
     const director = body?.directors?.[0]?.entity_name ?? null;
-    const youtubeSource = (body?.sources ?? []).find((s: any) => s.source === 'youtube');
-    return { director, youtubeVideoId: youtubeSource?.source_data ?? null };
+    const rawSources: any[] = body?.sources ?? [];
+    const sources = rawSources
+      .filter((s) => s?.source && s?.source_data)
+      .map((s) => ({
+        provider: String(s.source).toLowerCase(),
+        externalId: String(s.source_data),
+        url: sourceUrl(String(s.source).toLowerCase(), String(s.source_data)),
+      }));
+    const youtubeSource = sources.find((s) => s.provider === 'youtube');
+    const rawDuration = body?.duration ?? body?.runtime ?? null;
+    const durationSeconds = typeof rawDuration === 'number' ? Math.round(rawDuration) : null;
+    return { director, youtubeVideoId: youtubeSource?.externalId ?? null, durationSeconds, sources };
   } catch {
-    return { director: null, youtubeVideoId: null };
+    return { director: null, youtubeVideoId: null, durationSeconds: null, sources: [] };
   }
 }
 
@@ -139,6 +162,8 @@ export async function getArtistVideos(
     batch.forEach((v, j) => {
       v.director = details[j].director;
       v.youtubeVideoId = details[j].youtubeVideoId;
+      v.durationSeconds = details[j].durationSeconds;
+      v.sources = details[j].sources;
     });
   }
 

@@ -13,12 +13,14 @@ export interface CanonicalVideo {
   normalizedTitle: string;
   normalizedArtistName: string;
   releaseYear: number | null;
+  durationSeconds?: number | null;
 }
 
 export interface MatchCandidate {
   normalizedArtistName: string;
   normalizedTitle: string;
   releaseYear: number | null;
+  durationSeconds?: number | null;
 }
 
 export interface PreviousMatch {
@@ -89,8 +91,12 @@ export function matchLibraryVideo(
       best.video.releaseYear != null &&
       candidate.releaseYear != null &&
       best.video.releaseYear !== candidate.releaseYear;
+    const durationConflict =
+      best.video.durationSeconds != null &&
+      candidate.durationSeconds != null &&
+      Math.abs(best.video.durationSeconds - candidate.durationSeconds) > 10;
     const matchConfidence: MatchConfidence =
-      best.score >= PROBABLE_THRESHOLD && !yearConflict ? 'probable' : 'ambiguous';
+      best.score >= PROBABLE_THRESHOLD && !yearConflict && !durationConflict ? 'probable' : 'ambiguous';
     return { musicVideoId: best.video.id, matchConfidence };
   }
 

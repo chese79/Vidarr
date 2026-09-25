@@ -46,6 +46,26 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
         data: { youtubeVideoId: video.youtubeVideoId },
       });
       affectedMusicVideoIds.push(existingMatch.id);
+      await prisma.acquisitionSource.upsert({
+        where: {
+          musicVideoId_provider_url: {
+            musicVideoId: existingMatch.id,
+            provider: 'youtube',
+            url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
+          },
+        },
+        update: { externalId: video.youtubeVideoId, accepted: true },
+        create: {
+          musicVideoId: existingMatch.id,
+          provider: 'youtube',
+          externalId: video.youtubeVideoId,
+          url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
+          authority: 'manual',
+          confidence: 'confirmed',
+          discoveryOrigin: `youtube-source:${sourceId}`,
+          accepted: true,
+        },
+      });
       matched++;
     } else {
       const createdVideo = await prisma.musicVideo.create({
@@ -58,6 +78,18 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
         },
       });
       affectedMusicVideoIds.push(createdVideo.id);
+      await prisma.acquisitionSource.create({
+        data: {
+          musicVideoId: createdVideo.id,
+          provider: 'youtube',
+          externalId: video.youtubeVideoId,
+          url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
+          authority: 'manual',
+          confidence: 'confirmed',
+          discoveryOrigin: `youtube-source:${sourceId}`,
+          accepted: true,
+        },
+      });
       created++;
     }
   }

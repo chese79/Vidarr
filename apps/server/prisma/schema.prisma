@@ -27,10 +27,13 @@ model Artist {
   qualityProfile   QualityProfile @relation(fields: [qualityProfileId], references: [id])
   posterUrl        String?
   genre            String? // user-editable; auto-fillable from a matched LibraryArtist (Jellyfin) or a "standard" external source (Spotify's controlled-vocabulary genres) — see pipeline/genreMatch.ts
+  metadataRefreshedAt DateTime?
+  reconciledAt     DateTime?
   addedAt          DateTime     @default(now())
 
   musicVideos   MusicVideo[]
   youtubeSources YoutubeSource[]
+  sources       ArtistSource[]
 }
 
 model MusicVideo {
@@ -43,6 +46,7 @@ model MusicVideo {
   youtubeVideoId String?  @unique
   releaseYear    Int?
   director       String?
+  durationSeconds Int?
   genre          String? // user-editable "song tag" — see Artist.genre
   monitored      Boolean  @default(true)
   // Independent of `monitored`: an explicit "don't act on this one" that
@@ -52,6 +56,10 @@ model MusicVideo {
   ignored        Boolean  @default(false)
   hasFile        Boolean  @default(false)
   thumbnailUrl   String?
+  catalogStatus  String   @default("active") // "active" | "removedReview"
+  lastSeenAt     DateTime?
+  removedAt      DateTime?
+  awaitingServerScanAt DateTime?
   addedAt        DateTime @default(now())
 
   file           MusicVideoFile?
@@ -60,8 +68,39 @@ model MusicVideo {
   playlistItems  PlaylistItem[]
   libraryVideos  LibraryVideo[] @relation("LibraryVideoMatch")
   rejectedByLibraryVideos LibraryVideo[] @relation("LibraryVideoRejectedMatch")
+  acquisitionSources AcquisitionSource[]
 
   @@unique([artistId, normalizedTitle])
+}
+
+model ArtistSource {
+  id          Int      @id @default(autoincrement())
+  artistId    Int
+  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  provider    String
+  externalId  String?
+  origin      String
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([artistId, provider, origin])
+}
+
+model AcquisitionSource {
+  id             Int        @id @default(autoincrement())
+  musicVideoId   Int
+  musicVideo     MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  provider       String
+  externalId     String?
+  url            String
+  authority      String // "authoritative" | "verified" | "heuristic" | "manual"
+  confidence     String // "confirmed" | "probable" | "review"
+  discoveryOrigin String
+  accepted       Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([musicVideoId, provider, url])
+  @@index([musicVideoId, authority, confidence])
 }
 
 model MusicVideoFile {
@@ -116,6 +155,8 @@ model RootFolder {
   freeSpaceBytes BigInt?
   accessible     Boolean  @default(true)
   lastCheckedAt  DateTime?
+  targetConnectorId Int?
+  targetConnector LibraryConnector? @relation(fields: [targetConnectorId], references: [id], onDelete: SetNull)
 
   artists Artist[]
 }
@@ -241,10 +282,14 @@ model LibraryConnector {
   lastSyncedAt   DateTime?
   lastSyncStatus String? // "success" | "failed"
   lastSyncError  String?
+  syncRunning    Boolean    @default(false)
+  syncProcessed  Int        @default(0)
+  syncTotal      Int?
 
   libraryArtists LibraryArtist[]
   libraryVideos  LibraryVideo[]
   playlistSyncs  PlaylistSync[]
+  rootFolders    RootFolder[]
 }
 
 // A video observed in a selected Plex/Jellyfin music-video library. This is
@@ -260,6 +305,7 @@ model LibraryVideo {
   artistName           String
   normalizedArtistName String
   releaseYear          Int?
+  durationSeconds      Int?
   path                 String?
   playCount            Int?
   hasThumbnail         Boolean          @default(false)

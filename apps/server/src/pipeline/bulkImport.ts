@@ -128,18 +128,34 @@ export async function commitYoutubePlaylistImport(
         },
       });
       artistId = created.id;
+      await prisma.artistSource.create({
+        data: { artistId, provider: 'youtube', origin: 'playlist-import' },
+      });
       artistsCreated++;
     }
 
     for (const video of included) {
       try {
-        await prisma.musicVideo.create({
+        const createdVideo = await prisma.musicVideo.create({
           data: {
             artistId,
             title: video.title,
             normalizedTitle: normalizeTitle(video.title),
             youtubeVideoId: video.youtubeVideoId,
             monitored: true,
+          },
+        });
+        const url = `https://www.youtube.com/watch?v=${video.youtubeVideoId}`;
+        await prisma.acquisitionSource.create({
+          data: {
+            musicVideoId: createdVideo.id,
+            provider: 'youtube',
+            externalId: video.youtubeVideoId,
+            url,
+            authority: 'manual',
+            confidence: 'confirmed',
+            discoveryOrigin: 'playlist-import',
+            accepted: true,
           },
         });
         videosAdded++;

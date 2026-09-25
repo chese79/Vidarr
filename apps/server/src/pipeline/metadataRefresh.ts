@@ -7,45 +7,104 @@ import { getArtistVideos } from '../providers/metadata/imvdb.js';
 // IMVDb slug (see providers/metadata/imvdb.ts for why). Used both by the
 // scheduled metadata-refresh job (all artists) and by toggling an artist's
 // Monitored flag on (that one artist, immediately).
-export async function refreshArtistMetadata(artistId: number): Promise<{ videosAdded: number }> {
+export interface MetadataRefreshResult {
+  videosAdded: number;
+  videosUpdated: number;
+  videosFlaggedForReview: number;
+}
+
+export async function refreshArtistMetadata(artistId: number): Promise<MetadataRefreshResult> {
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
-  if (!settings?.imvdbApiKey || !artist.imvdbArtistId) return { videosAdded: 0 };
+  if (!settings?.imvdbApiKey || !artist.imvdbArtistId) {
+    return { videosAdded: 0, videosUpdated: 0, videosFlaggedForReview: 0 };
+  }
 
   const videos = await getArtistVideos(settings.imvdbApiKey, artist.imvdbArtistId, artist.name);
-  const existingImvdbIds = new Set(
-    (
-      await prisma.musicVideo.findMany({ where: { artistId }, select: { imvdbVideoId: true } })
-    ).map((v) => v.imvdbVideoId),
-  );
+  const existing = await prisma.musicVideo.findMany({
+    where: { artistId, imvdbVideoId: { not: null } },
+    select: { id: true, imvdbVideoId: true },
+  });
+  const existingByImvdbId = new Map(existing.map((v) => [v.imvdbVideoId as string, v.id]));
+  const seenIds = new Set(videos.map((video) => video.imvdbVideoId));
 
   let videosAdded = 0;
+  let videosUpdated = 0;
   for (const video of videos) {
-    if (existingImvdbIds.has(video.imvdbVideoId)) continue;
     try {
-      await prisma.musicVideo.create({
-        data: {
+      const existingId = existingByImvdbId.get(video.imvdbVideoId);
+      const data = {
+        title: video.title,
+        normalizedTitle: normalizeTitle(video.title),
+        releaseYear: video.year,
+        thumbnailUrl: video.thumbnailUrl,
+        director: video.director,
+        durationSeconds: video.durationSeconds,
+        youtubeVideoId: video.youtubeVideoId,
+        catalogStatus: 'active',
+        lastSeenAt: new Date(),
+        removedAt: null,
+      };
+      const saved = existingId
+        ? await prisma.musicVideo.update({ where: { id: existingId }, data })
+        : await prisma.musicVideo.create({
+          data: {
           artistId,
-          title: video.title,
-          normalizedTitle: normalizeTitle(video.title),
           imvdbVideoId: video.imvdbVideoId,
-          releaseYear: video.year,
-          thumbnailUrl: video.thumbnailUrl,
-          director: video.director,
-          // youtubeVideoId is unique — a collision (e.g. the same official
-          // video already linked via a YoutubeSource sync) shouldn't abort
-          // the rest of this artist's videos, just skip stamping it here.
-          youtubeVideoId: video.youtubeVideoId,
           monitored: true,
-        },
-      });
-      videosAdded++;
+          ...data,
+        } });
+      if (existingId) videosUpdated++;
+      else videosAdded++;
+      for (const source of video.sources) {
+        await prisma.acquisitionSource.upsert({
+          where: {
+            musicVideoId_provider_url: {
+              musicVideoId: saved.id,
+              provider: source.provider,
+              url: source.url,
+            },
+          },
+          update: {
+            externalId: source.externalId,
+            authority: 'authoritative',
+            confidence: 'confirmed',
+            accepted: true,
+          },
+          create: {
+            musicVideoId: saved.id,
+            provider: source.provider,
+            externalId: source.externalId,
+            url: source.url,
+            authority: 'authoritative',
+            confidence: 'confirmed',
+            discoveryOrigin: 'imvdb',
+            accepted: true,
+          },
+        });
+      }
     } catch (err) {
       await logActivity('warn', 'metadata-refresh:video', err);
     }
   }
 
-  return { videosAdded };
+  const removed = existing.filter((video) => !seenIds.has(video.imvdbVideoId as string));
+  if (removed.length) {
+    await prisma.musicVideo.updateMany({
+      where: { id: { in: removed.map((video) => video.id) } },
+      data: { catalogStatus: 'removedReview', removedAt: new Date() },
+    });
+  }
+  await prisma.artist.update({
+    where: { id: artistId },
+    data: { metadataRefreshedAt: new Date() },
+  });
+  await prisma.artistSource.upsert({
+    where: { artistId_provider_origin: { artistId, provider: 'imvdb', origin: 'metadata-refresh' } },
+    update: { externalId: artist.imvdbArtistId, lastSeenAt: new Date() },
+    create: { artistId, provider: 'imvdb', externalId: artist.imvdbArtistId, origin: 'metadata-refresh' },
+  });
+  return { videosAdded, videosUpdated, videosFlaggedForReview: removed.length };
 }
 
 export async function refreshImvdbMetadata(): Promise<{ artistsChecked: number; videosAdded: number }> {

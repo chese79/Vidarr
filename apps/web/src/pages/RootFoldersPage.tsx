@@ -5,19 +5,27 @@ import { api } from '../api/client';
 export default function RootFoldersPage() {
   const queryClient = useQueryClient();
   const [path, setPath] = useState('');
+  const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
 
   const rootFolders = useQuery({ queryKey: ['rootFolders'], queryFn: api.rootFolders.list });
+  const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list });
 
   const createFolder = useMutation({
     mutationFn: api.rootFolders.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rootFolders'] });
       setPath('');
+      setTargetConnectorId('');
     },
   });
 
   const removeFolder = useMutation({
     mutationFn: api.rootFolders.remove,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rootFolders'] }),
+  });
+  const updateFolder = useMutation({
+    mutationFn: ({ id, targetConnectorId }: { id: number; targetConnectorId: number | null }) =>
+      api.rootFolders.update(id, { targetConnectorId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rootFolders'] }),
   });
 
@@ -31,7 +39,7 @@ export default function RootFoldersPage() {
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
-          if (path) createFolder.mutate({ path });
+          if (path) createFolder.mutate({ path, targetConnectorId: targetConnectorId || null });
         }}
       >
         <div className="form-row">
@@ -43,6 +51,16 @@ export default function RootFoldersPage() {
             style={{ minWidth: 320 }}
             required
           />
+          <select
+            aria-label="Target media-server video library"
+            value={targetConnectorId}
+            onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}
+          >
+            <option value="">No automatic media-server refresh</option>
+            {connectors.data?.filter((connector) => connector.videoLibraryId).map((connector) => (
+              <option key={connector.id} value={connector.id}>{connector.name}</option>
+            ))}
+          </select>
           <button type="submit">Add</button>
         </div>
       </form>
@@ -52,6 +70,7 @@ export default function RootFoldersPage() {
           <thead>
             <tr>
               <th>Path</th>
+              <th>Target media server</th>
               <th>
                 <span className="sr-only">Actions</span>
               </th>
@@ -61,6 +80,18 @@ export default function RootFoldersPage() {
             {rootFolders.data.map((rf) => (
               <tr key={rf.id}>
                 <td>{rf.path}</td>
+                <td>
+                  <select
+                    aria-label={`Target media server for ${rf.path}`}
+                    value={rf.targetConnectorId ?? ''}
+                    onChange={(e) => updateFolder.mutate({ id: rf.id, targetConnectorId: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">None</option>
+                    {connectors.data?.filter((connector) => connector.videoLibraryId).map((connector) => (
+                      <option key={connector.id} value={connector.id}>{connector.name}</option>
+                    ))}
+                  </select>
+                </td>
                 <td>
                   <button
                     className="secondary"

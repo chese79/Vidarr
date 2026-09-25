@@ -5,6 +5,27 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — completed artist-centered library workflow
+
+- Complete the artist detail workspace with official artwork, catalog/availability/play summaries,
+  IMVDb refresh, inventory reconciliation, artist/video monitoring presets, missing-video search,
+  acquisition progress, source provenance, and uncertain-match review controls.
+- Add provider-neutral artist and acquisition-source provenance. Authoritative IMVDb YouTube and
+  Vimeo links are retained separately from the official catalog and can be acquired directly;
+  accepted heuristic YouTube results remain recorded with their confidence and origin.
+- Reconcile IMVDb refreshes as upserts: metadata and duration are refreshed without resetting user
+  monitoring/ignore choices, while provider-removed videos are retained and flagged for review.
+- Add complete, unmatched-inventory, and active-download Library filters; monitored and unmatched
+  counts; unknown and multi-genre filtering; selected-artist and global missing-video searches; and
+  compact duration/director/progress metadata in the lazy artist accordion.
+- Inventory Plex and Jellyfin duration data, expose connector scan progress, materialize newly found
+  artists as unmonitored catalog entries, and retain match confidence for artist-page review.
+- Associate root folders with an optional target Plex/Jellyfin connector. Successful imports request
+  a media-server refresh and remain visibly `awaiting server scan` until a later inventory sync
+  confirms them, preventing duplicate automatic searches during that window.
+- Add a backward-compatible Prisma migration for provenance, duration, catalog review state,
+  refresh/reconciliation timestamps, scan progress, target connectors, and awaiting-scan state.
+
 ### Fixed — follow-up acquisition and migration review
 
 - Reconcile legacy duplicate active queue rows before installing the active-download unique index,

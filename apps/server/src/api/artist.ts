@@ -5,6 +5,7 @@ import {
   UpdateArtistSchema,
   ArtistSummaryQuerySchema,
   BulkMonitorArtistsBodySchema,
+  BulkArtistIdsBodySchema,
 } from '@vidarr/shared-types';
 import { prisma, logActivity } from '../db/client.js';
 import { sortNameFor, normalizeTitle } from '../pipeline/normalize.js';
@@ -13,6 +14,8 @@ import { matchStandardGenre } from '../pipeline/genreMatch.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
 import { computeVideoStatus } from '../pipeline/videoStatus.js';
+import { matchLibraryVideo, type CanonicalVideo } from '../pipeline/reconciliation.js';
+import { autoSearchAndGrab, runBacklogSearch } from '../pipeline/autoSearch.js';
 
 // Escapes SQLite LIKE's own wildcards so a search term containing "%" or "_"
 // is matched literally rather than as a pattern.
@@ -31,6 +34,8 @@ interface ArtistSummaryRow {
   availableVideoCount: number;
   missingVideoCount: number;
   downloadingVideoCount: number;
+  monitoredVideoCount: number;
+  unmatchedVideoCount: number;
   aggregatePlayCount: number | null;
   letter: string;
 }
@@ -82,7 +87,11 @@ export async function artistRoutes(app: FastifyInstance) {
     if (query.search) {
       baseConditions.push(Prisma.sql`a."name" LIKE ${'%' + escapeLikeTerm(query.search) + '%'} ESCAPE '\\'`);
     }
-    if (query.genre) baseConditions.push(Prisma.sql`a."genre" = ${query.genre}`);
+    if (query.genre === '__unknown__') {
+      baseConditions.push(Prisma.sql`(a."genre" IS NULL OR TRIM(a."genre") = '')`);
+    } else if (query.genre) {
+      baseConditions.push(Prisma.sql`(',' || LOWER(REPLACE(a."genre", ', ', ',')) || ',') LIKE ${'%,' + query.genre.toLowerCase() + ',%'}`);
+    }
     if (query.monitored) baseConditions.push(Prisma.sql`a."monitored" = ${query.monitored === 'true' ? 1 : 0}`);
     const baseWhere = Prisma.join(baseConditions, ' AND ');
 
@@ -95,12 +104,16 @@ export async function artistRoutes(app: FastifyInstance) {
       refineConditions.push(Prisma.sql`COALESCE("aggregatePlayCount", 0) >= ${query.minPlayCount}`);
     }
     if (query.hasMissing === 'true') refineConditions.push(Prisma.sql`"missingVideoCount" > 0`);
+    if (query.completeness === 'complete') refineConditions.push(Prisma.sql`"missingVideoCount" = 0 AND "knownVideoCount" > 0`);
+    if (query.completeness === 'unmatched') refineConditions.push(Prisma.sql`"unmatchedVideoCount" > 0`);
+    if (query.completeness === 'activeDownloads') refineConditions.push(Prisma.sql`"downloadingVideoCount" > 0`);
     const refineWhere = Prisma.join(refineConditions, ' AND ');
 
     const filteredCte = Prisma.sql`
       WITH video_stats AS (
         SELECT
           mv."artistId" AS "artistId",
+          mv."monitored" AS "isMonitored",
           CASE WHEN mv."hasFile" = 1 OR EXISTS (
             SELECT 1 FROM "LibraryVideo" lv
             JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
@@ -124,6 +137,7 @@ export async function artistRoutes(app: FastifyInstance) {
           COUNT(*) AS "known",
           SUM("isAvailable") AS "available",
           SUM("isDownloading") AS "downloading",
+          SUM("isMonitored") AS "monitored",
           SUM(CASE WHEN "playCount" IS NOT NULL THEN "playCount" ELSE 0 END) AS "playCountSum",
           SUM(CASE WHEN "playCount" IS NOT NULL THEN 1 ELSE 0 END) AS "playCountKnownN"
         FROM video_stats
@@ -141,6 +155,13 @@ export async function artistRoutes(app: FastifyInstance) {
           COALESCE(s."available", 0) AS "availableVideoCount",
           COALESCE(s."known", 0) - COALESCE(s."available", 0) AS "missingVideoCount",
           COALESCE(s."downloading", 0) AS "downloadingVideoCount",
+          COALESCE(s."monitored", 0) AS "monitoredVideoCount",
+          (SELECT COUNT(*) FROM "LibraryVideo" ulv
+             JOIN "LibraryConnector" ulc ON ulc."id" = ulv."connectorId"
+             WHERE ulc."enabled" = 1 AND ulv."available" = 1
+               AND ulv."normalizedArtistName" = LOWER(TRIM(a."name"))
+               AND (ulv."musicVideoId" IS NULL OR ulv."matchConfidence" IS NOT NULL)
+          ) AS "unmatchedVideoCount",
           CASE WHEN COALESCE(s."playCountKnownN", 0) > 0 THEN s."playCountSum" ELSE NULL END AS "aggregatePlayCount",
           CASE
             WHEN UPPER(SUBSTR(TRIM(a."sortName"), 1, 1)) BETWEEN 'A' AND 'Z'
@@ -194,6 +215,8 @@ export async function artistRoutes(app: FastifyInstance) {
       availableVideoCount: Number(row.availableVideoCount),
       missingVideoCount: Number(row.missingVideoCount),
       downloadingVideoCount: Number(row.downloadingVideoCount),
+      monitoredVideoCount: Number(row.monitoredVideoCount),
+      unmatchedVideoCount: Number(row.unmatchedVideoCount),
       aggregatePlayCount: row.aggregatePlayCount == null ? null : Number(row.aggregatePlayCount),
     }));
     const availableLetters = letterRows.map((r) => r.letter).sort();
@@ -218,6 +241,24 @@ export async function artistRoutes(app: FastifyInstance) {
     const id = Number(req.params.id);
     const artist = await prisma.artist.findUnique({ where: { id } });
     if (!artist) return reply.code(404).send({ error: 'Artist not found' });
+
+    const unmatchedInventory = await prisma.libraryVideo.findMany({
+      where: {
+        available: true,
+        normalizedArtistName: normalizeTitle(artist.name),
+        connector: { enabled: true },
+        OR: [{ musicVideoId: null }, { matchConfidence: { not: null } }],
+      },
+      select: {
+        id: true,
+        title: true,
+        releaseYear: true,
+        durationSeconds: true,
+        matchConfidence: true,
+        musicVideoId: true,
+        connector: { select: { name: true, type: true } },
+      },
+    });
 
     if (artist.posterUrl) {
       const image = await fetchImageSafely(artist.posterUrl);
@@ -267,6 +308,79 @@ export async function artistRoutes(app: FastifyInstance) {
     return { succeeded, failed };
   });
 
+  app.post('/api/v1/artist/bulk-search-missing', async (req) => {
+    const body = BulkArtistIdsBodySchema.parse(req.body);
+    const videos = await prisma.musicVideo.findMany({
+      where: {
+        artistId: { in: body.ids },
+        monitored: true,
+        ignored: false,
+        hasFile: false,
+        awaitingServerScanAt: null,
+        artist: { monitored: true },
+        libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
+        queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
+      },
+      select: { id: true },
+    });
+    let grabbed = 0;
+    let skipped = 0;
+    for (const video of videos) {
+      const outcome = await autoSearchAndGrab(video.id);
+      if (outcome.grabbed) grabbed++;
+      else skipped++;
+    }
+    return { grabbed, skipped };
+  });
+
+  app.post('/api/v1/artist/search-all-missing', async () => runBacklogSearch());
+
+  // Lightweight payload for the Library-page accordion. Keep artwork,
+  // acquisition-source history, and unmatched inventory on the full detail
+  // endpoint so expanding rows remains cheap for large catalogs.
+  app.get('/api/v1/artist/:id/videos', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const artist = await prisma.artist.findUnique({
+      where: { id },
+      select: {
+        monitored: true,
+        musicVideos: {
+          orderBy: [{ releaseYear: { sort: 'asc', nulls: 'last' } }, { title: 'asc' }],
+          select: {
+            id: true,
+            title: true,
+            releaseYear: true,
+            director: true,
+            durationSeconds: true,
+            monitored: true,
+            ignored: true,
+            hasFile: true,
+            awaitingServerScanAt: true,
+            libraryVideos: {
+              where: { available: true, connector: { enabled: true } },
+              select: { available: true, matchConfidence: true, playCount: true },
+            },
+            queueItems: { select: { status: true, progress: true }, orderBy: { addedAt: 'desc' } },
+          },
+        },
+      },
+    });
+    if (!artist) return reply.code(404).send({ error: 'Artist not found' });
+
+    return artist.musicVideos.map((video) => ({
+      ...video,
+      status: computeVideoStatus({
+        hasFile: video.hasFile,
+        monitored: video.monitored,
+        ignored: video.ignored,
+        artistMonitored: artist.monitored,
+        libraryVideos: video.libraryVideos,
+        queueItems: video.queueItems,
+        awaitingServerScanAt: video.awaitingServerScanAt,
+      }),
+    }));
+  });
+
   // Each video's `libraryVideos` carries only what the Artist Detail page's
   // "available on your media server" display needs (id for the thumbnail
   // proxy, playCount, connector name/type) — never the connector's raw
@@ -288,22 +402,43 @@ export async function artistRoutes(app: FastifyInstance) {
           orderBy: { releaseYear: { sort: 'asc', nulls: 'last' } },
           include: {
             libraryVideos: {
-              where: { available: true, matchConfidence: null, connector: { enabled: true } },
+              where: { available: true, connector: { enabled: true } },
               select: {
                 id: true,
                 available: true,
                 matchConfidence: true,
                 hasThumbnail: true,
                 playCount: true,
+                durationSeconds: true,
                 connector: { select: { name: true, type: true } },
               },
             },
-            queueItems: { select: { status: true } },
+            queueItems: { select: { status: true, progress: true }, orderBy: { addedAt: 'desc' } },
+            acquisitionSources: { orderBy: { id: 'asc' } },
           },
         },
       },
     });
     if (!artist) return reply.code(404).send({ error: 'Artist not found' });
+
+    const unmatchedInventory = await prisma.libraryVideo.findMany({
+      where: {
+        available: true,
+        connector: { enabled: true },
+        normalizedArtistName: normalizeTitle(artist.name),
+        OR: [{ musicVideoId: null }, { matchConfidence: { not: null } }],
+      },
+      select: {
+        id: true,
+        title: true,
+        releaseYear: true,
+        durationSeconds: true,
+        matchConfidence: true,
+        musicVideoId: true,
+        connector: { select: { name: true, type: true } },
+      },
+      orderBy: [{ releaseYear: { sort: 'asc', nulls: 'last' } }, { title: 'asc' }],
+    });
 
     return {
       ...artist,
@@ -316,9 +451,109 @@ export async function artistRoutes(app: FastifyInstance) {
           artistMonitored: artist.monitored,
           libraryVideos: mv.libraryVideos,
           queueItems: mv.queueItems,
+          awaitingServerScanAt: mv.awaitingServerScanAt,
         }),
       })),
+      summary: {
+        known: artist.musicVideos.length,
+        available: artist.musicVideos.filter((mv) => mv.hasFile || mv.libraryVideos.some((lv) => lv.available && lv.matchConfidence == null)).length,
+        missing: artist.musicVideos.filter((mv) => !mv.hasFile && !mv.libraryVideos.some((lv) => lv.available && lv.matchConfidence == null)).length,
+        monitored: artist.musicVideos.filter((mv) => mv.monitored).length,
+        aggregatePlayCount: (() => {
+          const counts = artist.musicVideos.flatMap((mv) => mv.libraryVideos.map((lv) => lv.playCount).filter((v): v is number => v != null));
+          return counts.length ? counts.reduce((sum, value) => sum + value, 0) : null;
+        })(),
+      },
+      unmatchedInventory,
     };
+  });
+
+  app.post('/api/v1/artist/:id/refresh-metadata', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return refreshArtistMetadata(id);
+  });
+
+  app.post('/api/v1/artist/:id/reconcile', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    const artist = await prisma.artist.findUniqueOrThrow({
+      where: { id },
+      include: { musicVideos: true },
+    });
+    const candidates: CanonicalVideo[] = artist.musicVideos.map((video) => ({
+      id: video.id,
+      normalizedTitle: video.normalizedTitle,
+      normalizedArtistName: normalizeTitle(artist.name),
+      releaseYear: video.releaseYear,
+      durationSeconds: video.durationSeconds,
+    }));
+    const inventory = await prisma.libraryVideo.findMany({
+      where: { normalizedArtistName: normalizeTitle(artist.name), connector: { enabled: true } },
+    });
+    let confident = 0;
+    let review = 0;
+    let unmatched = 0;
+    for (const item of inventory) {
+      const match = matchLibraryVideo(
+        {
+          normalizedArtistName: item.normalizedArtistName,
+          normalizedTitle: item.normalizedTitle,
+          releaseYear: item.releaseYear,
+          durationSeconds: item.durationSeconds,
+        },
+        candidates,
+        { musicVideoId: item.musicVideoId, matchConfidence: item.matchConfidence as 'probable' | 'ambiguous' | null },
+        item.rejectedMusicVideoId,
+      );
+      await prisma.libraryVideo.update({
+        where: { id: item.id },
+        data: { musicVideoId: match.musicVideoId, matchConfidence: match.matchConfidence },
+      });
+      if (!match.musicVideoId) unmatched++;
+      else if (match.matchConfidence) review++;
+      else confident++;
+    }
+    await prisma.artist.update({ where: { id }, data: { reconciledAt: new Date() } });
+    return { confident, review, unmatched };
+  });
+
+  app.post('/api/v1/artist/:id/monitor-videos', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    const body = req.body as { mode: 'all' | 'none' | 'missing' };
+    const where: Prisma.MusicVideoWhereInput = { artistId: id };
+    if (body.mode === 'missing') {
+      where.hasFile = false;
+      where.libraryVideos = { none: { available: true, matchConfidence: null, connector: { enabled: true } } };
+    }
+    const result = await prisma.musicVideo.updateMany({
+      where,
+      data: { monitored: body.mode !== 'none' },
+    });
+    return { updated: result.count };
+  });
+
+  app.post('/api/v1/artist/:id/search-missing', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    const videos = await prisma.musicVideo.findMany({
+      where: {
+        artistId: id,
+        monitored: true,
+        ignored: false,
+        hasFile: false,
+        awaitingServerScanAt: null,
+        artist: { monitored: true },
+        libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
+        queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
+      },
+      select: { id: true },
+    });
+    let grabbed = 0;
+    let skipped = 0;
+    for (const video of videos) {
+      const outcome = await autoSearchAndGrab(video.id);
+      if (outcome.grabbed) grabbed++;
+      else skipped++;
+    }
+    return { grabbed, skipped };
   });
 
   app.post('/api/v1/artist', async (req, reply) => {
@@ -333,6 +568,14 @@ export async function artistRoutes(app: FastifyInstance) {
         qualityProfileId: body.qualityProfileId,
         posterUrl: body.posterUrl ?? null,
         genre: body.genre ?? null,
+      },
+    });
+    await prisma.artistSource.create({
+      data: {
+        artistId: created.id,
+        provider: body.imvdbArtistId ? 'imvdb' : 'manual',
+        externalId: body.imvdbArtistId ?? null,
+        origin: 'manual-add',
       },
     });
     reply.code(201);

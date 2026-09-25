@@ -204,3 +204,30 @@ export async function downloadVideo(
   if (!filepath) throw new Error('yt-dlp did not report an output file path');
   return filepath;
 }
+
+// Provider-neutral direct-source transfer. yt-dlp supports both YouTube and
+// Vimeo (plus other URL-based providers); catalog code supplies the exact
+// authoritative URL instead of forcing every source through a YouTube id.
+export async function downloadDirectVideo(
+  url: string,
+  destDir: string,
+  formatSelector: string = DEFAULT_FORMAT,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
+  const args = [
+    '-f', formatSelector,
+    '--merge-output-format', 'mp4',
+    '--newline',
+    '-P', destDir,
+    '-o', '%(id)s.%(ext)s',
+    '--print', 'after_move:filepath',
+  ];
+  if (FFMPEG_PATH !== 'ffmpeg') args.push('--ffmpeg-location', path.dirname(FFMPEG_PATH));
+  args.push(url);
+  const { stdout, stderr, code } = await runYtDlp(args, onProgress);
+  if (code !== 0) throw new Error(`yt-dlp download failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+  const lines = stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+  const filepath = lines[lines.length - 1];
+  if (!filepath) throw new Error('yt-dlp did not report an output file path');
+  return filepath;
+}

@@ -97,7 +97,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     for (let startIndex = 0; ; startIndex += limit) {
       const body = await jellyfinGet(
         config,
-        `/Users/${config.userId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&ParentId=${encodeURIComponent(config.videoLibraryId)}&Fields=Artists,ProductionYear,Path,UserData,ImageTags&StartIndex=${startIndex}&Limit=${limit}`,
+        `/Users/${config.userId}/Items?IncludeItemTypes=MusicVideo&Recursive=true&ParentId=${encodeURIComponent(config.videoLibraryId)}&Fields=Artists,ProductionYear,Path,UserData,ImageTags,RunTimeTicks&StartIndex=${startIndex}&Limit=${limit}`,
       );
       const items: any[] = body?.Items ?? [];
       for (const item of items) {
@@ -107,6 +107,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
           title: item.Name as string,
           artistName,
           releaseYear: item.ProductionYear as number | undefined,
+          durationSeconds: typeof item.RunTimeTicks === 'number' ? Math.round(item.RunTimeTicks / 10_000_000) : undefined,
           path: item.Path as string | undefined,
           playCount: item.UserData?.PlayCount as number | undefined,
           hasThumbnail: Boolean(item.ImageTags?.Primary),
@@ -181,4 +182,8 @@ export const jellyfinProvider: LibraryConnectorProvider = {
   },
 
   findLibraryItem,
+
+  async refreshVideoLibrary(config) {
+    await jellyfinSend(config, 'POST', '/Library/Refresh');
+  },
 };

@@ -163,9 +163,14 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
     const connector = await prisma.libraryConnector.findUnique({ where: { id } });
     if (!connector) return reply.code(404).send({ error: 'Connector not found' });
 
+    await prisma.libraryConnector.update({
+      where: { id },
+      data: { syncRunning: true, syncProcessed: 0, syncTotal: null, lastSyncError: null },
+    });
     try {
       const syncStartedAt = new Date();
       const artists = await getLibraryConnectorProvider(connector.type).fetchArtists(connector);
+      await prisma.libraryConnector.update({ where: { id }, data: { syncTotal: artists.length, syncProcessed: 0 } });
       await prisma.$transaction(artists.map((artist) =>
         prisma.libraryArtist.upsert({
           where: { connectorId_externalId: { connectorId: id, externalId: artist.externalId } },
@@ -186,6 +191,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           },
         }),
       ));
+      await prisma.libraryConnector.update({ where: { id }, data: { syncProcessed: artists.length } });
       // Only prune rows the fetch didn't touch when the fetch actually
       // returned something — an empty `artists` array almost always means a
       // transient glitch (auth hiccup, momentarily-empty response, a renamed
@@ -202,16 +208,21 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
       const videos = provider.fetchVideos && connector.videoLibraryId
         ? await provider.fetchVideos(connector)
         : [];
+      await prisma.libraryConnector.update({
+        where: { id },
+        data: { syncTotal: artists.length + videos.length },
+      });
       if (provider.fetchVideos && connector.videoLibraryId) {
         const canonicalVideos: CanonicalVideo[] = (
           await prisma.musicVideo.findMany({
-            select: { id: true, title: true, releaseYear: true, artist: { select: { name: true } } },
+            select: { id: true, title: true, releaseYear: true, durationSeconds: true, artist: { select: { name: true } } },
           })
         ).map((video) => ({
           id: video.id,
           normalizedTitle: normalizeTitle(video.title),
           normalizedArtistName: normalizeTitle(video.artist.name),
           releaseYear: video.releaseYear,
+          durationSeconds: video.durationSeconds,
         }));
         // A prior sync's match must never be silently dropped just because
         // *this* sync's search misses (an artist/video rename upstream, for
@@ -222,7 +233,10 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           where: { connectorId: id },
           select: { externalId: true, musicVideoId: true, matchConfidence: true, rejectedMusicVideoId: true },
         });
-        const existingByExternalId = new Map(existingMatches.map((v) => [v.externalId, v]));
+        const existingByExternalId = new Map(existingMatches.map((v) => [v.externalId, {
+          ...v,
+          matchConfidence: v.matchConfidence as MatchConfidence | null,
+        }]));
         // The "mark everything stale, then re-mark what's still there" reset
         // must be one atomic transaction — if it were two separate
         // statements and anything after the reset threw (a bad title from
@@ -237,7 +251,12 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             const normalizedTitle = normalizeTitle(video.title);
             const existing = existingByExternalId.get(video.externalId);
             const match = matchLibraryVideo(
-              { normalizedArtistName, normalizedTitle, releaseYear: video.releaseYear ?? null },
+              {
+                normalizedArtistName,
+                normalizedTitle,
+                releaseYear: video.releaseYear ?? null,
+                durationSeconds: video.durationSeconds ?? null,
+              },
               canonicalVideos,
               existing
                 ? { musicVideoId: existing.musicVideoId, matchConfidence: existing.matchConfidence as MatchConfidence | null }
@@ -252,6 +271,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
                 artistName: video.artistName,
                 normalizedArtistName,
                 releaseYear: video.releaseYear ?? null,
+                durationSeconds: video.durationSeconds ?? null,
                 path: video.path ?? null,
                 playCount: video.playCount ?? null,
                 hasThumbnail: video.hasThumbnail ?? false,
@@ -268,6 +288,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
                 artistName: video.artistName,
                 normalizedArtistName,
                 releaseYear: video.releaseYear ?? null,
+                durationSeconds: video.durationSeconds ?? null,
                 path: video.path ?? null,
                 playCount: video.playCount ?? null,
                 hasThumbnail: video.hasThumbnail ?? false,
@@ -277,6 +298,68 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             });
           }),
         ]);
+        const confirmedIds = videos
+          .map((video) => {
+            const match = matchLibraryVideo(
+              {
+                normalizedArtistName: normalizeTitle(video.artistName),
+                normalizedTitle: normalizeTitle(video.title),
+                releaseYear: video.releaseYear ?? null,
+                durationSeconds: video.durationSeconds ?? null,
+              },
+              canonicalVideos,
+              existingByExternalId.get(video.externalId) ?? null,
+              existingByExternalId.get(video.externalId)?.rejectedMusicVideoId ?? null,
+            );
+            return match.matchConfidence === null ? match.musicVideoId : null;
+          })
+          .filter((value): value is number => value != null);
+        if (confirmedIds.length) {
+          await prisma.musicVideo.updateMany({
+            where: { id: { in: confirmedIds } },
+            data: { awaitingServerScanAt: null },
+          });
+          await prisma.artist.updateMany({
+            where: { musicVideos: { some: { id: { in: confirmedIds } } } },
+            data: { reconciledAt: new Date() },
+          });
+        }
+      }
+
+      // Materialize artists observed in selected libraries into the canonical
+      // catalog when defaults exist. They remain unmonitored, so discovery
+      // never starts acquisition by itself, and provenance explains why each
+      // record exists.
+      const defaults = await Promise.all([
+        prisma.rootFolder.findFirst({ orderBy: { id: 'asc' } }),
+        prisma.qualityProfile.findFirst({ orderBy: { id: 'asc' } }),
+      ]);
+      if (defaults[0] && defaults[1]) {
+        const names = new Set([...artists.map((a) => a.name), ...videos.map((v) => v.artistName)]);
+        const canonicalArtists = await prisma.artist.findMany({ select: { id: true, name: true } });
+        const byName = new Map(canonicalArtists.map((a) => [normalizeTitle(a.name), a]));
+        for (const name of names) {
+          const key = normalizeTitle(name);
+          let canonical = byName.get(key);
+          if (!canonical) {
+            canonical = await prisma.artist.create({
+              data: {
+                name,
+                sortName: name.replace(/^the\s+/i, ''),
+                monitored: false,
+                rootFolderId: defaults[0].id,
+                qualityProfileId: defaults[1].id,
+              },
+              select: { id: true, name: true },
+            });
+            byName.set(key, canonical);
+          }
+          await prisma.artistSource.upsert({
+            where: { artistId_provider_origin: { artistId: canonical.id, provider: connector.type, origin: `connector:${id}` } },
+            update: { lastSeenAt: new Date() },
+            create: { artistId: canonical.id, provider: connector.type, origin: `connector:${id}` },
+          });
+        }
       }
 
       // Backfill vidarr's own Artist.genre from this connector's synced data
@@ -299,7 +382,14 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
 
       await prisma.libraryConnector.update({
         where: { id },
-        data: { lastSyncedAt: new Date(), lastSyncStatus: 'success', lastSyncError: null },
+        data: {
+          lastSyncedAt: new Date(),
+          lastSyncStatus: 'success',
+          lastSyncError: null,
+          syncRunning: false,
+          syncProcessed: artists.length + videos.length,
+          syncTotal: artists.length + videos.length,
+        },
       });
       const recommendations = await refreshRecommendations();
       return {
@@ -315,6 +405,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           lastSyncedAt: new Date(),
           lastSyncStatus: 'failed',
           lastSyncError: (err as Error).message,
+          syncRunning: false,
         },
       });
       return reply.code(502).send({ error: (err as Error).message });
