@@ -114,6 +114,32 @@ describe('playlist routes', () => {
     expect(res.json().map((item: { id: number }) => item.id)).toContain(video.id);
   });
 
+  it('binds a static playlist to one playback connector for item selection and push', async () => {
+    const target = await createLibraryConnector({ name: 'Target' });
+    const other = await createLibraryConnector({ name: 'Other' });
+    await prisma.libraryConnector.updateMany({ where: { id: { in: [target.id, other.id] } }, data: { videoLibraryId: 'videos' } });
+    const targetVideo = await createMusicVideo(artistId, { title: 'Target Video', hasFile: false });
+    await createLibraryVideo(target.id, { musicVideoId: targetVideo.id, externalId: 'target' });
+    const otherVideo = await createMusicVideo(artistId, { title: 'Other Video', hasFile: false });
+    await createLibraryVideo(other.id, { musicVideoId: otherVideo.id, externalId: 'other' });
+    const created = await app.inject({ method: 'POST', url: '/api/v1/playlist', headers: authHeaders(),
+      payload: { name: 'Bound', targetConnectorId: target.id } });
+    const id = created.json().id;
+    const eligible = await app.inject({ method: 'GET', url: `/api/v1/musicvideo?playableConnectorId=${target.id}`, headers: authHeaders() });
+    const rejected = await app.inject({ method: 'POST', url: `/api/v1/playlist/${id}/items`, headers: authHeaders(),
+      payload: { musicVideoId: otherVideo.id } });
+    const accepted = await app.inject({ method: 'POST', url: `/api/v1/playlist/${id}/items`, headers: authHeaders(),
+      payload: { musicVideoId: targetVideo.id } });
+    const wrongPush = await app.inject({ method: 'POST', url: `/api/v1/playlist/${id}/push/${other.id}`, headers: authHeaders() });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json().targetConnectorId).toBe(target.id);
+    expect(eligible.json().map((item: { id: number }) => item.id)).toEqual([targetVideo.id]);
+    expect(rejected.statusCode).toBe(409);
+    expect(accepted.statusCode).toBe(201);
+    expect(wrongPush.statusCode).toBe(409);
+  });
+
   describe('playlist items', () => {
     let playlistId: number;
     let videoId: number;

@@ -45,6 +45,24 @@ describe('generatePlaylistFromFilters', () => {
     expect((await prisma.playlistItem.findFirst({ where: { playlistId: result.playlistId } }))?.musicVideoId).toBe(video.id);
   });
 
+  it('scopes a bound playlist to confirmed videos in its selected playback connector', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const target = await createLibraryConnector({ name: 'Target' });
+    const other = await createLibraryConnector({ name: 'Other' });
+    const targetVideo = await createMusicVideo(artist.id, { title: 'Target', hasFile: false, releaseYear: 2000 });
+    await createLibraryVideo(target.id, { musicVideoId: targetVideo.id, externalId: 'target' });
+    const otherVideo = await createMusicVideo(artist.id, { title: 'Other', hasFile: false, releaseYear: 2000 });
+    await createLibraryVideo(other.id, { musicVideoId: otherVideo.id, externalId: 'other' });
+    const localOnly = await createMusicVideo(artist.id, { title: 'Local', hasFile: true, releaseYear: 2000 });
+    await createMusicVideoFile(localOnly.id);
+
+    const result = await generatePlaylistFromFilters('Bound', { yearMin: 1990 }, 'all', { targetConnectorId: target.id });
+
+    expect(result.matchedCount).toBe(1);
+    expect((await prisma.playlist.findUniqueOrThrow({ where: { id: result.playlistId } })).targetConnectorId).toBe(target.id);
+    expect((await prisma.playlistItem.findFirst({ where: { playlistId: result.playlistId } }))?.musicVideoId).toBe(targetVideo.id);
+  });
+
   it('with no filters at all, matches nothing (checks.length === 0 short-circuit)', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id, { hasFile: true, releaseYear: 2000 });

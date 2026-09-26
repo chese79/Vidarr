@@ -95,6 +95,10 @@ file's quality. A date-added rule uses the canonical video's added time.
 The playlist picker and filter generator include confirmed media-server videos even when Vidarr
 does not own a local file. A push uses server-only items only when they are available in that
 specific connector.
+New static and smart playlists may be bound to one selected playback connector. A bound playlist
+draws only from confirmed available videos in that connector, restricts manual additions to that
+inventory, and pushes only to that connector. Existing unbound playlists preserve their current
+behavior and order; users can select a playback connector when creating a new playlist.
 
 Static playlists are snapshots. Smart playlists retain their rules, can be regenerated on demand
 or on a schedule, and can republish when membership changes. Playlist ordering must be explicit

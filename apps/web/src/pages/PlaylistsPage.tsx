@@ -11,6 +11,7 @@ function GeneratePlaylistPanel() {
   const [matchMode, setMatchMode] = useState<MatchMode>('all');
   const [smart, setSmart] = useState(false);
   const [regenerateIntervalMinutes, setRegenerateIntervalMinutes] = useState<number | null>(null);
+  const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
 
   const [enableYear, setEnableYear] = useState(false);
   const [yearMin, setYearMin] = useState('');
@@ -36,14 +37,15 @@ function GeneratePlaylistPanel() {
 
   const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list, enabled: open });
   const qualities = useQuery({ queryKey: ['qualities'], queryFn: api.qualities.list, enabled: open });
+  const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list, enabled: open });
   const downloaded = useQuery({
-    queryKey: ['musicVideos', 'playable'],
-    queryFn: () => api.musicVideos.list({ playable: true }),
+    queryKey: ['musicVideos', 'playable', targetConnectorId],
+    queryFn: () => api.musicVideos.list(targetConnectorId ? { playableConnectorId: targetConnectorId } : { playable: true }),
     enabled: open,
   });
 
   const generate = useMutation({
-    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode, smart, regenerateIntervalMinutes }),
+    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode, smart, regenerateIntervalMinutes, targetConnectorId: targetConnectorId || null }),
     onSuccess: (r) => {
       setResult(`Created "${name}" with ${r.matchedCount} video(s).`);
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
@@ -100,6 +102,10 @@ function GeneratePlaylistPanel() {
           style={{ minWidth: 220 }}
           required
         />
+        <select aria-label="Playback library" value={targetConnectorId} onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}>
+          <option value="">Any playback library</option>
+          {connectors.data?.filter((c) => c.enabled && c.type !== 'subsonic' && c.videoLibraryId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
             type="radio"
@@ -287,8 +293,10 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
   const playlist = playlists.data?.find((p) => p.id === playlistId);
 
   const downloaded = useQuery({
-    queryKey: ['musicVideos', 'playable'],
-    queryFn: () => api.musicVideos.list({ playable: true }),
+    queryKey: ['musicVideos', 'playable', playlist?.targetConnectorId],
+    queryFn: () => api.musicVideos.list(playlist?.targetConnectorId
+      ? { playableConnectorId: playlist.targetConnectorId }
+      : { playable: true }),
     enabled: adding,
   });
 
@@ -331,7 +339,8 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
 
   if (!playlist) return null;
   const inPlaylist = new Set(playlist.items.map((i) => i.musicVideoId));
-  const pushableConnectors = (connectors.data ?? []).filter((c) => c.enabled && c.type !== 'subsonic');
+  const pushableConnectors = (connectors.data ?? []).filter((c) => c.enabled && c.type !== 'subsonic'
+    && (!playlist.targetConnectorId || c.id === playlist.targetConnectorId));
 
   return (
     <div className="card">
@@ -360,6 +369,9 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
       </div>
       {playlist.kind === 'smart' && <p className="empty-state" style={{ padding: '0 0 8px' }}>
         {playlist.regenerateIntervalMinutes === 1440 ? 'Regenerates daily' : playlist.regenerateIntervalMinutes === 10080 ? 'Regenerates weekly' : 'Regenerates manually'}
+      </p>}
+      {playlist.targetConnectorId && <p className="empty-state" style={{ padding: '0 0 8px' }}>
+        Playback library: {connectors.data?.find((c) => c.id === playlist.targetConnectorId)?.name ?? `Connector ${playlist.targetConnectorId}`}
       </p>}
 
       {playlist.items.length ? (
@@ -444,8 +456,10 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
 export default function PlaylistsPage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
+  const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
 
   const playlists = useQuery({ queryKey: ['playlists'], queryFn: api.playlists.list });
+  const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list });
 
   const createPlaylist = useMutation({
     mutationFn: api.playlists.create,
@@ -458,7 +472,7 @@ export default function PlaylistsPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    createPlaylist.mutate({ name });
+    createPlaylist.mutate({ name, targetConnectorId: targetConnectorId || null });
   }
 
   return (
@@ -476,6 +490,10 @@ export default function PlaylistsPage() {
           style={{ minWidth: 240 }}
           required
         />
+        <select aria-label="Playlist playback library" value={targetConnectorId} onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}>
+          <option value="">Any playback library</option>
+          {connectors.data?.filter((c) => c.enabled && c.type !== 'subsonic' && c.videoLibraryId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <button type="submit">Create Playlist</button>
       </form>
 

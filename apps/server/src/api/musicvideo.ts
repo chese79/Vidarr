@@ -8,7 +8,7 @@ import { autoSearchAndGrab } from '../pipeline/autoSearch.js';
 
 export async function musicVideoRoutes(app: FastifyInstance) {
   app.get('/api/v1/musicvideo', async (req) => {
-    const query = req.query as { artistId?: string; hasFile?: string; playable?: string };
+    const query = req.query as { artistId?: string; hasFile?: string; playable?: string; playableConnectorId?: string };
     return prisma.musicVideo.findMany({
       where: {
         artistId: query.artistId ? Number(query.artistId) : undefined,
@@ -17,6 +17,9 @@ export async function musicVideoRoutes(app: FastifyInstance) {
           { hasFile: true },
           { libraryVideos: { some: { available: true, matchConfidence: null, connector: { enabled: true } } } },
         ] : undefined,
+        libraryVideos: query.playableConnectorId ? { some: {
+          connectorId: Number(query.playableConnectorId), available: true, matchConfidence: null, connector: { enabled: true },
+        } } : undefined,
       },
       include: { artist: true },
       orderBy: { addedAt: 'desc' },

@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — playback-library playlists
+
+- Bind a new static or smart playlist to a selected Plex or Jellyfin video library. The picker,
+  generated membership, manual additions, and push destination then use confirmed videos in that
+  library. Existing playlists remain unbound, preserving their current membership and behavior.
+
 ### Improved — playlist rules
 
 - Filter static and smart playlist generation by director, ownership, file quality, and date

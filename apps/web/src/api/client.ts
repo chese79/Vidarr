@@ -224,11 +224,12 @@ export const api = {
     searchMissing: (id: number) => request<BulkSearchResult>(`/artist/${id}/search-missing`, { method: 'POST' }),
   },
   musicVideos: {
-    list: (opts?: { artistId?: number; hasFile?: boolean; playable?: boolean }) => {
+    list: (opts?: { artistId?: number; hasFile?: boolean; playable?: boolean; playableConnectorId?: number }) => {
       const params = new URLSearchParams();
       if (opts?.artistId !== undefined) params.set('artistId', String(opts.artistId));
       if (opts?.hasFile !== undefined) params.set('hasFile', String(opts.hasFile));
       if (opts?.playable !== undefined) params.set('playable', String(opts.playable));
+      if (opts?.playableConnectorId !== undefined) params.set('playableConnectorId', String(opts.playableConnectorId));
       const qs = params.toString();
       return request<(MusicVideo & { artist: { name: string } })[]>(`/musicvideo${qs ? `?${qs}` : ''}`);
     },

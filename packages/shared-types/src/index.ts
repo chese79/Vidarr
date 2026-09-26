@@ -761,6 +761,7 @@ export const PlaylistSchema = z.object({
   ruleMatchMode: z.string().nullable(),
   regenerateIntervalMinutes: z.number().int().nullable(),
   lastGeneratedAt: z.string().nullable(),
+  targetConnectorId: z.number().int().nullable(),
   items: z.array(PlaylistItemSchema),
   syncs: z.array(PlaylistSyncSchema),
 });
@@ -768,6 +769,7 @@ export type Playlist = z.infer<typeof PlaylistSchema>;
 
 export const CreatePlaylistSchema = z.object({
   name: z.string().min(1),
+  targetConnectorId: z.number().int().positive().nullable().optional(),
 });
 export type CreatePlaylist = z.infer<typeof CreatePlaylistSchema>;
 
@@ -858,6 +860,7 @@ export const GeneratePlaylistBodySchema = z.object({
   matchMode: MatchMode,
   smart: z.boolean().optional(),
   regenerateIntervalMinutes: z.number().int().min(60).nullable().optional(),
+  targetConnectorId: z.number().int().positive().nullable().optional(),
 });
 export type GeneratePlaylistBody = z.infer<typeof GeneratePlaylistBodySchema>;
 

@@ -376,6 +376,7 @@ model Playlist {
   ruleMatchMode String? // all | any
   regenerateIntervalMinutes Int? // null = manual only
   lastGeneratedAt DateTime?
+  targetConnectorId Int? // selected Plex/Jellyfin playback library; null preserves legacy playlists
 
   items PlaylistItem[]
   syncs PlaylistSync[]
