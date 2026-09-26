@@ -330,6 +330,67 @@ describe('libraryconnector routes', () => {
     expect(video?.available).toBe(true);
   });
 
+  it('preserves video availability when a server scan suddenly returns no videos', async () => {
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { userId: 'user-1', musicLibraryId: 'music-1', videoLibraryId: 'video-1' },
+    });
+    await prisma.libraryVideo.create({ data: {
+      connectorId: connector.id,
+      externalId: 'existing-video',
+      title: 'Existing Song',
+      normalizedTitle: 'existing song',
+      artistName: 'Existing Artist',
+      normalizedArtistName: 'existing artist',
+      available: true,
+    } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ Items: [] }),
+    }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/sync`,
+      headers: authHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().videoCount).toBe(0);
+    expect((await prisma.libraryVideo.findFirst({ where: { connectorId: connector.id } }))?.available).toBe(true);
+  });
+
+  it('retains video-library provenance for an artist already observed in audio and refreshes it on later syncs', async () => {
+    const rootFolder = await createRootFolder();
+    const quality = await createQuality();
+    const qualityProfile = await createQualityProfile(quality.id);
+    const artist = await createArtist(rootFolder.id, qualityProfile.id, { name: 'Shared Artist' });
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { userId: 'user-1', musicLibraryId: 'music-1', videoLibraryId: 'video-1' },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => url.includes('MusicArtist')
+        ? { Items: [{ Id: 'audio-artist', Name: 'Shared Artist' }] }
+        : { Items: [{ Id: 'video-1', Name: 'Song', Artists: ['Shared Artist'] }], TotalRecordCount: 1 },
+    })));
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/libraryconnector/${connector.id}/sync`,
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(200);
+    }
+
+    expect(await prisma.artist.count()).toBe(1);
+    expect(await prisma.artistSource.count({ where: { artistId: artist.id, origin: `video-connector:${connector.id}` } })).toBe(1);
+  });
+
   it('preserves an existing LibraryVideo match across a sync where the title no longer resolves the exact-match key', async () => {
     const rootFolder = await createRootFolder();
     const quality = await createQuality();

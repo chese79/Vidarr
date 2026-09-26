@@ -292,22 +292,30 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         ? await provider.fetchVideos(connector)
         : [];
       if (defaults[0] && defaults[1]) {
+        const sourcedVideoArtists = new Set<number>();
         for (const video of videos) {
           const key = normalizeTitle(video.artistName);
-          if (!key || canonicalByName.has(key)) continue;
-          const canonical = await prisma.artist.create({
-            data: {
-              name: video.artistName,
-              sortName: video.artistName.replace(/^the\s+/i, ''),
-              monitored: false,
-              rootFolderId: defaults[0].id,
-              qualityProfileId: defaults[1].id,
-            },
-            select: { id: true, name: true },
-          });
-          canonicalByName.set(key, canonical);
-          await prisma.artistSource.create({
-            data: { artistId: canonical.id, provider: connector.type, externalId: video.externalId, origin: `video-connector:${id}` },
+          if (!key) continue;
+          let canonical = canonicalByName.get(key);
+          if (!canonical) {
+            canonical = await prisma.artist.create({
+              data: {
+                name: video.artistName,
+                sortName: video.artistName.replace(/^the\s+/i, ''),
+                monitored: false,
+                rootFolderId: defaults[0].id,
+                qualityProfileId: defaults[1].id,
+              },
+              select: { id: true, name: true },
+            });
+            canonicalByName.set(key, canonical);
+          }
+          if (sourcedVideoArtists.has(canonical.id)) continue;
+          sourcedVideoArtists.add(canonical.id);
+          await prisma.artistSource.upsert({
+            where: { artistId_provider_origin: { artistId: canonical.id, provider: connector.type, origin: `video-connector:${id}` } },
+            update: { externalId: video.externalId, lastSeenAt: new Date() },
+            create: { artistId: canonical.id, provider: connector.type, externalId: video.externalId, origin: `video-connector:${id}` },
           });
         }
       }
@@ -315,7 +323,10 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         where: { id },
         data: { syncTotal: artists.length + videos.length },
       });
-      if (provider.fetchVideos && connector.videoLibraryId) {
+      // A suddenly empty server response may mean an unavailable mount or a
+      // temporary media-server indexing failure. Preserve known availability
+      // until a non-empty scan can reconcile it safely.
+      if (provider.fetchVideos && connector.videoLibraryId && videos.length > 0) {
         const canonicalVideos: CanonicalVideo[] = (
           await prisma.musicVideo.findMany({
             where: { catalogKind: { in: ['official', 'supplementary'] } },

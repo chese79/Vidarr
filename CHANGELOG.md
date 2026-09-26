@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — video-library reconciliation
+
+- Preserve existing media-server video availability when a connector unexpectedly returns an
+  empty video scan, and retain video-library provenance for artists already known from audio.
+
 ### Improved — MusicBrainz artist review
 
 - Use artist credits from up to two observed MusicBrainz recordings and two observed releases to
