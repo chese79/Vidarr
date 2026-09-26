@@ -119,6 +119,8 @@ at the next regeneration.
 Replacing a previously published playlist requires every selected item to be available and matched
 in that playback library; otherwise Vidarr preserves the last published copy and records the
 failed push for review or retry.
+Plex sections without reliable artist metadata use title matching only when exactly one item in
+the selected library has that title; duplicate titles require review rather than an arbitrary pick.
 Existing static playlists and their item order are preserved by the additive migration.
 
 ## Current alignment priorities

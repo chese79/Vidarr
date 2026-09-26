@@ -35,8 +35,11 @@ const findLibraryItem: LibraryConnectorProvider['findLibraryItem'] = async (conf
   );
   const candidates: any[] = body?.MediaContainer?.Metadata ?? [];
   const wantTitle = normalizeTitle(item.title);
-  const match = candidates.find((c) => normalizeTitle(c.title ?? '') === wantTitle);
-  if (!match) return null;
+  const exact = candidates.filter((c) => c.ratingKey != null && normalizeTitle(c.title ?? '') === wantTitle);
+  // Plex video sections often lack artist metadata. A title-only match is
+  // safe only when it resolves to one item in the selected library.
+  if (exact.length !== 1) return null;
+  const match = exact[0];
   const result: LibraryItemMatch = { id: String(match.ratingKey), playCount: match.viewCount ?? null };
   return result;
 };

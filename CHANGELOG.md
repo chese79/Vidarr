@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — ambiguous Plex playlist matches
+
+- Leave a Plex playlist item unmatched when multiple videos in the selected library have the
+  same exact title, instead of selecting the first result. Existing published playlists remain
+  intact when this prevents a complete replacement.
+
 ### Fixed — playlist replacement safety
 
 - Preserve a previously published Plex or Jellyfin playlist when any selected item is no longer
