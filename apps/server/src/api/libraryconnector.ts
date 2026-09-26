@@ -8,7 +8,8 @@ import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discov
 import { refreshRecommendations } from '../pipeline/recommendations.js';
 import { matchLibraryVideo, type CanonicalVideo, type MatchConfidence } from '../pipeline/reconciliation.js';
 import { resolveArtistIdentityAndCatalog } from '../pipeline/artistIdentity.js';
-import { scanEmbeddedMusicArtists } from '../pipeline/embeddedMusicScan.js';
+import { scanEmbeddedMusicLibrary } from '../pipeline/embeddedMusicScan.js';
+import { syncLibraryRecordings } from '../pipeline/libraryRecordingSync.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
@@ -173,7 +174,10 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
     try {
       const syncStartedAt = new Date();
       const connectorArtists = await getLibraryConnectorProvider(connector.type).fetchArtists(connector);
-      const embeddedArtists = connector.musicPath ? await scanEmbeddedMusicArtists(connector.musicPath) : [];
+      const embeddedScan = connector.musicPath
+        ? await scanEmbeddedMusicLibrary(connector.musicPath)
+        : { artists: [], recordings: [] };
+      const embeddedArtists = embeddedScan.artists;
       const artistsByName = new Map(connectorArtists.map((artist) => [normalizeTitle(artist.name), artist]));
       for (const embedded of embeddedArtists) {
         const key = normalizeTitle(embedded.name);
@@ -226,6 +230,9 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         await prisma.libraryArtist.deleteMany({
           where: { connectorId: id, lastSyncedAt: { lt: syncStartedAt } },
         });
+      }
+      if (connector.musicPath) {
+        await syncLibraryRecordings(id, embeddedScan.recordings, syncStartedAt);
       }
 
       // Observations establish artists before either metadata catalog is
@@ -457,6 +464,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         ok: true,
         artistCount: artists.length,
         videoCount: videos.length,
+        recordingCount: embeddedScan.recordings.length,
         recommendationCount: recommendations.totalRecommendations,
       };
     } catch (err) {

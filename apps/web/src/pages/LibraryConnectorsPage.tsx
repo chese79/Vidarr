@@ -453,7 +453,7 @@ export default function LibraryConnectorsPage() {
       const result = await api.libraryConnectors.sync(id);
       setStatus((s) => ({
         ...s,
-        [id]: `Synced ${result.artistCount} artists, ${result.videoCount} videos; ${result.recommendationCount} recommendations`,
+        [id]: `Synced ${result.artistCount} artists, ${result.recordingCount} audio recordings, ${result.videoCount} videos; ${result.recommendationCount} recommendations`,
       }));
       queryClient.invalidateQueries({ queryKey: ['libraryVideos'] });
       queryClient.invalidateQueries({ queryKey: ['recommendations'] });

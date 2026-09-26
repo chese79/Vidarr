@@ -20,6 +20,12 @@ recording relationships. Picard data is consumed from tags embedded in audio fil
 media server; Vidarr does not depend on a separate Picard database. Genre precedence is user value,
 embedded Picard metadata, MusicBrainz genres, connector metadata, then folksonomy data.
 
+When a read-only audio path is configured, Vidarr retains connector-scoped observations for only
+the files present there: title, album, credited artist, album artist, track/disc positions, genre,
+and embedded MusicBrainz artist, recording, release, and release-group IDs. These observations are
+matching evidence, not a request to import the artist's complete MusicBrainz discography. A fully
+empty scan preserves prior observations because the mount may be temporarily unavailable.
+
 Artist observations are formed from the normalized union of:
 
 1. artists in every selected music library;
@@ -85,7 +91,7 @@ and deterministic, with optional shuffle/randomization as a user choice.
 
 ## Current alignment priorities
 
-1. Expand embedded-tag observations from artists into the user's observed release/recording set.
+1. Use the observed release/recording set as supporting evidence for ambiguous artist matches.
 2. Inventory existing music videos from Plex and Jellyfin and reconcile them with IMVDb official
    records while preserving supplementary inventory.
 3. Generalize authoritative sources to support IMVDb-provided YouTube and Vimeo links.

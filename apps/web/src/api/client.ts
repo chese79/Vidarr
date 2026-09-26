@@ -285,7 +285,7 @@ export const api = {
     test: (id: number) =>
       request<LibraryConnectorTestResult>(`/libraryconnector/${id}/test`, { method: 'POST' }),
     sync: (id: number) =>
-      request<{ ok: boolean; artistCount: number; videoCount: number; recommendationCount: number }>(`/libraryconnector/${id}/sync`, {
+      request<{ ok: boolean; artistCount: number; videoCount: number; recordingCount: number; recommendationCount: number }>(`/libraryconnector/${id}/sync`, {
         method: 'POST',
       }),
     sections: (id: number) => request<LibrarySection[]>(`/libraryconnector/${id}/sections`),

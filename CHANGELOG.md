@@ -10,12 +10,15 @@ under **Unreleased** in the same commit as the change.
 - Allow each library connector to scan an optional read-only audio path for embedded Picard tags,
   including MusicBrainz album-artist IDs and genres. Album artists take precedence over track
   performers, `Various Artists` is excluded, and corrupt files do not abort the complete scan.
+- Retain a connector-scoped inventory of only the audio recordings actually observed on disk,
+  including embedded MusicBrainz recording, release, release-group, artist, album, track, disc,
+  and genre evidence. Vidarr does not mirror an artist's complete MusicBrainz discography.
 - Merge embedded identity evidence with the same connector's media-server observations without
   losing server play counts or creating duplicate connector artists.
 - Add MusicBrainz match-state filtering, top-candidate previews, inline confirmation, and bulk
   candidate discovery to the artist Library.
-- Add a backward-compatible connector `musicPath` migration. Existing connectors continue to sync
-  exactly as before until a path is configured.
+- Add backward-compatible `musicPath` and observed-recording migrations. Existing connectors
+  continue to sync exactly as before until a path is configured.
 
 ### Added — MusicBrainz artist identity and authoritative video catalogs
 

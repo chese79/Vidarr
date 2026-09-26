@@ -300,10 +300,35 @@ model LibraryConnector {
   syncProcessed  Int        @default(0)
   syncTotal      Int?
 
-  libraryArtists LibraryArtist[]
-  libraryVideos  LibraryVideo[]
+  libraryArtists    LibraryArtist[]
+  libraryRecordings LibraryRecording[]
+  libraryVideos     LibraryVideo[]
   playlistSyncs  PlaylistSync[]
   rootFolders    RootFolder[]
+}
+
+model LibraryRecording {
+  id                        Int              @id @default(autoincrement())
+  connectorId               Int
+  connector                 LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  filePath                  String
+  title                     String
+  album                     String?
+  artistName                String
+  albumArtistName           String?
+  genre                     String?
+  trackNumber               Int?
+  discNumber                Int?
+  musicbrainzArtistId       String?
+  musicbrainzAlbumArtistId  String?
+  musicbrainzRecordingId    String?
+  musicbrainzReleaseId      String?
+  musicbrainzReleaseGroupId String?
+  lastSyncedAt              DateTime         @default(now())
+
+  @@unique([connectorId, filePath])
+  @@index([musicbrainzArtistId])
+  @@index([musicbrainzRecordingId])
 }
 
 // A video observed in a selected Plex/Jellyfin music-video library. This is

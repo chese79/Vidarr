@@ -12,6 +12,27 @@ const MAX_AUDIO_FILES = 100_000;
 
 type Probe = (filePath: string) => Promise<Record<string, unknown>>;
 
+export interface EmbeddedRecordingObservation {
+  filePath: string;
+  title: string;
+  album?: string;
+  artistName: string;
+  albumArtistName?: string;
+  genre?: string;
+  trackNumber?: number;
+  discNumber?: number;
+  musicbrainzArtistId?: string;
+  musicbrainzAlbumArtistId?: string;
+  musicbrainzRecordingId?: string;
+  musicbrainzReleaseId?: string;
+  musicbrainzReleaseGroupId?: string;
+}
+
+export interface EmbeddedMusicScanResult {
+  artists: FetchedLibraryArtist[];
+  recordings: EmbeddedRecordingObservation[];
+}
+
 function tag(tags: Record<string, unknown>, ...names: string[]): string | undefined {
   const byLowerName = new Map(Object.entries(tags).map(([name, value]) => [name.toLowerCase(), value]));
   for (const name of names) {
@@ -37,6 +58,35 @@ export function artistFromEmbeddedTags(tags: Record<string, unknown>): FetchedLi
   };
 }
 
+function mbid(tags: Record<string, unknown>, ...names: string[]) {
+  return tag(tags, ...names)?.match(MBID_PATTERN)?.[0].toLowerCase();
+}
+
+function positiveInteger(value?: string): number | undefined {
+  const parsed = Number.parseInt(value?.split('/')[0] ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+export function recordingFromEmbeddedTags(filePath: string, tags: Record<string, unknown>): EmbeddedRecordingObservation | null {
+  const artistName = tag(tags, 'artist', 'album_artist', 'albumartist');
+  if (!artistName) return null;
+  return {
+    filePath,
+    title: tag(tags, 'title') ?? path.basename(filePath, path.extname(filePath)),
+    album: tag(tags, 'album'),
+    artistName,
+    albumArtistName: tag(tags, 'album_artist', 'albumartist'),
+    genre: tag(tags, 'genre'),
+    trackNumber: positiveInteger(tag(tags, 'track', 'tracknumber')),
+    discNumber: positiveInteger(tag(tags, 'disc', 'discnumber')),
+    musicbrainzArtistId: mbid(tags, 'musicbrainz_artistid', 'musicbrainz artist id'),
+    musicbrainzAlbumArtistId: mbid(tags, 'musicbrainz_albumartistid', 'musicbrainz album artist id'),
+    musicbrainzRecordingId: mbid(tags, 'musicbrainz_recordingid', 'musicbrainz recording id'),
+    musicbrainzReleaseId: mbid(tags, 'musicbrainz_albumid', 'musicbrainz release id'),
+    musicbrainzReleaseGroupId: mbid(tags, 'musicbrainz_releasegroupid', 'musicbrainz release group id'),
+  };
+}
+
 async function listAudioFiles(rootPath: string): Promise<string[]> {
   const root = path.resolve(rootPath);
   const files: string[] = [];
@@ -53,7 +103,7 @@ async function listAudioFiles(rootPath: string): Promise<string[]> {
       }
     }
   }
-  return files;
+  return files.sort((left, right) => left.localeCompare(right));
 }
 
 const ffprobe: Probe = async (filePath) => {
@@ -63,25 +113,34 @@ const ffprobe: Probe = async (filePath) => {
   return (JSON.parse(stdout).format?.tags ?? {}) as Record<string, unknown>;
 };
 
-export async function scanEmbeddedMusicArtists(rootPath: string, probe: Probe = ffprobe): Promise<FetchedLibraryArtist[]> {
+export async function scanEmbeddedMusicLibrary(rootPath: string, probe: Probe = ffprobe): Promise<EmbeddedMusicScanResult> {
   const files = await listAudioFiles(rootPath);
   const byIdentity = new Map<string, FetchedLibraryArtist>();
+  const recordings: EmbeddedRecordingObservation[] = [];
   // Bounded concurrency keeps ffprobe useful on large libraries without
   // opening thousands of processes or saturating a NAS.
   const concurrency = 4;
   for (let offset = 0; offset < files.length; offset += concurrency) {
     await Promise.all(files.slice(offset, offset + concurrency).map(async (filePath) => {
       try {
-        const artist = artistFromEmbeddedTags(await probe(filePath));
-        if (!artist) return;
-        const key = artist.musicbrainzArtistId ?? normalizeTitle(artist.name);
-        const existing = byIdentity.get(key);
-        byIdentity.set(key, { ...existing, ...artist, genre: existing?.genre ?? artist.genre });
+        const tags = await probe(filePath);
+        const recording = recordingFromEmbeddedTags(filePath, tags);
+        if (recording) recordings.push(recording);
+        const artist = artistFromEmbeddedTags(tags);
+        if (artist) {
+          const key = artist.musicbrainzArtistId ?? normalizeTitle(artist.name);
+          const existing = byIdentity.get(key);
+          byIdentity.set(key, { ...existing, ...artist, genre: existing?.genre ?? artist.genre });
+        }
       } catch {
         // A corrupt or unsupported file does not invalidate every other tag
         // observation in the configured library.
       }
     }));
   }
-  return [...byIdentity.values()];
+  return { artists: [...byIdentity.values()], recordings };
+}
+
+export async function scanEmbeddedMusicArtists(rootPath: string, probe: Probe = ffprobe): Promise<FetchedLibraryArtist[]> {
+  return (await scanEmbeddedMusicLibrary(rootPath, probe)).artists;
 }

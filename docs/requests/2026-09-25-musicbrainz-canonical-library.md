@@ -65,6 +65,7 @@ relationships may be retained as sources.
 | Preserve unmatched existing videos | `LibraryVideo` inventory plus `inventory` catalog kind |
 | Identity review API | candidate list, discover, and confirm artist routes |
 | Direct embedded tag scanner | Complete: optional connector `musicPath`, recursive read-only ffprobe scan |
+| Observed releases/recordings only | Complete: connector-scoped `LibraryRecording` inventory and safe reconciliation |
 | Bulk match-review UI | Complete: match filter, candidate discovery, preview, and inline confirmation |
 | Discover filter parity | Complete: URL filters, A-Z rail, counts, selection, and bulk actions |
 
@@ -74,4 +75,6 @@ relationships may be retained as sources.
 - Test migration on a populated pre-change database.
 - Test direct-MBID connector sync, IMVDb official catalog construction, supplementary import, and
   inventory reconciliation order with mocked provider responses.
+- Test Picard recording/release tag extraction, corrupt-file isolation, stale-recording pruning,
+  and preservation when a scan returns no files.
 - Run the complete server suite and production workspace build under Node 22/Docker.
