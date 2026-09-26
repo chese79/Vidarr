@@ -120,6 +120,9 @@ export const plexProvider: LibraryConnectorProvider = {
       if (match) matchedKeys.push(match.id);
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
+    if (existingRemoteId && unmatchedTitles.length) {
+      throw new Error(`Keeping the existing Plex playlist: ${unmatchedTitles.length} item(s) are not in the selected video library`);
+    }
 
     const identity = await plexGet(config, '/identity');
     const machineIdentifier = identity?.MediaContainer?.machineIdentifier as string;

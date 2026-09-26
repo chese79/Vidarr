@@ -251,6 +251,27 @@ describe('playlist routes', () => {
   });
 
   describe('playlist push', () => {
+    it('preserves a prior remote playlist when a selected item is no longer confirmed available', async () => {
+      const video = await createMusicVideo(artistId, { title: 'Unavailable', hasFile: false });
+      const connector = await createLibraryConnector();
+      await prisma.libraryConnector.update({ where: { id: connector.id }, data: { videoLibraryId: 'videos' } });
+      const inventory = await createLibraryVideo(connector.id, { musicVideoId: video.id });
+      const playlist = await prisma.playlist.create({ data: { name: 'Existing', targetConnectorId: connector.id } });
+      await prisma.playlistItem.create({ data: { playlistId: playlist.id, musicVideoId: video.id, sortOrder: 0 } });
+      await prisma.playlistSync.create({ data: { playlistId: playlist.id, connectorId: connector.id, remotePlaylistId: 'old-playlist' } });
+      await prisma.libraryVideo.update({ where: { id: inventory.id }, data: { available: false } });
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const response = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlist.id}/push/${connector.id}`, headers: authHeaders() });
+      const sync = await prisma.playlistSync.findUniqueOrThrow({ where: { playlistId_connectorId: { playlistId: playlist.id, connectorId: connector.id } } });
+      expect(response.statusCode).toBe(502);
+      expect(response.json().error).toContain('Keeping the existing playlist');
+      expect(sync.remotePlaylistId).toBe('old-playlist');
+      expect(sync.lastPushStatus).toBe('failed');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('pushes a server-only video to its matching connector', async () => {
       const video = await createMusicVideo(artistId, { title: 'Server Only', hasFile: false });
       const connector = await createLibraryConnector({ type: 'jellyfin' });

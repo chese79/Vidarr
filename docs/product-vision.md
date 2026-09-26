@@ -116,6 +116,9 @@ rules every 15 minutes; users can also regenerate manually.
 When regeneration changes membership, Vidarr republishes only to libraries where the smart
 playlist was previously pushed. A failed publish is recorded in playlist sync status and retried
 at the next regeneration.
+Replacing a previously published playlist requires every selected item to be available and matched
+in that playback library; otherwise Vidarr preserves the last published copy and records the
+failed push for review or retry.
 Existing static playlists and their item order are preserved by the additive migration.
 
 ## Current alignment priorities

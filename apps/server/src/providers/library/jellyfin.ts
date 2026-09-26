@@ -159,6 +159,9 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       if (match) matchedIds.push(match.id);
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
+    if (existingRemoteId && unmatchedTitles.length) {
+      throw new Error(`Keeping the existing Jellyfin playlist: ${unmatchedTitles.length} item(s) are not in the selected video library`);
+    }
 
     // Create first so a transient Jellyfin failure never destroys the last
     // known-good playlist. If deleting the old playlist fails, remove the new

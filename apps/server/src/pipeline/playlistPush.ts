@@ -22,6 +22,9 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
   const playable = playlist.items.filter((item) => (!playlist.targetConnectorId && item.musicVideo.hasFile)
     || item.musicVideo.libraryVideos.some((video) => video.connectorId === connectorId && video.available && video.matchConfidence === null));
   try {
+    if (existingSync?.remotePlaylistId && playable.length !== playlist.items.length) {
+      throw new Error(`Keeping the existing playlist: ${playlist.items.length - playable.length} item(s) are not confirmed available in this playback library`);
+    }
     const result = await provider.pushPlaylist(connector, {
       name: playlist.name,
       items: playable.map((item) => ({ artistName: item.musicVideo.artist.name, title: item.musicVideo.title })),

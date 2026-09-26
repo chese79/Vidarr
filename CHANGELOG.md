@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — playlist replacement safety
+
+- Preserve a previously published Plex or Jellyfin playlist when any selected item is no longer
+  confirmed available or cannot be matched in that library. Record the failed push for retry
+  instead of replacing the remote playlist with an incomplete copy.
+
 ### Improved — imported video reconciliation
 
 - Check pending imports against their configured playback library every five minutes after a

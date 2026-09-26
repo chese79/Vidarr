@@ -95,6 +95,15 @@ describe('jellyfinProvider', () => {
     expect(fetchMock.mock.calls[2][0]).toBe('http://jellyfin:8096/Items/old-playlist');
   });
 
+  it('keeps the existing playlist when a replacement item cannot be matched', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ Items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(jellyfinProvider.pushPlaylist!(connector(), {
+      name: 'Favorites', items: [{ artistName: 'Artist', title: 'Missing' }], existingRemoteId: 'old-playlist',
+    })).rejects.toThrow('Keeping the existing Jellyfin playlist');
+    expect(fetchMock.mock.calls.map(([, init]) => init?.method ?? 'GET')).toEqual(['GET']);
+  });
+
   it('fetches a video thumbnail using the same MediaBrowser auth header as every other call', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
