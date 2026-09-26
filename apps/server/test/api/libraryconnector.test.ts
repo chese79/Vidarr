@@ -227,6 +227,35 @@ describe('libraryconnector routes', () => {
     expect(remaining).toHaveLength(1);
   });
 
+  it('uses stable connector provenance after canonical metadata renames an artist', async () => {
+    const root = await createRootFolder();
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({
+      where: { id: connector.id },
+      data: { userId: 'user-1', musicLibraryId: 'music-1' },
+    });
+    const canonical = await createArtist(root.id, profile.id, { name: 'Canonical Spelling' });
+    await prisma.artistSource.create({
+      data: { artistId: canonical.id, provider: 'jellyfin', externalId: 'artist-1', origin: `connector:${connector.id}` },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ Items: [{ Id: 'artist-1', Name: 'Old Server Spelling' }] }),
+    }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/libraryconnector/${connector.id}/sync`,
+      headers: authHeaders(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await prisma.artist.count()).toBe(1);
+    expect((await prisma.artistSource.findFirst({ where: { externalId: 'artist-1' } }))?.artistId).toBe(canonical.id);
+  });
+
   it('POST /:id/test does not overwrite an already-chosen musicLibraryId with its own guess', async () => {
     const connector = await createLibraryConnector({ type: 'plex' });
     await prisma.libraryConnector.update({

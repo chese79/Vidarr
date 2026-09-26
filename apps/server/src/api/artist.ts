@@ -30,6 +30,11 @@ interface ArtistSummaryRow {
   sortName: string;
   genre: string | null;
   monitored: number;
+  musicbrainzMatchStatus: string;
+  musicbrainzMatchConfidence: number | null;
+  musicbrainzCandidateId: string | null;
+  musicbrainzCandidateName: string | null;
+  musicbrainzCandidateScore: number | null;
   posterUrl: string | null;
   knownVideoCount: number;
   availableVideoCount: number;
@@ -123,6 +128,7 @@ export async function artistRoutes(app: FastifyInstance) {
       baseConditions.push(Prisma.sql`(',' || LOWER(REPLACE(a."genre", ', ', ',')) || ',') LIKE ${'%,' + query.genre.toLowerCase() + ',%'}`);
     }
     if (query.monitored) baseConditions.push(Prisma.sql`a."monitored" = ${query.monitored === 'true' ? 1 : 0}`);
+    if (query.musicbrainzStatus) baseConditions.push(Prisma.sql`a."musicbrainzMatchStatus" = ${query.musicbrainzStatus}`);
     const baseWhere = Prisma.join(baseConditions, ' AND ');
 
     const refineConditions: Prisma.Sql[] = [Prisma.sql`1=1`];
@@ -181,6 +187,11 @@ export async function artistRoutes(app: FastifyInstance) {
           a."sortName" AS "sortName",
           a."genre" AS "genre",
           a."monitored" AS "monitored",
+          a."musicbrainzMatchStatus" AS "musicbrainzMatchStatus",
+          a."musicbrainzMatchConfidence" AS "musicbrainzMatchConfidence",
+          (SELECT c."musicbrainzArtistId" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = a."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateId",
+          (SELECT c."name" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = a."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateName",
+          (SELECT c."score" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = a."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateScore",
           a."posterUrl" AS "posterUrl",
           COALESCE(s."known", 0) AS "knownVideoCount",
           COALESCE(s."available", 0) AS "availableVideoCount",
@@ -244,6 +255,11 @@ export async function artistRoutes(app: FastifyInstance) {
       sortName: row.sortName,
       genre: row.genre,
       monitored: Boolean(row.monitored),
+      musicbrainzMatchStatus: row.musicbrainzMatchStatus,
+      musicbrainzMatchConfidence: row.musicbrainzMatchConfidence,
+      musicbrainzCandidateId: row.musicbrainzCandidateId,
+      musicbrainzCandidateName: row.musicbrainzCandidateName,
+      musicbrainzCandidateScore: row.musicbrainzCandidateScore,
       hasImage: Boolean(row.posterUrl) || imageableNameSet.has(normalizeTitle(row.name)),
       knownVideoCount: Number(row.knownVideoCount),
       availableVideoCount: Number(row.availableVideoCount),
@@ -340,6 +356,21 @@ export async function artistRoutes(app: FastifyInstance) {
       }
     }
 
+    return { succeeded, failed };
+  });
+
+  app.post('/api/v1/artist/bulk-musicbrainz-discover', async (req) => {
+    const body = BulkArtistIdsBodySchema.parse(req.body);
+    const succeeded: Array<{ id: number; candidateCount: number }> = [];
+    const failed: Array<{ id: number; error: string }> = [];
+    for (const id of body.ids) {
+      try {
+        const candidates = await discoverArtistIdentityCandidates(id);
+        succeeded.push({ id, candidateCount: candidates.length });
+      } catch (error) {
+        failed.push({ id, error: (error as Error).message });
+      }
+    }
     return { succeeded, failed };
   });
 

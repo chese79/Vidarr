@@ -132,6 +132,7 @@ function ConnectorRow({
   const [authToken, setAuthToken] = useState('');
   const [username, setUsername] = useState(connector.username ?? '');
   const [password, setPassword] = useState('');
+  const [musicPath, setMusicPath] = useState(connector.musicPath ?? '');
 
   const update = useMutation({
     mutationFn: () =>
@@ -141,6 +142,7 @@ function ConnectorRow({
         ...(authToken ? { authToken } : {}),
         username: username || null,
         ...(password ? { password } : {}),
+        musicPath: musicPath || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['libraryConnectors'] });
@@ -155,6 +157,7 @@ function ConnectorRow({
     setAuthToken('');
     setUsername(connector.username ?? '');
     setPassword('');
+    setMusicPath(connector.musicPath ?? '');
     update.reset();
     setEditing(true);
   }
@@ -198,6 +201,13 @@ function ConnectorRow({
                 onChange={(e) => setPassword(e.target.value)}
               />
             )}
+            <input
+              placeholder="Optional audio path, e.g. /media/music"
+              aria-label="Embedded music tag path"
+              value={musicPath}
+              onChange={(e) => setMusicPath(e.target.value)}
+              style={{ minWidth: 220 }}
+            />
             <button onClick={() => update.mutate()} disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save'}
             </button>
@@ -228,6 +238,7 @@ function ConnectorRow({
         </td>
         <td>
           <LibraryPicker connector={connector} kind="music" />
+          {connector.musicPath && <small style={{ display: 'block' }}>Tags: {connector.musicPath}</small>}
         </td>
         <td>
           <LibraryPicker connector={connector} kind="video" />
@@ -377,6 +388,7 @@ export default function LibraryConnectorsPage() {
   const [authToken, setAuthToken] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [musicPath, setMusicPath] = useState('');
   const [status, setStatus] = useState<Record<number, string>>({});
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState<DiscoveredServer[] | null>(null);
@@ -419,6 +431,7 @@ export default function LibraryConnectorsPage() {
       setAuthToken('');
       setUsername('');
       setPassword('');
+      setMusicPath('');
     },
   });
 
@@ -488,6 +501,7 @@ export default function LibraryConnectorsPage() {
       authToken: authToken || undefined,
       username: username || undefined,
       password: password || undefined,
+      musicPath: musicPath || undefined,
       enabled: true,
     });
   }
@@ -587,6 +601,13 @@ export default function LibraryConnectorsPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           )}
+          <input
+            placeholder="Optional audio path for Picard tags, e.g. /media/music"
+            aria-label="Embedded music tag path"
+            value={musicPath}
+            onChange={(e) => setMusicPath(e.target.value)}
+            style={{ minWidth: 260 }}
+          />
           <button type="submit">Add</button>
         </div>
       </form>

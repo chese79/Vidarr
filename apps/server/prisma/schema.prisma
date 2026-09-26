@@ -290,6 +290,7 @@ model LibraryConnector {
   password       String? // Subsonic only (salted-MD5 auth requires it server-side)
   userId         String? // Jellyfin user id resolved by Test; separate from the selected music library
   musicLibraryId String? // selected Plex/Jellyfin music section used to read artists (LibraryArtist sync)
+  musicPath      String? // optional local/container path scanned read-only for embedded Picard tags
   videoLibraryId String? // section/library holding vidarr's own downloaded music videos — used for playlist push; a different library than musicLibraryId, picked by the user from listSections()
   enabled        Boolean   @default(true)
   lastSyncedAt   DateTime?

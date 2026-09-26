@@ -8,6 +8,7 @@ import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discov
 import { refreshRecommendations } from '../pipeline/recommendations.js';
 import { matchLibraryVideo, type CanonicalVideo, type MatchConfidence } from '../pipeline/reconciliation.js';
 import { resolveArtistIdentityAndCatalog } from '../pipeline/artistIdentity.js';
+import { scanEmbeddedMusicArtists } from '../pipeline/embeddedMusicScan.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
@@ -100,6 +101,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         username: body.username ?? null,
         password: body.password ?? null,
         musicLibraryId: body.musicLibraryId ?? null,
+        musicPath: body.musicPath ?? null,
         videoLibraryId: body.videoLibraryId ?? null,
         enabled: body.enabled,
       },
@@ -170,7 +172,24 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
     });
     try {
       const syncStartedAt = new Date();
-      const artists = await getLibraryConnectorProvider(connector.type).fetchArtists(connector);
+      const connectorArtists = await getLibraryConnectorProvider(connector.type).fetchArtists(connector);
+      const embeddedArtists = connector.musicPath ? await scanEmbeddedMusicArtists(connector.musicPath) : [];
+      const artistsByName = new Map(connectorArtists.map((artist) => [normalizeTitle(artist.name), artist]));
+      for (const embedded of embeddedArtists) {
+        const key = normalizeTitle(embedded.name);
+        const existing = artistsByName.get(key);
+        artistsByName.set(key, {
+          ...existing,
+          ...embedded,
+          externalId: existing?.externalId ?? embedded.externalId,
+          // Connector play counts remain useful; embedded tags do not carry
+          // one. Picard identity and genre win over lower-authority server
+          // metadata when the same artist was observed by both.
+          playCount: existing?.playCount,
+          genre: embedded.genre ?? existing?.genre,
+        });
+      }
+      const artists = [...artistsByName.values()];
       await prisma.libraryConnector.update({ where: { id }, data: { syncTotal: artists.length, syncProcessed: 0 } });
       await prisma.$transaction(artists.map((artist) =>
         prisma.libraryArtist.upsert({
@@ -221,9 +240,18 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
       if (defaults[0] && defaults[1]) {
         const canonicalArtists = await prisma.artist.findMany({ select: { id: true, name: true } });
         canonicalArtists.forEach((artist) => canonicalByName.set(normalizeTitle(artist.name), artist));
+        const existingSources = await prisma.artistSource.findMany({
+          where: { provider: connector.type, origin: `connector:${id}`, externalId: { not: null } },
+          select: { externalId: true, artist: { select: { id: true, name: true } } },
+        });
+        const canonicalByExternalId = new Map(existingSources.map((source) => [source.externalId!, source.artist]));
         for (const observation of artists) {
           const key = normalizeTitle(observation.name);
-          let canonical = canonicalByName.get(key);
+          // Stable connector identity wins over a display name. MusicBrainz
+          // enrichment may rename an artist to its canonical spelling; the
+          // next connector sync must update that artist, not recreate the old
+          // spelling as a duplicate.
+          let canonical = canonicalByExternalId.get(observation.externalId) ?? canonicalByName.get(key);
           if (!canonical) {
             canonical = await prisma.artist.create({
               data: {
@@ -237,6 +265,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             });
             canonicalByName.set(key, canonical);
           }
+          canonicalByExternalId.set(observation.externalId, canonical);
           await prisma.artistSource.upsert({
             where: { artistId_provider_origin: { artistId: canonical.id, provider: connector.type, origin: `connector:${id}` } },
             update: { externalId: observation.externalId, lastSeenAt: new Date() },

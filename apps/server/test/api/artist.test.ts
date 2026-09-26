@@ -327,6 +327,35 @@ describe('artist routes', () => {
       expect(names).toEqual(['Match Rock']);
     });
 
+    it('filters by MusicBrainz match state and exposes the best review candidate', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Review Artist' });
+      await prisma.artist.update({ where: { id: artist.id }, data: { musicbrainzMatchStatus: 'suggested' } });
+      await prisma.musicBrainzArtistCandidate.create({
+        data: {
+          artistId: artist.id,
+          musicbrainzArtistId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          name: 'Review Artist',
+          score: 0.82,
+          evidence: '{}',
+        },
+      });
+      await createArtist(rootFolderId, qualityProfileId, { name: 'Unmatched Artist' });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/artist/summary?musicbrainzStatus=suggested',
+        headers: authHeaders(),
+      });
+      expect(res.json().items).toHaveLength(1);
+      expect(res.json().items[0]).toMatchObject({
+        id: artist.id,
+        musicbrainzMatchStatus: 'suggested',
+        musicbrainzCandidateId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        musicbrainzCandidateName: 'Review Artist',
+        musicbrainzCandidateScore: 0.82,
+      });
+    });
+
     it('filters by the A-Z rail letter, bucketing non-alphabetic sort names under "#"', async () => {
       await createArtist(rootFolderId, qualityProfileId, { name: 'Apple', sortName: 'Apple' });
       await createArtist(rootFolderId, qualityProfileId, { name: '3 Doors Down', sortName: '3 Doors Down' });

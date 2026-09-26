@@ -22,7 +22,7 @@ existing video files. A user's extra videos remain visible without changing offi
 ## Functional requirements
 
 1. Import artists from selected audio libraries and artists credited by selected video libraries.
-2. Consume connector-exposed MusicBrainz IDs and, later, direct embedded audio tags.
+2. Consume connector-exposed MusicBrainz IDs and direct embedded audio tags.
 3. Store MusicBrainz match status, confidence, evidence, and review candidates.
 4. Confirm direct IDs automatically. Present ambiguous, fuzzy, and name-only matches for review.
 5. Enrich confirmed artists with canonical name/sort name, type, country, disambiguation, and genre.
@@ -64,9 +64,9 @@ relationships may be retained as sources.
 | Supplementary MusicBrainz videos | recording relationship import with verified sources |
 | Preserve unmatched existing videos | `LibraryVideo` inventory plus `inventory` catalog kind |
 | Identity review API | candidate list, discover, and confirm artist routes |
-| Direct embedded tag scanner | Open |
-| Bulk match-review UI | Open |
-| Discover filter parity | Open |
+| Direct embedded tag scanner | Complete: optional connector `musicPath`, recursive read-only ffprobe scan |
+| Bulk match-review UI | Complete: match filter, candidate discovery, preview, and inline confirmation |
+| Discover filter parity | Complete: URL filters, A-Z rail, counts, selection, and bulk actions |
 
 ## Verification
 

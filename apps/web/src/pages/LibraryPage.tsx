@@ -192,6 +192,14 @@ function ArtistRow({
   onToggleExpand: (id: number) => void;
   onMonitorChange: (id: number, monitored: boolean) => void;
 }) {
+  const queryClient = useQueryClient();
+  const confirmMusicbrainz = useMutation({
+    mutationFn: () => api.artists.confirmMusicbrainz(artist.id, artist.musicbrainzCandidateId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['artist', artist.id] });
+    },
+  });
   return (
     <div className="artist-row" role="listitem">
       <div className="artist-row-header">
@@ -207,6 +215,11 @@ function ArtistRow({
             {artist.name}
           </Link>
           <span className="artist-meta">{artist.genre ?? 'Unknown genre'}</span>
+          <span className="artist-meta">MusicBrainz: {artist.musicbrainzMatchStatus}</span>
+          {artist.musicbrainzCandidateId && <span className="artist-meta">
+            Suggested: {artist.musicbrainzCandidateName} ({Math.round((artist.musicbrainzCandidateScore ?? 0) * 100)}%)
+            {' '}<button type="button" className="secondary" onClick={() => confirmMusicbrainz.mutate()} disabled={confirmMusicbrainz.isPending}>Confirm</button>
+          </span>}
         </div>
         <div className="artist-counts">
           <span>
@@ -503,6 +516,7 @@ export default function LibraryPage() {
   const search = params.get('q') ?? '';
   const genre = params.get('genre') ?? '';
   const monitored = params.get('monitored') as 'true' | 'false' | null;
+  const musicbrainzStatus = params.get('musicbrainzStatus') as 'unmatched' | 'suggested' | 'ambiguous' | 'confirmed' | 'notFound' | 'failed' | null;
   const letter = params.get('letter');
   const hasMissing = params.get('missing') === 'true';
   const completeness = (params.get('completeness') ?? '') as '' | 'complete' | 'unmatched' | 'activeDownloads';
@@ -532,12 +546,13 @@ export default function LibraryPage() {
   }
 
   const summary = useQuery({
-    queryKey: ['artistSummary', search, genre, monitored, letter, hasMissing, completeness, minKnownVideos, minPlayCount, page],
+    queryKey: ['artistSummary', search, genre, monitored, musicbrainzStatus, letter, hasMissing, completeness, minKnownVideos, minPlayCount, page],
     queryFn: () =>
       api.artists.summary({
         search: search || undefined,
         genre: genre || undefined,
         monitored: monitored === 'true' ? true : monitored === 'false' ? false : undefined,
+        musicbrainzStatus: musicbrainzStatus || undefined,
         letter: letter || undefined,
         hasMissing: hasMissing || undefined,
         completeness: completeness || undefined,
@@ -551,7 +566,7 @@ export default function LibraryPage() {
   const items = summary.data?.items ?? [];
   const totalPages = summary.data ? Math.max(1, Math.ceil(summary.data.total / PAGE_SIZE)) : 1;
   const anyFilterActive = Boolean(
-    search || genre || monitored || letter || hasMissing || completeness || minKnownVideos || minPlayCount,
+    search || genre || monitored || musicbrainzStatus || letter || hasMissing || completeness || minKnownVideos || minPlayCount,
   );
   const allVisibleSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
 
@@ -608,6 +623,14 @@ export default function LibraryPage() {
     mutationFn: () => api.artists.bulkSearchMissing([...selectedIds]),
     onSuccess: (result) => {
       setBulkMessage(`${result.grabbed} grabbed, ${result.skipped} skipped`);
+      queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
+    },
+  });
+  const bulkDiscoverMusicbrainz = useMutation({
+    mutationFn: () => api.artists.bulkDiscoverMusicbrainz([...selectedIds]),
+    onSuccess: (result) => {
+      const candidates = result.succeeded.reduce((sum, item) => sum + item.candidateCount, 0);
+      setBulkMessage(`${candidates} MusicBrainz candidate(s) found for ${result.succeeded.length} artist(s)${result.failed.length ? `; ${result.failed.length} failed` : ''}`);
       queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
     },
   });
@@ -697,6 +720,19 @@ export default function LibraryPage() {
               <option value="true">Monitored</option>
               <option value="false">Unmonitored</option>
             </select>
+            <select
+              aria-label="Filter by MusicBrainz match state"
+              value={musicbrainzStatus ?? ''}
+              onChange={(e) => updateParams({ musicbrainzStatus: e.target.value || null, page: null })}
+            >
+              <option value="">MusicBrainz: any</option>
+              <option value="unmatched">Unmatched</option>
+              <option value="suggested">Candidates found</option>
+              <option value="ambiguous">Ambiguous</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="notFound">No match found</option>
+              <option value="failed">Match failed</option>
+            </select>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
               <input
                 type="checkbox"
@@ -758,6 +794,9 @@ export default function LibraryPage() {
               </button>
               <button type="button" onClick={() => bulkSearch.mutate()} disabled={bulkSearch.isPending}>
                 Search missing
+              </button>
+              <button type="button" className="secondary" onClick={() => bulkDiscoverMusicbrainz.mutate()} disabled={bulkDiscoverMusicbrainz.isPending}>
+                Find MusicBrainz matches
               </button>
               <button type="button" className="secondary" onClick={() => setSelectedIds(new Set())}>
                 Clear selection

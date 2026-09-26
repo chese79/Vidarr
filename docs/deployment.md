@@ -23,6 +23,11 @@ Docker and the paths below all work without it.
 
 ## Docker
 
+To scan Picard tags directly, mount the audio library read-only into the Vidarr container and enter
+that container path as the connector's **Embedded music tag path**. For example, add
+`/host/music:/music:ro` under the Vidarr service volumes and configure `/music`. Vidarr reads tags
+with `ffprobe`; it never modifies audio files.
+
 ```bash
 docker compose up --build
 ```

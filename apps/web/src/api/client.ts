@@ -65,6 +65,7 @@ export interface ArtistSummaryParams {
   search?: string;
   genre?: string;
   monitored?: boolean;
+  musicbrainzStatus?: 'unmatched' | 'suggested' | 'ambiguous' | 'confirmed' | 'notFound' | 'failed';
   letter?: string;
   minKnownVideos?: number;
   minPlayCount?: number;
@@ -189,6 +190,7 @@ export const api = {
       if (params.search) qs.set('search', params.search);
       if (params.genre) qs.set('genre', params.genre);
       if (params.monitored !== undefined) qs.set('monitored', String(params.monitored));
+      if (params.musicbrainzStatus) qs.set('musicbrainzStatus', params.musicbrainzStatus);
       if (params.letter) qs.set('letter', params.letter);
       if (params.minKnownVideos !== undefined) qs.set('minKnownVideos', String(params.minKnownVideos));
       if (params.minPlayCount !== undefined) qs.set('minPlayCount', String(params.minPlayCount));
@@ -204,6 +206,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ ids, monitored }),
       }),
+    bulkDiscoverMusicbrainz: (ids: number[]) => request<{
+      succeeded: Array<{ id: number; candidateCount: number }>;
+      failed: Array<{ id: number; error: string }>;
+    }>('/artist/bulk-musicbrainz-discover', { method: 'POST', body: JSON.stringify({ ids }) }),
     bulkSearchMissing: (ids: number[]) => request<BulkSearchResult>('/artist/bulk-search-missing', {
       method: 'POST', body: JSON.stringify({ ids }),
     }),

@@ -85,10 +85,8 @@ and deterministic, with optional shuffle/randomization as a user choice.
 
 ## Current alignment priorities
 
-1. Complete embedded audio-tag scanning for installations whose media server does not expose
-   Picard/MusicBrainz identifiers.
-2. Complete the bulk MusicBrainz candidate-review experience for unresolved and ambiguous artists.
-3. Inventory existing music videos from Plex and Jellyfin and reconcile them with IMVDb official
+1. Expand embedded-tag observations from artists into the user's observed release/recording set.
+2. Inventory existing music videos from Plex and Jellyfin and reconcile them with IMVDb official
    records while preserving supplementary inventory.
 3. Generalize authoritative sources to support IMVDb-provided YouTube and Vimeo links.
 4. Map imports to connector libraries and trigger/reconcile media-server refreshes.
