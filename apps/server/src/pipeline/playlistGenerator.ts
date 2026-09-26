@@ -6,6 +6,10 @@ export interface PlaylistFilters {
   yearMin?: number;
   yearMax?: number;
   genre?: string;
+  director?: string;
+  ownership?: 'local' | 'server' | 'both';
+  qualityIds?: number[];
+  addedAfter?: string;
   minPlayCount?: number;
   artistIds?: number[];
   musicVideoIds?: number[];
@@ -52,6 +56,30 @@ async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'an
       const artistGenre = v.artist.genre ? normalizeTitle(v.artist.genre) : '';
       return videoGenre.includes(wantGenre) || artistGenre.includes(wantGenre);
     });
+  }
+
+  if (filters.director) {
+    const wantDirector = normalizeTitle(filters.director);
+    checks.push((v) => Boolean(v.director && normalizeTitle(v.director).includes(wantDirector)));
+  }
+
+  if (filters.ownership) {
+    checks.push((v) => {
+      const onServer = v.libraryVideos.length > 0;
+      if (filters.ownership === 'both') return v.hasFile && onServer;
+      if (filters.ownership === 'local') return v.hasFile && !onServer;
+      return !v.hasFile && onServer;
+    });
+  }
+
+  if (filters.qualityIds?.length) {
+    const qualities = new Set(filters.qualityIds);
+    checks.push((v) => v.file?.qualityId != null && qualities.has(v.file.qualityId));
+  }
+
+  if (filters.addedAfter) {
+    const threshold = new Date(filters.addedAfter);
+    checks.push((v) => v.addedAt >= threshold);
   }
 
   if (filters.minPlayCount !== undefined) {

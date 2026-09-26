@@ -90,6 +90,8 @@ was already observed through an audio library.
 Vidarr creates playlists only from videos available in the selected playback library and can send
 them to Plex or Jellyfin. Users can build playlists manually or from metadata rules such as artist,
 genre, year, play count, ownership, quality, date added, director, or other catalog metadata.
+Ownership rules distinguish local-only, media-server-only, and both; quality rules use the local
+file's quality. A date-added rule uses the canonical video's added time.
 The playlist picker and filter generator include confirmed media-server videos even when Vidarr
 does not own a local file. A push uses server-only items only when they are available in that
 specific connector.

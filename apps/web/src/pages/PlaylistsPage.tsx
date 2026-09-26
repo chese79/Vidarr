@@ -18,6 +18,10 @@ function GeneratePlaylistPanel() {
 
   const [enableGenre, setEnableGenre] = useState(false);
   const [genre, setGenre] = useState('');
+  const [director, setDirector] = useState('');
+  const [ownership, setOwnership] = useState<'' | 'local' | 'server' | 'both'>('');
+  const [qualityIds, setQualityIds] = useState<number[]>([]);
+  const [addedAfter, setAddedAfter] = useState('');
 
   const [enablePlayCount, setEnablePlayCount] = useState(false);
   const [minPlayCount, setMinPlayCount] = useState('');
@@ -31,6 +35,7 @@ function GeneratePlaylistPanel() {
   const [result, setResult] = useState<string | null>(null);
 
   const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list, enabled: open });
+  const qualities = useQuery({ queryKey: ['qualities'], queryFn: api.qualities.list, enabled: open });
   const downloaded = useQuery({
     queryKey: ['musicVideos', 'playable'],
     queryFn: () => api.musicVideos.list({ playable: true }),
@@ -47,7 +52,8 @@ function GeneratePlaylistPanel() {
     onError: (err) => setResult(`Failed: ${(err as Error).message}`),
   });
 
-  const anyEnabled = enableYear || enableGenre || enablePlayCount || enableArtists || enableVideos;
+  const anyEnabled = enableYear || enableGenre || enablePlayCount || enableArtists || enableVideos
+    || Boolean(director.trim() || ownership || qualityIds.length || addedAfter);
 
   function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
@@ -58,6 +64,10 @@ function GeneratePlaylistPanel() {
       if (yearMax) filters.yearMax = Number(yearMax);
     }
     if (enableGenre && genre.trim()) filters.genre = genre.trim();
+    if (director.trim()) filters.director = director.trim();
+    if (ownership) filters.ownership = ownership;
+    if (qualityIds.length) filters.qualityIds = qualityIds;
+    if (addedAfter) filters.addedAfter = new Date(addedAfter).toISOString();
     if (enablePlayCount && minPlayCount) filters.minPlayCount = Number(minPlayCount);
     if (enableArtists && artistIds.length) filters.artistIds = artistIds;
     if (enableVideos && videoIds.length) filters.musicVideoIds = videoIds;
@@ -185,6 +195,20 @@ function GeneratePlaylistPanel() {
         <span className="empty-state" style={{ padding: 0 }}>
           requires a library connector's "Sync Play Counts" to have run
         </span>
+      </div>
+
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <input aria-label="Director" placeholder="Director" value={director} onChange={(e) => setDirector(e.target.value)} />
+        <select aria-label="Ownership" value={ownership} onChange={(e) => setOwnership(e.target.value as typeof ownership)}>
+          <option value="">Any ownership</option>
+          <option value="local">Local only</option>
+          <option value="server">Media server only</option>
+          <option value="both">Local and media server</option>
+        </select>
+        <select multiple aria-label="Quality" value={qualityIds.map(String)} onChange={(e) => setQualityIds([...e.target.selectedOptions].map((option) => Number(option.value)))} style={{ minWidth: 150, height: 72 }}>
+          {qualities.data?.map((quality) => <option key={quality.id} value={quality.id}>{quality.name}</option>)}
+        </select>
+        <label>Added after <input type="date" aria-label="Added after" value={addedAfter} onChange={(e) => setAddedAfter(e.target.value)} /></label>
       </div>
 
       <div className="form-row" style={{ alignItems: 'flex-start' }}>

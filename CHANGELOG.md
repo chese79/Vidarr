@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — playlist rules
+
+- Filter static and smart playlist generation by director, ownership, file quality, and date
+  added alongside the existing year, genre, play-count, artist, and video filters.
+
 ### Added — smart playlists
 
 - Save playlist filter rules as smart playlists, regenerate them on demand, or schedule daily or

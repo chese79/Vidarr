@@ -98,6 +98,53 @@ describe('generatePlaylistFromFilters', () => {
     expect(result.matchedCount).toBe(1);
   });
 
+  it('filters director and date added using catalog metadata', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const recent = await createMusicVideo(artist.id, { title: 'Recent', hasFile: true });
+    await createMusicVideoFile(recent.id);
+    await prisma.musicVideo.update({ where: { id: recent.id }, data: { director: 'Jane Smith', addedAt: new Date('2026-01-01') } });
+    const old = await createMusicVideo(artist.id, { title: 'Old', hasFile: true });
+    await createMusicVideoFile(old.id, { path: '/old.mp4' });
+    await prisma.musicVideo.update({ where: { id: old.id }, data: { director: 'Jane Smith', addedAt: new Date('2020-01-01') } });
+
+    const result = await generatePlaylistFromFilters('Recent Jane', { director: 'jane', addedAfter: '2025-01-01T00:00:00.000Z' }, 'all');
+
+    expect(result.matchedCount).toBe(1);
+    expect((await prisma.playlistItem.findFirst({ where: { playlistId: result.playlistId } }))?.musicVideoId).toBe(recent.id);
+  });
+
+  it('distinguishes local-only, server-only, and dual ownership', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const connector = await createLibraryConnector();
+    const local = await createMusicVideo(artist.id, { title: 'Local', hasFile: true });
+    await createMusicVideoFile(local.id);
+    const server = await createMusicVideo(artist.id, { title: 'Server', hasFile: false });
+    await createLibraryVideo(connector.id, { musicVideoId: server.id, title: 'Server', externalId: 'server' });
+    const both = await createMusicVideo(artist.id, { title: 'Both', hasFile: true });
+    await createMusicVideoFile(both.id, { path: '/both.mp4' });
+    await createLibraryVideo(connector.id, { musicVideoId: both.id, title: 'Both', externalId: 'both' });
+
+    for (const [ownership, expected] of [['local', local.id], ['server', server.id], ['both', both.id]] as const) {
+      const result = await generatePlaylistFromFilters(ownership, { ownership }, 'all');
+      expect(result.matchedCount).toBe(1);
+      expect((await prisma.playlistItem.findFirst({ where: { playlistId: result.playlistId } }))?.musicVideoId).toBe(expected);
+    }
+  });
+
+  it('filters by file quality', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const quality = await createQuality({ name: '4K', weight: 50 });
+    const video = await createMusicVideo(artist.id, { title: '4K Video', hasFile: true });
+    await createMusicVideoFile(video.id);
+    await prisma.musicVideoFile.update({ where: { musicVideoId: video.id }, data: { qualityId: quality.id } });
+
+    const matching = await generatePlaylistFromFilters('4K', { qualityIds: [quality.id] }, 'all');
+    const other = await generatePlaylistFromFilters('Other', { qualityIds: [quality.id + 999] }, 'all');
+
+    expect(matching.matchedCount).toBe(1);
+    expect(other.matchedCount).toBe(0);
+  });
+
   it('filters by explicit artistIds and musicVideoIds', async () => {
     const artistA = await createArtist(rootFolderId, qualityProfileId, { name: 'A' });
     const artistB = await createArtist(rootFolderId, qualityProfileId, { name: 'B' });
