@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — direct download source priority
+
+- Choose accepted direct links by explicit authority priority: IMVDb authoritative, verified,
+  manual, then heuristic. Automatic search and the download path now use the same ranking.
+
 ### Improved — partial playlist retry
 
 - Retry a partially published smart playlist at its next regeneration, even when its Vidarr

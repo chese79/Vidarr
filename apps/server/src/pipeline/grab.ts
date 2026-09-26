@@ -9,6 +9,7 @@ import { importDownloadedFile, type ImportResult } from './import.js';
 import { locateVideoFile } from './locateVideoFile.js';
 import { assertIsRealMusicVideo } from './validateVideoFile.js';
 import { hasActiveDownload } from './videoStatus.js';
+import { preferredDirectSource } from './directSourcePriority.js';
 
 const STAGING_DIR = process.env.STAGING_DIR ?? path.join(os.tmpdir(), 'vidarr-staging');
 
@@ -18,11 +19,10 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     include: {
       acquisitionSources: {
         where: { accepted: true },
-        orderBy: [{ authority: 'asc' }, { id: 'asc' }],
       },
     },
   });
-  const directSource = musicVideo.acquisitionSources.find((source) => /^https?:\/\//i.test(source.url));
+  const directSource = preferredDirectSource(musicVideo.acquisitionSources);
   const source = directSource ?? (musicVideo.youtubeVideoId
     ? {
       provider: 'youtube',

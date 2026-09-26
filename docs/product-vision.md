@@ -68,6 +68,8 @@ Preferred source order:
 Source records should be provider-neutral and retain the provider, external identifier, URL,
 authority/confidence, and discovery origin. `yt-dlp` can perform the actual transfer for supported
 video sites, but the domain model must not assume every direct source is YouTube.
+When several accepted direct links exist, the automatic decision and downloader use the same
+authority order: authoritative, verified, manual, then heuristic.
 
 ## Media-library delivery
 

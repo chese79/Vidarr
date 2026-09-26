@@ -3,6 +3,7 @@ import { searchAllIndexers } from './search.js';
 import { grabFromIndexer, grabYoutubeVideo } from './grab.js';
 import { findYoutubeMatch } from './youtubeMatch.js';
 import { hasActiveDownload } from './videoStatus.js';
+import { preferredDirectSource } from './directSourcePriority.js';
 import { validateCandidate, type ClassificationResult } from './youtubeValidation.js';
 
 export interface AutoSearchOutcome {
@@ -55,7 +56,6 @@ export async function autoSearchAndGrab(
       },
       acquisitionSources: {
         where: { accepted: true, authority: { in: ['authoritative', 'verified'] } },
-        orderBy: { id: 'asc' },
       },
     },
   });
@@ -96,14 +96,14 @@ export async function autoSearchAndGrab(
     // below, where a VEVO-tier result does NOT get the same bypass, since a
     // heuristic search match (even from a VEVO-named channel) is not an
     // IMVDb identification.
-    const authoritativeSource = musicVideo.acquisitionSources[0];
+    const authoritativeSource = preferredDirectSource(musicVideo.acquisitionSources);
     if (authoritativeSource || musicVideo.youtubeVideoId) {
       try {
         await grabYoutubeVideo(musicVideoId);
         return {
           musicVideoId,
           grabbed: true,
-          reason: `Grabbed via IMVDb-sourced ${authoritativeSource?.provider ?? 'YouTube'} link (${musicVideo.title})`,
+          reason: `Grabbed via ${authoritativeSource ? `${authoritativeSource.authority} ${authoritativeSource.provider}` : 'IMVDb-sourced YouTube'} link (${musicVideo.title})`,
         };
       } catch (err) {
         await logActivity('warn', 'auto-search-youtube', err);
