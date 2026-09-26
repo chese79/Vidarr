@@ -53,6 +53,10 @@ not-yet-started ideas (concert videos, web-series content types, curated list im
   reliable regardless of what quality tag ends up in the filename. Run "Regenerate library metadata
   files" on the System/Tasks page to backfill this for videos imported before this existed.
 - Configurable transfer mode (hardlink / copy / move) and a minimum-free-space check before import.
+- A quality upgrade keeps the previous media file until its replacement is recorded successfully.
+  When a root folder targets a Plex or Jellyfin video library, Vidarr requests a refresh after
+  import and checks pending videos against that library every five minutes. Empty or ambiguous
+  scans leave the import pending for later retry or review.
 
 **Plex / Jellyfin / Navidrome integration** — three separate points of contact, since "read from"
 and "write to" a media server are different jobs with different data:
@@ -65,12 +69,17 @@ and "write to" a media server are different jobs with different data:
    The same sync inventories the selected Plex/Jellyfin music-video library. Existing videos appear
    in Library as screenshot cards with title and basic metadata, while remaining distinct from
    locally owned Vidarr files.
-2. **Push playlists back out** — build a playlist in vidarr from your downloaded videos, then push
+2. **Push playlists back out** — build a playlist in Vidarr from local files or confirmed videos
+   already in a media server, then push
    it to Plex or Jellyfin as a real playlist in their apps. This uses a *second*, separately-chosen
    library on the same connector (the "video library" picker on the Library Connectors page) —
    whichever Plex/Jellyfin section actually holds vidarr's organized video files — matched to each
    playlist item by artist + title. A push fully replaces the remote playlist rather than diffing
    it, to avoid drift.
+   New static and smart playlists can be bound to one playback library, so their picker, generated
+   membership, and push destination stay within that library. Smart playlists save filter rules,
+   regenerate manually or daily/weekly, and republish changed membership after an initial push.
+   Generated playlists can use artist/title order or a repeatable shuffle.
    - Jellyfin's playlist API is well-documented and used as-is.
    - **Plex's playlist push is best-effort and not yet verified against a real Plex server** (none
      was available while building it) — Plex has no first-class "music video" item type, so
