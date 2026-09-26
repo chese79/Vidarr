@@ -9,6 +9,8 @@ under **Unreleased** in the same commit as the change.
 
 - Choose accepted direct links by explicit authority priority: IMVDb authoritative, verified,
   manual, then heuristic. Automatic search and the download path now use the same ranking.
+- Try accepted manual and heuristic direct links during automatic search before starting a fresh
+  YouTube or indexer search.
 
 ### Improved — partial playlist retry
 

@@ -55,7 +55,7 @@ export async function autoSearchAndGrab(
         include: { qualityProfile: { include: { items: { include: { quality: true } } } } },
       },
       acquisitionSources: {
-        where: { accepted: true, authority: { in: ['authoritative', 'verified'] } },
+        where: { accepted: true },
       },
     },
   });
@@ -86,24 +86,17 @@ export async function autoSearchAndGrab(
   }
 
   if (allowedQualities.has('YouTube')) {
-    // An IMVDb-sourced youtubeVideoId (see providers/metadata/imvdb.ts
-    // getVideoDetails) is an editor-curated, exact match — a strictly better
-    // source than our own heuristic search, so grab it directly and skip the
-    // search entirely when we already have it. This is the request doc's own
-    // carve-out ("Accept these automatically only when IMVDb explicitly
-    // identifies the exact item as the official video") — deliberately the
-    // only bypass of content-type validation; see the heuristic-match branch
-    // below, where a VEVO-tier result does NOT get the same bypass, since a
-    // heuristic search match (even from a VEVO-named channel) is not an
-    // IMVDb identification.
-    const authoritativeSource = preferredDirectSource(musicVideo.acquisitionSources);
-    if (authoritativeSource || musicVideo.youtubeVideoId) {
+    // Accepted direct links have already been selected by their source flow.
+    // Reuse the download path's authority order before searching for a new
+    // candidate. New heuristic search results still require validation below.
+    const directSource = preferredDirectSource(musicVideo.acquisitionSources);
+    if (directSource || musicVideo.youtubeVideoId) {
       try {
         await grabYoutubeVideo(musicVideoId);
         return {
           musicVideoId,
           grabbed: true,
-          reason: `Grabbed via ${authoritativeSource ? `${authoritativeSource.authority} ${authoritativeSource.provider}` : 'IMVDb-sourced YouTube'} link (${musicVideo.title})`,
+          reason: `Grabbed via ${directSource ? `${directSource.authority} ${directSource.provider}` : 'IMVDb-sourced YouTube'} link (${musicVideo.title})`,
         };
       } catch (err) {
         await logActivity('warn', 'auto-search-youtube', err);

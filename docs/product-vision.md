@@ -69,7 +69,9 @@ Source records should be provider-neutral and retain the provider, external iden
 authority/confidence, and discovery origin. `yt-dlp` can perform the actual transfer for supported
 video sites, but the domain model must not assume every direct source is YouTube.
 When several accepted direct links exist, the automatic decision and downloader use the same
-authority order: authoritative, verified, manual, then heuristic.
+authority order: authoritative, verified, manual, then heuristic. Automatic search tries these
+accepted links before searching for a new candidate; newly discovered YouTube candidates still
+require validation.
 
 ## Media-library delivery
 
