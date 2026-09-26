@@ -83,16 +83,15 @@ export async function playlistRoutes(app: FastifyInstance) {
   });
 
   // Push is a full replace, not a diff — see PlaylistSync's doc comment in
-  // schema.prisma. Only items with a downloaded file make sense to push,
-  // since a Plex/Jellyfin item lookup can only ever match something they've
-  // already scanned off disk.
+  // schema.prisma. Local files and confirmed items in this exact connector
+  // are eligible; a match in another playback library is not.
   app.post('/api/v1/playlist/:id/push/:connectorId', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const connectorId = Number((req.params as { connectorId: string }).connectorId);
 
     const playlist = await prisma.playlist.findUnique({
       where: { id },
-      include: { items: { include: { musicVideo: { include: { artist: true } } } } },
+      include: { items: { include: { musicVideo: { include: { artist: true, libraryVideos: true } } } } },
     });
     if (!playlist) return reply.code(404).send({ error: 'Playlist not found' });
 
@@ -108,11 +107,13 @@ export async function playlistRoutes(app: FastifyInstance) {
       where: { playlistId_connectorId: { playlistId: id, connectorId } },
     });
 
-    const downloaded = playlist.items.filter((i) => i.musicVideo.hasFile);
+    const playable = playlist.items.filter((i) => i.musicVideo.hasFile || i.musicVideo.libraryVideos.some(
+      (item) => item.connectorId === connectorId && item.available && item.matchConfidence === null,
+    ));
     try {
       const result = await provider.pushPlaylist(connector, {
         name: playlist.name,
-        items: downloaded.map((i) => ({ artistName: i.musicVideo.artist.name, title: i.musicVideo.title })),
+        items: playable.map((i) => ({ artistName: i.musicVideo.artist.name, title: i.musicVideo.title })),
         existingRemoteId: existingSync?.remotePlaylistId ?? null,
       });
 

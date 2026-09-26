@@ -9,6 +9,8 @@ import {
   createArtist,
   createMusicVideo,
   createMusicVideoFile,
+  createLibraryConnector,
+  createLibraryVideo,
 } from './support/db.js';
 
 describe('generatePlaylistFromFilters', () => {
@@ -29,6 +31,18 @@ describe('generatePlaylistFromFilters', () => {
 
     const result = await generatePlaylistFromFilters('Test', { yearMin: 1990 }, 'all');
     expect(result.matchedCount).toBe(0);
+  });
+
+  it('includes a video available only through a confirmed media-server match', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id, { title: 'Server Only', hasFile: false, releaseYear: 2000 });
+    const connector = await createLibraryConnector();
+    await createLibraryVideo(connector.id, { musicVideoId: video.id, playCount: 12 });
+
+    const result = await generatePlaylistFromFilters('Server tracks', { minPlayCount: 10 }, 'all');
+
+    expect(result.matchedCount).toBe(1);
+    expect((await prisma.playlistItem.findFirst({ where: { playlistId: result.playlistId } }))?.musicVideoId).toBe(video.id);
   });
 
   it('with no filters at all, matches nothing (checks.length === 0 short-circuit)', async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import {
@@ -11,8 +11,10 @@ import {
   createMusicVideo,
   createMusicVideoFile,
   createLibraryConnector,
+  createLibraryVideo,
 } from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
+import { prisma } from '../../src/db/client.js';
 
 describe('playlist routes', () => {
   let app: FastifyInstance;
@@ -26,6 +28,8 @@ describe('playlist routes', () => {
   afterAll(async () => {
     await app.close();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   beforeEach(async () => {
     await resetDb();
@@ -79,6 +83,17 @@ describe('playlist routes', () => {
       payload: { name: 'Bad', filters: {}, matchMode: 'xor' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('lists a confirmed server-only video as playable', async () => {
+    const video = await createMusicVideo(artistId, { title: 'Server Only', hasFile: false });
+    const connector = await createLibraryConnector();
+    await createLibraryVideo(connector.id, { musicVideoId: video.id });
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/musicvideo?playable=true', headers: authHeaders() });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().map((item: { id: number }) => item.id)).toContain(video.id);
   });
 
   describe('playlist items', () => {
@@ -149,6 +164,36 @@ describe('playlist routes', () => {
   });
 
   describe('playlist push', () => {
+    it('pushes a server-only video to its matching connector', async () => {
+      const video = await createMusicVideo(artistId, { title: 'Server Only', hasFile: false });
+      const connector = await createLibraryConnector({ type: 'jellyfin' });
+      await prisma.libraryConnector.update({ where: { id: connector.id }, data: { userId: 'user-1', videoLibraryId: 'videos-1' } });
+      await createLibraryVideo(connector.id, { musicVideoId: video.id, externalId: 'video-1', title: 'Server Only' });
+      const playlist = await prisma.playlist.create({ data: { name: 'Server Playlist' } });
+      await prisma.playlistItem.create({ data: { playlistId: playlist.id, musicVideoId: video.id, sortOrder: 0 } });
+      const sentBodies: unknown[] = [];
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string; body?: string }) => {
+        if (url.includes('/Users/') && url.includes('/Items?')) return {
+          ok: true, json: async () => ({ Items: [{ Id: 'video-1', Name: 'Server Only', Artists: ['Test Artist'] }] }),
+        };
+        if (url.endsWith('/Playlists') && options.method === 'POST') {
+          sentBodies.push(JSON.parse(options.body ?? '{}'));
+          return { ok: true, status: 200, text: async () => JSON.stringify({ Id: 'playlist-1' }) };
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      }));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/playlist/${playlist.id}/push/${connector.id}`,
+        headers: authHeaders(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().matchedCount).toBe(1);
+      expect(sentBodies).toEqual([expect.objectContaining({ Ids: ['video-1'] })]);
+    });
+
     it('404s when the playlist does not exist', async () => {
       const connector = await createLibraryConnector();
       const res = await app.inject({

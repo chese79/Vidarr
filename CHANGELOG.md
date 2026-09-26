@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — playlists from media-server videos
+
+- Allow confirmed, available Plex/Jellyfin videos in playlist filter results and the manual picker,
+  even when Vidarr has no local copy. Push includes a server-only video only for the connector
+  where it is confirmed available.
+
 ### Fixed — video-library reconciliation
 
 - Preserve existing media-server video availability when a connector unexpectedly returns an

@@ -30,8 +30,8 @@ function GeneratePlaylistPanel() {
 
   const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list, enabled: open });
   const downloaded = useQuery({
-    queryKey: ['musicVideos', 'downloaded'],
-    queryFn: () => api.musicVideos.list({ hasFile: true }),
+    queryKey: ['musicVideos', 'playable'],
+    queryFn: () => api.musicVideos.list({ playable: true }),
     enabled: open,
   });
 
@@ -251,8 +251,8 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
   const playlist = playlists.data?.find((p) => p.id === playlistId);
 
   const downloaded = useQuery({
-    queryKey: ['musicVideos', 'downloaded'],
-    queryFn: () => api.musicVideos.list({ hasFile: true }),
+    queryKey: ['musicVideos', 'playable'],
+    queryFn: () => api.musicVideos.list({ playable: true }),
     enabled: adding,
   });
 
@@ -362,7 +362,7 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
                 </div>
               </div>
             ))}
-          {downloaded.data?.length === 0 && <p className="empty-state">No downloaded videos yet.</p>}
+          {downloaded.data?.length === 0 && <p className="empty-state">No local or media-server videos available yet.</p>}
         </div>
       )}
 

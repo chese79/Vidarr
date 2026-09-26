@@ -15,18 +15,21 @@ export interface GeneratePlaylistResult {
   matchedCount: number;
 }
 
-// Only videos already on disk are eligible — a playlist exists to be pushed
-// to Plex/Jellyfin, and an unowned video can't be pushed anywhere yet (see
-// PlaylistsPage's manual "Add videos" picker, which applies the same
-// hasFile-only restriction).
+// A local file or a confirmed available server match can participate in a
+// playlist. Push applies the selected connector's availability boundary.
 export async function generatePlaylistFromFilters(
   name: string,
   filters: PlaylistFilters,
   matchMode: 'all' | 'any',
 ): Promise<GeneratePlaylistResult> {
   const candidates = await prisma.musicVideo.findMany({
-    where: { hasFile: true },
-    include: { artist: true, file: true },
+    where: { OR: [
+      { hasFile: true },
+      { libraryVideos: { some: { available: true, matchConfidence: null, connector: { enabled: true } } } },
+    ] },
+    include: { artist: true, file: true, libraryVideos: {
+      where: { available: true, matchConfidence: null, connector: { enabled: true } },
+    } },
   });
 
   type Candidate = (typeof candidates)[number];
@@ -55,7 +58,7 @@ export async function generatePlaylistFromFilters(
 
   if (filters.minPlayCount !== undefined) {
     const min = filters.minPlayCount;
-    checks.push((v) => (v.file?.playCount ?? 0) >= min);
+    checks.push((v) => (v.file?.playCount ?? Math.max(0, ...v.libraryVideos.map((item) => item.playCount ?? 0))) >= min);
   }
 
   if (filters.artistIds?.length) {

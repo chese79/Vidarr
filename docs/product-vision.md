@@ -90,6 +90,9 @@ was already observed through an audio library.
 Vidarr creates playlists only from videos available in the selected playback library and can send
 them to Plex or Jellyfin. Users can build playlists manually or from metadata rules such as artist,
 genre, year, play count, ownership, quality, date added, director, or other catalog metadata.
+The playlist picker and filter generator include confirmed media-server videos even when Vidarr
+does not own a local file. A push uses server-only items only when they are available in that
+specific connector.
 
 Static playlists are snapshots. Smart playlists retain their rules, can be regenerated on demand
 or on a schedule, and can republish when membership changes. Playlist ordering must be explicit
