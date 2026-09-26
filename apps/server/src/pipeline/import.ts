@@ -70,15 +70,9 @@ export async function importDownloadedFile(
     thumbnailUrl: musicVideo.thumbnailUrl,
   });
 
-  // A quality upgrade renames to a different filename (the {Quality} token
-  // changes) — the old file is now an orphan once the new one is in place.
-  if (existingFile && existingFile.path !== destPath) {
-    await fs.unlink(existingFile.path).catch(() => {});
-  }
-
   const quality = await prisma.quality.findUnique({ where: { name: qualityName } });
 
-  await prisma.musicVideoFile.upsert({
+  await prisma.$transaction([prisma.musicVideoFile.upsert({
     where: { musicVideoId },
     update: {
       path: destPath,
@@ -94,12 +88,10 @@ export async function importDownloadedFile(
       qualityId: quality?.id,
       originalFilename: path.basename(sourcePath),
     },
-  });
-  await prisma.musicVideo.update({
+  }), prisma.musicVideo.update({
     where: { id: musicVideoId },
     data: { hasFile: true, awaitingServerScanAt: rootFolder.targetConnector ? new Date() : null },
-  });
-  await prisma.history.create({
+  }), prisma.history.create({
     data: {
       musicVideoId,
       eventType: 'downloadFolderImported',
@@ -109,7 +101,16 @@ export async function importDownloadedFile(
         upgradedFrom: existingFile && existingFile.path !== destPath ? existingFile.path : undefined,
       }),
     },
-  });
+  })]);
+
+  // A quality upgrade can change the filename. Keep the previous file until
+  // the replacement is fully recorded, and never delete a path outside the
+  // configured root if an older record points elsewhere.
+  if (existingFile && existingFile.path !== destPath && isPathWithinRoot(rootFolder.path, existingFile.path)) {
+    await fs.unlink(existingFile.path).catch(async (err: NodeJS.ErrnoException) => {
+      if (err.code !== 'ENOENT') await logActivity('warn', 'old-video-cleanup', err).catch(() => {});
+    });
+  }
 
   if (rootFolder.targetConnector) {
     try {

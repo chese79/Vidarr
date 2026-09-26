@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — quality upgrade import safety
+
+- Keep the previous video file until its replacement and import history are committed to the
+  database. Cleanup also refuses to delete a prior path outside the configured root folder.
+
 ### Added — repeatable playlist shuffle
 
 - Choose artist/title order or a shuffled order when generating static or smart playlists. Smart

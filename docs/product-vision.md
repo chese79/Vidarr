@@ -81,6 +81,8 @@ After import, Vidarr should request a media-server library refresh, wait for or 
 new server item, and surface whether the file is merely on disk or fully available in the player.
 Existing files and media-server records must never be deleted merely because a connector sync
 temporarily fails.
+During a quality upgrade, the previous file remains in place until the replacement is recorded
+successfully; cleanup never removes a prior path outside the configured root folder.
 An unexpectedly empty video-library scan also preserves the last known availability; a later
 non-empty scan reconciles inventory. Video-library provenance is retained even when the artist
 was already observed through an audio library.
