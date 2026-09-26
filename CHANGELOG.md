@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — repeatable playlist shuffle
+
+- Choose artist/title order or a shuffled order when generating static or smart playlists. Smart
+  playlist regeneration retains the same shuffle seed, so unchanged membership keeps its order.
+  Existing playlists keep artist/title order.
+
 ### Improved — smart playlist publishing
 
 - Republish a smart playlist to previously pushed playback libraries when manual or scheduled

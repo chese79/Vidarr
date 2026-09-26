@@ -12,6 +12,7 @@ function GeneratePlaylistPanel() {
   const [smart, setSmart] = useState(false);
   const [regenerateIntervalMinutes, setRegenerateIntervalMinutes] = useState<number | null>(null);
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
+  const [sortMode, setSortMode] = useState<'artist_title' | 'shuffle'>('artist_title');
 
   const [enableYear, setEnableYear] = useState(false);
   const [yearMin, setYearMin] = useState('');
@@ -45,7 +46,7 @@ function GeneratePlaylistPanel() {
   });
 
   const generate = useMutation({
-    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode, smart, regenerateIntervalMinutes, targetConnectorId: targetConnectorId || null }),
+    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode, smart, regenerateIntervalMinutes, targetConnectorId: targetConnectorId || null, sortMode }),
     onSuccess: (r) => {
       setResult(`Created "${name}" with ${r.matchedCount} video(s).`);
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
@@ -127,6 +128,10 @@ function GeneratePlaylistPanel() {
       </div>
 
       <div className="form-row" style={{ alignItems: 'center' }}>
+        <label>Order <select aria-label="Playlist order" value={sortMode} onChange={(e) => setSortMode(e.target.value as 'artist_title' | 'shuffle')}>
+          <option value="artist_title">Artist and title</option>
+          <option value="shuffle">Shuffle once</option>
+        </select></label>
         <label><input type="checkbox" checked={smart} onChange={(e) => setSmart(e.target.checked)} /> Save as smart playlist</label>
         {smart && <select aria-label="Regeneration schedule" value={regenerateIntervalMinutes ?? ''} onChange={(e) => setRegenerateIntervalMinutes(e.target.value ? Number(e.target.value) : null)}>
           <option value="">Manual regeneration</option>
@@ -373,6 +378,7 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
       {playlist.targetConnectorId && <p className="empty-state" style={{ padding: '0 0 8px' }}>
         Playback library: {connectors.data?.find((c) => c.id === playlist.targetConnectorId)?.name ?? `Connector ${playlist.targetConnectorId}`}
       </p>}
+      {playlist.sortMode === 'shuffle' && <p className="empty-state" style={{ padding: '0 0 8px' }}>Shuffled order is kept when this playlist regenerates.</p>}
 
       {playlist.items.length ? (
         <div className="video-list">

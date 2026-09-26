@@ -103,8 +103,10 @@ behavior and order; users can select a playback connector when creating a new pl
 Static playlists are snapshots. Smart playlists retain their rules, can be regenerated on demand
 or on a schedule, and can republish when membership changes. Playlist ordering must be explicit
 and deterministic, with optional shuffle/randomization as a user choice.
-Smart rules are stored with the playlist and regenerate atomically in artist/title order. The
-scheduler checks daily or weekly rules every 15 minutes; users can also regenerate manually.
+Smart rules are stored with the playlist and regenerate atomically in artist/title order by
+default. Generated static and smart playlists can instead use a saved shuffle seed; regeneration
+keeps the same shuffled order for unchanged membership. The scheduler checks daily or weekly
+rules every 15 minutes; users can also regenerate manually.
 When regeneration changes membership, Vidarr republishes only to libraries where the smart
 playlist was previously pushed. A failed publish is recorded in playlist sync status and retried
 at the next regeneration.

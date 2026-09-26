@@ -1,6 +1,7 @@
 import { prisma } from '../db/client.js';
 import { MatchMode, PlaylistFiltersSchema } from '@vidarr/shared-types';
 import { normalizeTitle } from './normalize.js';
+import { createHash, randomInt } from 'node:crypto';
 
 export interface PlaylistFilters {
   yearMin?: number;
@@ -18,6 +19,16 @@ export interface PlaylistFilters {
 export interface GeneratePlaylistResult {
   playlistId: number;
   matchedCount: number;
+}
+
+function orderedIds(ids: number[], sortMode: string, shuffleSeed: number | null): number[] {
+  if (sortMode !== 'shuffle' || shuffleSeed == null) return ids;
+  const ranks = new Map(ids.map((id) => [id, createHash('sha256').update(`${shuffleSeed}:${id}`).digest('hex')]));
+  return [...ids].sort((a, b) => {
+    const left = ranks.get(a)!;
+    const right = ranks.get(b)!;
+    return left < right ? -1 : left > right ? 1 : a - b;
+  });
 }
 
 // A local file or a confirmed available server match can participate in a
@@ -110,9 +121,12 @@ export async function generatePlaylistFromFilters(
   name: string,
   filters: PlaylistFilters,
   matchMode: 'all' | 'any',
-  options: { smart?: boolean; regenerateIntervalMinutes?: number | null; targetConnectorId?: number | null } = {},
+  options: { smart?: boolean; regenerateIntervalMinutes?: number | null; targetConnectorId?: number | null; sortMode?: 'artist_title' | 'shuffle' } = {},
 ): Promise<GeneratePlaylistResult> {
   const matchedIds = await matchingVideoIds(filters, matchMode, options.targetConnectorId);
+  const sortMode = options.sortMode ?? 'artist_title';
+  const shuffleSeed = sortMode === 'shuffle' ? randomInt(0, 2 ** 31) : null;
+  const sortedIds = orderedIds(matchedIds, sortMode, shuffleSeed);
 
   const playlist = await prisma.playlist.create({ data: {
     name,
@@ -122,10 +136,12 @@ export async function generatePlaylistFromFilters(
     regenerateIntervalMinutes: options.smart ? options.regenerateIntervalMinutes ?? null : null,
     lastGeneratedAt: options.smart ? new Date() : null,
     targetConnectorId: options.targetConnectorId ?? null,
+    sortMode,
+    shuffleSeed,
   } });
-  if (matchedIds.length) {
+  if (sortedIds.length) {
     await prisma.playlistItem.createMany({
-      data: matchedIds.map((musicVideoId, sortOrder) => ({ playlistId: playlist.id, musicVideoId, sortOrder })),
+      data: sortedIds.map((musicVideoId, sortOrder) => ({ playlistId: playlist.id, musicVideoId, sortOrder })),
     });
   }
 
@@ -142,7 +158,7 @@ export async function regenerateSmartPlaylist(playlistId: number): Promise<{ mat
   }
   const filters = PlaylistFiltersSchema.parse(JSON.parse(playlist.ruleFilters));
   const matchMode = MatchMode.parse(playlist.ruleMatchMode);
-  const matchedIds = await matchingVideoIds(filters, matchMode, playlist.targetConnectorId);
+  const matchedIds = orderedIds(await matchingVideoIds(filters, matchMode, playlist.targetConnectorId), playlist.sortMode, playlist.shuffleSeed);
   const previousIds = playlist.items.map((item) => item.musicVideoId);
   const changed = matchedIds.length !== previousIds.length || matchedIds.some((id, index) => id !== previousIds[index]);
   await prisma.$transaction(async (tx) => {

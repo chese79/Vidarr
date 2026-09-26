@@ -61,6 +61,7 @@ export async function playlistRoutes(app: FastifyInstance) {
         smart: body.smart,
         regenerateIntervalMinutes: body.regenerateIntervalMinutes,
         targetConnectorId: body.targetConnectorId,
+        sortMode: body.sortMode,
       });
     } catch (err) {
       reply.code(502);

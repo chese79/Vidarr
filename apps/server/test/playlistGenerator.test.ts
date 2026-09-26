@@ -223,4 +223,25 @@ describe('generatePlaylistFromFilters', () => {
     expect(playlist.items.map((item) => item.musicVideoId)).toEqual([first.id, second.id]);
     expect((await regenerateSmartPlaylist(generated.playlistId)).changed).toBe(false);
   });
+
+  it('keeps a smart playlist shuffle stable across regeneration', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const videoIds: number[] = [];
+    for (const title of ['One', 'Two', 'Three', 'Four', 'Five']) {
+      const video = await createMusicVideo(artist.id, { title, hasFile: true, releaseYear: 2000 });
+      await createMusicVideoFile(video.id, { path: `/${title}.mp4` });
+      videoIds.push(video.id);
+    }
+    const created = await generatePlaylistFromFilters('Shuffle', { yearMin: 1990 }, 'all', { smart: true, sortMode: 'shuffle' });
+    const before = await prisma.playlist.findUniqueOrThrow({ where: { id: created.playlistId },
+      include: { items: { orderBy: { sortOrder: 'asc' } } } });
+    const refreshed = await regenerateSmartPlaylist(created.playlistId);
+    const after = await prisma.playlistItem.findMany({ where: { playlistId: created.playlistId }, orderBy: { sortOrder: 'asc' } });
+
+    expect(before.sortMode).toBe('shuffle');
+    expect(before.shuffleSeed).not.toBeNull();
+    expect(before.items.map((item) => item.musicVideoId).sort((a, b) => a - b)).toEqual(videoIds.sort((a, b) => a - b));
+    expect(refreshed).toEqual({ matchedCount: 5, changed: false });
+    expect(after.map((item) => item.musicVideoId)).toEqual(before.items.map((item) => item.musicVideoId));
+  });
 });

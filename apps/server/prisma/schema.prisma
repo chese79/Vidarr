@@ -377,6 +377,8 @@ model Playlist {
   regenerateIntervalMinutes Int? // null = manual only
   lastGeneratedAt DateTime?
   targetConnectorId Int? // selected Plex/Jellyfin playback library; null preserves legacy playlists
+  sortMode String @default("artist_title") // artist_title | shuffle
+  shuffleSeed Int?
 
   items PlaylistItem[]
   syncs PlaylistSync[]
