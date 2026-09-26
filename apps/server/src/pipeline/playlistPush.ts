@@ -50,7 +50,7 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
 // Only previously published smart playlists are republished automatically.
 export async function republishChangedSmartPlaylist(playlistId: number, changed: boolean): Promise<number> {
   const syncs = await prisma.playlistSync.findMany({
-    where: { playlistId, remotePlaylistId: { not: null }, ...(changed ? {} : { lastPushStatus: 'failed' }) },
+    where: { playlistId, remotePlaylistId: { not: null }, ...(changed ? {} : { lastPushStatus: { in: ['failed', 'partial'] } }) },
     select: { connectorId: true },
   });
   let pushed = 0;

@@ -134,6 +134,12 @@ describe('playlist routes', () => {
     expect(requests.some((request) => request.includes('DELETE') && request.includes('/Items/playlist-1'))).toBe(true);
     expect(sync.remotePlaylistId).toBe('playlist-2');
     expect(retriedSync.remotePlaylistId).toBe('playlist-3');
+    await prisma.playlistSync.update({ where: { id: sync.id }, data: { lastPushStatus: 'partial' } });
+    const partialRetry = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
+    const completedSync = await prisma.playlistSync.findUniqueOrThrow({ where: { id: sync.id } });
+    expect(partialRetry.json().changed).toBe(false);
+    expect(completedSync.remotePlaylistId).toBe('playlist-4');
+    expect(completedSync.lastPushStatus).toBe('success');
   });
 
   it('POST /api/v1/playlist/generate rejects an invalid matchMode', async () => {

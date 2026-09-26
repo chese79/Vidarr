@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — partial playlist retry
+
+- Retry a partially published smart playlist at its next regeneration, even when its Vidarr
+  membership has not changed, so newly available server items can complete the remote list.
+
 ### Fixed — ambiguous Plex playlist matches
 
 - Leave a Plex playlist item unmatched when multiple videos in the selected library have the
