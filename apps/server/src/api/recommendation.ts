@@ -6,10 +6,24 @@ import { sortNameFor } from '../pipeline/normalize.js';
 
 export async function recommendationRoutes(app: FastifyInstance) {
   app.get('/api/v1/recommendation', async () => {
-    return prisma.recommendation.findMany({
+    const recommendations = await prisma.recommendation.findMany({
       where: { dismissed: false, addedArtistId: null },
       orderBy: { aggregateScore: 'desc' },
       include: { sourceHits: true },
+    });
+    const observations = await prisma.libraryArtist.findMany({
+      where: { connector: { enabled: true } },
+      select: { normalizedName: true, genre: true, playCount: true, musicbrainzArtistId: true },
+    });
+    const byName = new Map(observations.map((observation) => [observation.normalizedName, observation]));
+    return recommendations.map((recommendation) => {
+      const observation = byName.get(recommendation.normalizedArtistName);
+      return {
+        ...recommendation,
+        genre: observation?.genre ?? null,
+        playCount: observation?.playCount ?? null,
+        mbid: recommendation.mbid ?? observation?.musicbrainzArtistId ?? null,
+      };
     });
   });
 
@@ -34,6 +48,9 @@ export async function recommendationRoutes(app: FastifyInstance) {
         sortName: sortNameFor(recommendation.artistName),
         rootFolderId: body.rootFolderId,
         qualityProfileId: body.qualityProfileId,
+        musicbrainzArtistId: recommendation.mbid,
+        musicbrainzMatchStatus: recommendation.mbid ? 'confirmed' : 'unmatched',
+        musicbrainzMatchConfidence: recommendation.mbid ? 1 : null,
       },
     });
     await prisma.artistSource.create({

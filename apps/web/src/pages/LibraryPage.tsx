@@ -214,6 +214,7 @@ function ArtistRow({
           </span>
           <span>{artist.monitoredVideoCount} monitored</span>
           {artist.unmatchedVideoCount > 0 && <span className="missing">{artist.unmatchedVideoCount} unmatched</span>}
+          {artist.supplementaryVideoCount > 0 && <span>{artist.supplementaryVideoCount} supplementary</span>}
           {artist.missingVideoCount > 0 && <span className="missing">{artist.missingVideoCount} missing</span>}
           {artist.downloadingVideoCount > 0 && (
             <span className="downloading">{artist.downloadingVideoCount} downloading</span>

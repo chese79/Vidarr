@@ -33,6 +33,7 @@ export async function musicVideoRoutes(app: FastifyInstance) {
         director: body.director ?? null,
         genre: body.genre ?? null,
         monitored: body.monitored,
+        catalogKind: body.imvdbVideoId ? 'official' : 'supplementary',
         thumbnailUrl: body.thumbnailUrl ?? null,
       },
     });

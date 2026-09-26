@@ -6,7 +6,21 @@ catalog and the playback destinations for the finished collection.
 
 ## Canonical catalog
 
-Vidarr maintains one canonical artist list formed from the normalized union of:
+Vidarr first observes artists from configured audio libraries, video libraries, manual additions,
+and discovery services. An observation is not itself a canonical identity. The preferred identity
+pipeline is:
+
+1. consume an embedded or connector-provided MusicBrainz artist ID when available;
+2. otherwise propose MusicBrainz candidates using exact names, aliases, and supporting evidence;
+3. require review for ambiguous or name-only matches; and
+4. retain the selected MusicBrainz ID as the stable canonical artist identity.
+
+MusicBrainz supplies canonical names, aliases, artist type, country, disambiguation, genres, and
+recording relationships. Picard data is consumed from tags embedded in audio files or exposed by a
+media server; Vidarr does not depend on a separate Picard database. Genre precedence is user value,
+embedded Picard metadata, MusicBrainz genres, connector metadata, then folksonomy data.
+
+Artist observations are formed from the normalized union of:
 
 1. artists in every selected music library;
 2. artists credited on videos in every selected music-video library;
@@ -18,10 +32,17 @@ removed or renamed library entries without deleting a manually managed artist. S
 connector must be repeatable, deduplicate equivalent names, and remove stale connector-owned
 records safely.
 
+After artist identity is resolved, IMVDb defines the authoritative list of expected official music
+videos. IMVDb completeness is therefore separate from source discovery and local ownership.
+MusicBrainz recording/video relationships may add supplementary videos and verified source URLs,
+but supplementary videos are unmonitored by default and never change IMVDb completeness. Artist
+channel links are discovery hints, not proof that an individual upload is an official video.
+
 The selected music-video library also establishes the owned-video inventory. Vidarr should know
 which canonical videos already exist in each media server, even when Vidarr did not originally
 download them. Local file ownership and availability in a connected server are related but
-distinct states.
+distinct states. A local video matching the artist but not an IMVDb video remains visible as
+inventory alongside the official catalog and is not silently discarded or counted as expected.
 
 ## Discovery and acquisition
 
@@ -64,10 +85,11 @@ and deterministic, with optional shuffle/randomization as a user choice.
 
 ## Current alignment priorities
 
-1. Synchronize artists from both selected music and music-video libraries into the canonical
-   catalog while retaining provenance.
-2. Inventory existing music videos from Plex and Jellyfin and reconcile them with canonical video
-   records.
+1. Complete embedded audio-tag scanning for installations whose media server does not expose
+   Picard/MusicBrainz identifiers.
+2. Complete the bulk MusicBrainz candidate-review experience for unresolved and ambiguous artists.
+3. Inventory existing music videos from Plex and Jellyfin and reconcile them with IMVDb official
+   records while preserving supplementary inventory.
 3. Generalize authoritative sources to support IMVDb-provided YouTube and Vimeo links.
 4. Map imports to connector libraries and trigger/reconcile media-server refreshes.
 5. Expand static playlist filters and add persisted smart-playlist rules.

@@ -12,6 +12,12 @@ import type {
 
 const { get: plexGet, send: plexSend, getBinary: plexGetBinary } = createAuthedFetcher('Plex', 'X-Plex-Token');
 
+function plexMusicBrainzArtistId(artist: any): string | undefined {
+  const guids: string[] = [artist.guid, ...(artist.Guid ?? []).map((entry: any) => entry.id)].filter(Boolean);
+  const match = guids.map((value) => String(value).match(/musicbrainz:\/\/artist\/([0-9a-f-]{36})/i)).find(Boolean);
+  return match?.[1]?.toLowerCase();
+}
+
 // Plex has no first-class "music video" item type — vidarr's video library is
 // whatever Plex section (Movies / Home Videos / Other Videos) the user points
 // it at. Without a native Artist field on those item types, matching falls
@@ -59,10 +65,15 @@ export const plexProvider: LibraryConnectorProvider = {
       `/library/sections/${config.musicLibraryId}/all?type=8`,
     );
     const artists: any[] = body?.MediaContainer?.Metadata ?? [];
-    return artists.map((a) => ({
-      externalId: String(a.ratingKey),
-      name: a.title as string,
-    }));
+    return artists.map((a) => {
+      const musicbrainzArtistId = plexMusicBrainzArtistId(a);
+      return {
+        externalId: String(a.ratingKey),
+        name: a.title as string,
+        musicbrainzArtistId,
+        musicbrainzSource: musicbrainzArtistId ? 'connector' as const : undefined,
+      };
+    });
   },
 
   async fetchVideos(config): Promise<FetchedLibraryVideo[]> {

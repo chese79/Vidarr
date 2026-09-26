@@ -12,6 +12,10 @@ export interface FetchedLibraryArtist {
   name: string;
   genre?: string;
   playCount?: number;
+  // A provider-supplied or embedded Picard tag is identity evidence, not
+  // merely display metadata. When present it safely bypasses fuzzy matching.
+  musicbrainzArtistId?: string;
+  musicbrainzSource?: 'connector' | 'embedded';
 }
 
 export interface LibraryVideoThumbnail {

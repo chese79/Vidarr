@@ -16,6 +16,7 @@ import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
 import { computeVideoStatus } from '../pipeline/videoStatus.js';
 import { matchLibraryVideo, type CanonicalVideo } from '../pipeline/reconciliation.js';
 import { autoSearchAndGrab, runBacklogSearch } from '../pipeline/autoSearch.js';
+import { confirmArtistIdentity, discoverArtistIdentityCandidates } from '../pipeline/artistIdentity.js';
 
 // Escapes SQLite LIKE's own wildcards so a search term containing "%" or "_"
 // is matched literally rather than as a pattern.
@@ -36,6 +37,7 @@ interface ArtistSummaryRow {
   downloadingVideoCount: number;
   monitoredVideoCount: number;
   unmatchedVideoCount: number;
+  supplementaryVideoCount: number;
   aggregatePlayCount: number | null;
   letter: string;
 }
@@ -43,6 +45,34 @@ interface ArtistSummaryRow {
 export async function artistRoutes(app: FastifyInstance) {
   app.get('/api/v1/artist', async () => {
     return prisma.artist.findMany({ orderBy: { sortName: 'asc' } });
+  });
+
+  app.get('/api/v1/artist/:id/musicbrainz/candidates', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return prisma.musicBrainzArtistCandidate.findMany({
+      where: { artistId: id, status: 'suggested' },
+      orderBy: { score: 'desc' },
+    });
+  });
+
+  app.post('/api/v1/artist/:id/musicbrainz/discover', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    if (!await prisma.artist.findUnique({ where: { id }, select: { id: true } })) {
+      return reply.code(404).send({ error: 'Artist not found' });
+    }
+    return discoverArtistIdentityCandidates(id);
+  });
+
+  app.post('/api/v1/artist/:id/musicbrainz/confirm', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const musicbrainzArtistId = (req.body as { musicbrainzArtistId?: string } | null)?.musicbrainzArtistId;
+    if (!musicbrainzArtistId || !/^[0-9a-f-]{36}$/i.test(musicbrainzArtistId)) {
+      return reply.code(400).send({ error: 'A valid MusicBrainz artist id is required' });
+    }
+    if (!await prisma.artist.findUnique({ where: { id }, select: { id: true } })) {
+      return reply.code(404).send({ error: 'Artist not found' });
+    }
+    return confirmArtistIdentity(id, musicbrainzArtistId.toLowerCase());
   });
 
   // Powers the Library page's artist-centered list — combines the counts a
@@ -130,6 +160,7 @@ export async function artistRoutes(app: FastifyInstance) {
              WHERE lv2."musicVideoId" = mv."id" AND lv2."available" = 1 AND lv2."matchConfidence" IS NULL AND lc2."enabled" = 1)
           ) AS "playCount"
         FROM "MusicVideo" mv
+        WHERE mv."catalogKind" = 'official' AND mv."catalogStatus" = 'active'
       ),
       artist_stats AS (
         SELECT
@@ -162,6 +193,9 @@ export async function artistRoutes(app: FastifyInstance) {
                AND ulv."normalizedArtistName" = LOWER(TRIM(a."name"))
                AND (ulv."musicVideoId" IS NULL OR ulv."matchConfidence" IS NOT NULL)
           ) AS "unmatchedVideoCount",
+          (SELECT COUNT(*) FROM "MusicVideo" smv
+             WHERE smv."artistId" = a."id" AND smv."catalogKind" IN ('supplementary', 'inventory')
+          ) AS "supplementaryVideoCount",
           CASE WHEN COALESCE(s."playCountKnownN", 0) > 0 THEN s."playCountSum" ELSE NULL END AS "aggregatePlayCount",
           CASE
             WHEN UPPER(SUBSTR(TRIM(a."sortName"), 1, 1)) BETWEEN 'A' AND 'Z'
@@ -217,6 +251,7 @@ export async function artistRoutes(app: FastifyInstance) {
       downloadingVideoCount: Number(row.downloadingVideoCount),
       monitoredVideoCount: Number(row.monitoredVideoCount),
       unmatchedVideoCount: Number(row.unmatchedVideoCount),
+      supplementaryVideoCount: Number(row.supplementaryVideoCount),
       aggregatePlayCount: row.aggregatePlayCount == null ? null : Number(row.aggregatePlayCount),
     }));
     const availableLetters = letterRows.map((r) => r.letter).sort();

@@ -16,6 +16,14 @@ model Artist {
   name             String
   sortName         String
   imvdbArtistId    String?      @unique
+  musicbrainzArtistId String?   @unique
+  musicbrainzMatchStatus String @default("unmatched") // unmatched | suggested | ambiguous | confirmed | notFound | failed
+  musicbrainzMatchConfidence Float?
+  musicbrainzMatchEvidence String? // JSON describing the observations used for the match
+  musicbrainzRefreshedAt DateTime?
+  artistType       String?
+  country          String?
+  disambiguation   String?
   // Defaults to false: a newly discovered/imported artist shouldn't start
   // auto-downloading its whole catalog just from being added. Only the
   // DEFAULT changed here — existing rows keep whatever value they already
@@ -27,6 +35,7 @@ model Artist {
   qualityProfile   QualityProfile @relation(fields: [qualityProfileId], references: [id])
   posterUrl        String?
   genre            String? // user-editable; auto-fillable from a matched LibraryArtist (Jellyfin) or a "standard" external source (Spotify's controlled-vocabulary genres) — see pipeline/genreMatch.ts
+  genreSource      String? // user | embedded | musicbrainz | connector | folksonomy
   metadataRefreshedAt DateTime?
   reconciledAt     DateTime?
   addedAt          DateTime     @default(now())
@@ -34,6 +43,7 @@ model Artist {
   musicVideos   MusicVideo[]
   youtubeSources YoutubeSource[]
   sources       ArtistSource[]
+  musicbrainzCandidates MusicBrainzArtistCandidate[]
 }
 
 model MusicVideo {
@@ -43,6 +53,9 @@ model MusicVideo {
   title          String
   normalizedTitle String
   imvdbVideoId   String?  @unique
+  musicbrainzRecordingId String? @unique
+  musicbrainzAudioRecordingId String?
+  catalogKind    String   @default("official") // official | supplementary | inventory
   youtubeVideoId String?  @unique
   releaseYear    Int?
   director       String?
@@ -377,9 +390,30 @@ model LibraryArtist {
   normalizedName String
   genre          String?
   playCount      Int?
+  musicbrainzArtistId String?
+  musicbrainzSource String? // connector | embedded
   lastSyncedAt   DateTime         @default(now())
 
   @@unique([connectorId, externalId])
+}
+
+model MusicBrainzArtistCandidate {
+  id             Int      @id @default(autoincrement())
+  artistId       Int
+  artist         Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  musicbrainzArtistId String
+  name           String
+  sortName       String?
+  artistType     String?
+  country        String?
+  disambiguation String?
+  score          Float
+  evidence       String // JSON
+  status         String @default("suggested") // suggested | rejected
+  lastSeenAt     DateTime @default(now())
+
+  @@unique([artistId, musicbrainzArtistId])
+  @@index([artistId, status, score])
 }
 
 model RecommendationProviderConfig {

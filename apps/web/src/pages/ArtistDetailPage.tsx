@@ -283,6 +283,24 @@ export default function ArtistDetailPage() {
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
   });
+  const musicbrainzCandidates = useQuery({
+    queryKey: ['musicbrainzCandidates', artistId],
+    queryFn: () => api.artists.musicbrainzCandidates(artistId),
+    enabled: Boolean(artist.data && !artist.data.musicbrainzArtistId),
+  });
+  const discoverMusicbrainz = useMutation({
+    mutationFn: () => api.artists.discoverMusicbrainzCandidates(artistId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['musicbrainzCandidates', artistId] }),
+    onError: (error) => setArtistActionMessage(`MusicBrainz search failed: ${(error as Error).message}`),
+  });
+  const confirmMusicbrainz = useMutation({
+    mutationFn: (mbid: string) => api.artists.confirmMusicbrainz(artistId, mbid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+      queryClient.invalidateQueries({ queryKey: ['musicbrainzCandidates', artistId] });
+    },
+    onError: (error) => setArtistActionMessage(`MusicBrainz confirmation failed: ${(error as Error).message}`),
+  });
 
   useEffect(() => {
     if (artist.data) setGenreInput(artist.data.genre ?? '');
@@ -442,6 +460,7 @@ export default function ArtistDetailPage() {
           <div>
             <h2>{artist.data.name}</h2>
             <div className="artist-meta">
+              {artist.data.musicbrainzArtistId ? `MusicBrainz: ${artist.data.musicbrainzArtistId}` : `MusicBrainz: ${artist.data.musicbrainzMatchStatus}`} ·{' '}
               {artist.data.imvdbArtistId ? `IMVDb: ${artist.data.imvdbArtistId}` : 'No IMVDb match'} ·{' '}
               {artist.data.summary.aggregatePlayCount ?? 'unknown'} plays · {artist.data.summary.available}/{artist.data.summary.known} available ·{' '}
               {artist.data.summary.missing} missing · {artist.data.summary.monitored} monitored
@@ -470,6 +489,11 @@ export default function ArtistDetailPage() {
         <button onClick={() => searchMissing.mutate()} disabled={searchMissing.isPending || !artist.data.monitored}>Search missing monitored</button>
       </div>
       {artistActionMessage && <p role="status" className="empty-state">{artistActionMessage}</p>}
+
+      {!artist.data.musicbrainzArtistId && <section className="card">
+        <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr builds the IMVDb catalog.</p></div><button className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</button></div>
+        {musicbrainzCandidates.data?.map((candidate) => <div key={candidate.id} className="form-row" style={{ alignItems: 'center' }}><strong>{candidate.name}</strong><span>{candidate.artistType ?? 'Unknown type'} · {candidate.country ?? 'Unknown country'}{candidate.disambiguation ? ` · ${candidate.disambiguation}` : ''} · {Math.round(candidate.score * 100)}%</span><button onClick={() => confirmMusicbrainz.mutate(candidate.musicbrainzArtistId)} disabled={confirmMusicbrainz.isPending}>Confirm</button></div>)}
+      </section>}
 
       {monitorMessage && (
         <p className="empty-state" role="status">

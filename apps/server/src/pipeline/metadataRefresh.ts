@@ -42,6 +42,7 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
         durationSeconds: video.durationSeconds,
         youtubeVideoId: video.youtubeVideoId,
         catalogStatus: 'active',
+        catalogKind: 'official',
         lastSeenAt: new Date(),
         removedAt: null,
       };

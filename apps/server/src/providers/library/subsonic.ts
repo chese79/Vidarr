@@ -50,7 +50,12 @@ export const subsonicProvider: LibraryConnectorProvider = {
     const artists: FetchedLibraryArtist[] = [];
     for (const index of indexes) {
       for (const artist of index.artist ?? []) {
-        artists.push({ externalId: String(artist.id), name: artist.name as string });
+        artists.push({
+          externalId: String(artist.id),
+          name: artist.name as string,
+          musicbrainzArtistId: artist.musicBrainzId as string | undefined,
+          musicbrainzSource: artist.musicBrainzId ? 'connector' : undefined,
+        });
       }
     }
     return artists;

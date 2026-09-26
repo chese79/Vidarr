@@ -5,6 +5,21 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — MusicBrainz artist identity and authoritative video catalogs
+
+- Resolve connector-provided MusicBrainz/Picard artist IDs before catalog construction, retain
+  match evidence and reviewable candidates, and enrich confirmed artists with canonical identity
+  metadata without overwriting an existing genre.
+- Treat active IMVDb videos as the authoritative expected catalog. MusicBrainz video recordings
+  and previously observed non-IMVDb videos remain visible as supplementary inventory and do not
+  inflate completeness or missing-video totals.
+- Import direct MusicBrainz video relationships as provider-neutral verified sources. Supplementary
+  videos default to unmonitored; inventory-only records are explicitly blocked from acquisition.
+- Read MusicBrainz artist IDs exposed by Jellyfin, Plex, and Subsonic connectors and construct the
+  catalog before reconciling the selected video library.
+- Add an additive Prisma migration for MusicBrainz identity, candidate review state, metadata
+  provenance, and catalog authority classification.
+
 ### Added — completed artist-centered library workflow
 
 - Complete the artist detail workspace with official artwork, catalog/availability/play summaries,

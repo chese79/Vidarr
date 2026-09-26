@@ -7,6 +7,7 @@ import { syncPlayCounts } from '../pipeline/playCountSync.js';
 import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discovery.js';
 import { refreshRecommendations } from '../pipeline/recommendations.js';
 import { matchLibraryVideo, type CanonicalVideo, type MatchConfidence } from '../pipeline/reconciliation.js';
+import { resolveArtistIdentityAndCatalog } from '../pipeline/artistIdentity.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
@@ -179,6 +180,8 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             normalizedName: normalizeTitle(artist.name),
             genre: artist.genre ?? null,
             playCount: artist.playCount ?? null,
+            musicbrainzArtistId: artist.musicbrainzArtistId ?? null,
+            musicbrainzSource: artist.musicbrainzSource ?? null,
             lastSyncedAt: new Date(),
           },
           create: {
@@ -188,6 +191,8 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
             normalizedName: normalizeTitle(artist.name),
             genre: artist.genre ?? null,
             playCount: artist.playCount ?? null,
+            musicbrainzArtistId: artist.musicbrainzArtistId ?? null,
+            musicbrainzSource: artist.musicbrainzSource ?? null,
           },
         }),
       ));
@@ -204,10 +209,72 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         });
       }
 
+      // Observations establish artists before either metadata catalog is
+      // queried. This order is intentional: inventory is reconciled against
+      // a catalog derived from a confirmed artist identity, never the other
+      // way around.
+      const defaults = await Promise.all([
+        prisma.rootFolder.findFirst({ orderBy: { id: 'asc' } }),
+        prisma.qualityProfile.findFirst({ orderBy: { id: 'asc' } }),
+      ]);
+      const canonicalByName = new Map<string, { id: number; name: string }>();
+      if (defaults[0] && defaults[1]) {
+        const canonicalArtists = await prisma.artist.findMany({ select: { id: true, name: true } });
+        canonicalArtists.forEach((artist) => canonicalByName.set(normalizeTitle(artist.name), artist));
+        for (const observation of artists) {
+          const key = normalizeTitle(observation.name);
+          let canonical = canonicalByName.get(key);
+          if (!canonical) {
+            canonical = await prisma.artist.create({
+              data: {
+                name: observation.name,
+                sortName: observation.name.replace(/^the\s+/i, ''),
+                monitored: false,
+                rootFolderId: defaults[0].id,
+                qualityProfileId: defaults[1].id,
+              },
+              select: { id: true, name: true },
+            });
+            canonicalByName.set(key, canonical);
+          }
+          await prisma.artistSource.upsert({
+            where: { artistId_provider_origin: { artistId: canonical.id, provider: connector.type, origin: `connector:${id}` } },
+            update: { externalId: observation.externalId, lastSeenAt: new Date() },
+            create: { artistId: canonical.id, provider: connector.type, externalId: observation.externalId, origin: `connector:${id}` },
+          });
+          // Only stable provider/embedded MBIDs auto-confirm during a library
+          // sync. Name-only observations stay unmatched until candidate
+          // discovery can present them for review.
+          if (observation.musicbrainzArtistId) {
+            await resolveArtistIdentityAndCatalog(canonical.id, observation);
+          }
+        }
+      }
+
       const provider = getLibraryConnectorProvider(connector.type);
       const videos = provider.fetchVideos && connector.videoLibraryId
         ? await provider.fetchVideos(connector)
         : [];
+      if (defaults[0] && defaults[1]) {
+        for (const video of videos) {
+          const key = normalizeTitle(video.artistName);
+          if (!key || canonicalByName.has(key)) continue;
+          const canonical = await prisma.artist.create({
+            data: {
+              name: video.artistName,
+              sortName: video.artistName.replace(/^the\s+/i, ''),
+              monitored: false,
+              rootFolderId: defaults[0].id,
+              qualityProfileId: defaults[1].id,
+            },
+            select: { id: true, name: true },
+          });
+          canonicalByName.set(key, canonical);
+          await prisma.artistSource.create({
+            data: { artistId: canonical.id, provider: connector.type, externalId: video.externalId, origin: `video-connector:${id}` },
+          });
+        }
+      }
       await prisma.libraryConnector.update({
         where: { id },
         data: { syncTotal: artists.length + videos.length },
@@ -215,6 +282,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
       if (provider.fetchVideos && connector.videoLibraryId) {
         const canonicalVideos: CanonicalVideo[] = (
           await prisma.musicVideo.findMany({
+            where: { catalogKind: { in: ['official', 'supplementary'] } },
             select: { id: true, title: true, releaseYear: true, durationSeconds: true, artist: { select: { name: true } } },
           })
         ).map((video) => ({
@@ -322,42 +390,6 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           await prisma.artist.updateMany({
             where: { musicVideos: { some: { id: { in: confirmedIds } } } },
             data: { reconciledAt: new Date() },
-          });
-        }
-      }
-
-      // Materialize artists observed in selected libraries into the canonical
-      // catalog when defaults exist. They remain unmonitored, so discovery
-      // never starts acquisition by itself, and provenance explains why each
-      // record exists.
-      const defaults = await Promise.all([
-        prisma.rootFolder.findFirst({ orderBy: { id: 'asc' } }),
-        prisma.qualityProfile.findFirst({ orderBy: { id: 'asc' } }),
-      ]);
-      if (defaults[0] && defaults[1]) {
-        const names = new Set([...artists.map((a) => a.name), ...videos.map((v) => v.artistName)]);
-        const canonicalArtists = await prisma.artist.findMany({ select: { id: true, name: true } });
-        const byName = new Map(canonicalArtists.map((a) => [normalizeTitle(a.name), a]));
-        for (const name of names) {
-          const key = normalizeTitle(name);
-          let canonical = byName.get(key);
-          if (!canonical) {
-            canonical = await prisma.artist.create({
-              data: {
-                name,
-                sortName: name.replace(/^the\s+/i, ''),
-                monitored: false,
-                rootFolderId: defaults[0].id,
-                qualityProfileId: defaults[1].id,
-              },
-              select: { id: true, name: true },
-            });
-            byName.set(key, canonical);
-          }
-          await prisma.artistSource.upsert({
-            where: { artistId_provider_origin: { artistId: canonical.id, provider: connector.type, origin: `connector:${id}` } },
-            update: { lastSeenAt: new Date() },
-            create: { artistId: canonical.id, provider: connector.type, origin: `connector:${id}` },
           });
         }
       }

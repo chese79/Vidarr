@@ -73,7 +73,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     }
     const body = await jellyfinGet(
       config,
-      `/Users/${config.userId}/Items?IncludeItemTypes=MusicArtist&Recursive=true&ParentId=${encodeURIComponent(config.musicLibraryId)}`,
+      `/Users/${config.userId}/Items?IncludeItemTypes=MusicArtist&Recursive=true&ParentId=${encodeURIComponent(config.musicLibraryId)}&Fields=Genres,UserData,ProviderIds`,
     );
     const items: any[] = body?.Items ?? [];
     return items.map((item) => ({
@@ -81,6 +81,8 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       name: item.Name as string,
       genre: Array.isArray(item.Genres) && item.Genres.length ? item.Genres.join(', ') : undefined,
       playCount: item.UserData?.PlayCount as number | undefined,
+      musicbrainzArtistId: item.ProviderIds?.MusicBrainzArtist as string | undefined,
+      musicbrainzSource: item.ProviderIds?.MusicBrainzArtist ? 'connector' as const : undefined,
     }));
   },
 

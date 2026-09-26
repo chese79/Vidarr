@@ -54,7 +54,7 @@ export async function autoSearchAndGrab(
         include: { qualityProfile: { include: { items: { include: { quality: true } } } } },
       },
       acquisitionSources: {
-        where: { accepted: true, authority: 'authoritative' },
+        where: { accepted: true, authority: { in: ['authoritative', 'verified'] } },
         orderBy: { id: 'asc' },
       },
     },
@@ -68,6 +68,9 @@ export async function autoSearchAndGrab(
   // filtered by each caller's own candidate query instead of here.
   if (musicVideo.ignored) {
     return { musicVideoId, grabbed: false, reason: 'Video is ignored' };
+  }
+  if (musicVideo.catalogKind === 'inventory') {
+    return { musicVideoId, grabbed: false, reason: 'Inventory-only video is not an acquisition target' };
   }
   if (await hasActiveDownload(musicVideoId)) {
     return { musicVideoId, grabbed: false, reason: 'Already downloading' };

@@ -57,6 +57,12 @@ export const ArtistSchema = z.object({
   name: z.string().min(1),
   sortName: z.string(),
   imvdbArtistId: z.string().nullable(),
+  musicbrainzArtistId: z.string().nullable(),
+  musicbrainzMatchStatus: z.string(),
+  musicbrainzMatchConfidence: z.number().nullable(),
+  artistType: z.string().nullable(),
+  country: z.string().nullable(),
+  disambiguation: z.string().nullable(),
   monitored: z.boolean(),
   rootFolderId: z.number().int(),
   qualityProfileId: z.number().int(),
@@ -104,6 +110,7 @@ export const ArtistSummarySchema = z.object({
   downloadingVideoCount: z.number().int(),
   monitoredVideoCount: z.number().int(),
   unmatchedVideoCount: z.number().int(),
+  supplementaryVideoCount: z.number().int(),
   // Distinct from 0 — an artist with videos but no known play-count data
   // anywhere is `null`, not "played zero times".
   aggregatePlayCount: z.number().int().nullable(),
@@ -492,6 +499,8 @@ export const RecommendationSchema = z.object({
   artistName: z.string(),
   mbid: z.string().nullable(),
   aggregateScore: z.number(),
+  genre: z.string().nullable().optional(),
+  playCount: z.number().int().nullable().optional(),
   dateFound: z.string(),
   sourceHits: z.array(RecommendationSourceHitSchema),
 });
