@@ -3,6 +3,7 @@ import { CreatePlaylistSchema, GeneratePlaylistBodySchema } from '@vidarr/shared
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { generatePlaylistFromFilters, regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
+import { pushPlaylist, republishChangedSmartPlaylist } from '../pipeline/playlistPush.js';
 
 const playlistInclude = {
   items: {
@@ -71,7 +72,9 @@ export async function playlistRoutes(app: FastifyInstance) {
     const id = Number((req.params as { id: string }).id);
     const playlist = await prisma.playlist.findUnique({ where: { id }, select: { kind: true } });
     if (!playlist || playlist.kind !== 'smart') return reply.code(404).send({ error: 'Smart playlist not found' });
-    return regenerateSmartPlaylist(id);
+    const result = await regenerateSmartPlaylist(id);
+    await republishChangedSmartPlaylist(id, result.changed);
+    return result;
   });
 
   app.delete('/api/v1/playlist/:id', async (req, reply) => {
@@ -115,82 +118,22 @@ export async function playlistRoutes(app: FastifyInstance) {
     reply.code(204);
   });
 
-  // Push is a full replace, not a diff — see PlaylistSync's doc comment in
-  // schema.prisma. Local files and confirmed items in this exact connector
-  // are eligible; a match in another playback library is not.
   app.post('/api/v1/playlist/:id/push/:connectorId', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const connectorId = Number((req.params as { connectorId: string }).connectorId);
-
-    const playlist = await prisma.playlist.findUnique({
-      where: { id },
-      include: { items: { include: { musicVideo: { include: { artist: true, libraryVideos: true } } } } },
-    });
+    const playlist = await prisma.playlist.findUnique({ where: { id }, select: { targetConnectorId: true } });
     if (!playlist) return reply.code(404).send({ error: 'Playlist not found' });
     if (playlist.targetConnectorId && playlist.targetConnectorId !== connectorId) {
       return reply.code(409).send({ error: 'Playlist is bound to a different playback library' });
     }
-
     const connector = await prisma.libraryConnector.findUnique({ where: { id: connectorId } });
     if (!connector) return reply.code(404).send({ error: 'Connector not found' });
-
-    const provider = getLibraryConnectorProvider(connector.type);
-    if (!provider.pushPlaylist) {
+    if (!getLibraryConnectorProvider(connector.type).pushPlaylist) {
       return reply.code(400).send({ error: `${connector.type} does not support playlist push` });
     }
-
-    const existingSync = await prisma.playlistSync.findUnique({
-      where: { playlistId_connectorId: { playlistId: id, connectorId } },
-    });
-
-    const playable = playlist.items.filter((i) => (!playlist.targetConnectorId && i.musicVideo.hasFile) || i.musicVideo.libraryVideos.some(
-      (item) => item.connectorId === connectorId && item.available && item.matchConfidence === null,
-    ));
     try {
-      const result = await provider.pushPlaylist(connector, {
-        name: playlist.name,
-        items: playable.map((i) => ({ artistName: i.musicVideo.artist.name, title: i.musicVideo.title })),
-        existingRemoteId: existingSync?.remotePlaylistId ?? null,
-      });
-
-      const status = result.unmatchedTitles.length === 0 ? 'success' : 'partial';
-      await prisma.playlistSync.upsert({
-        where: { playlistId_connectorId: { playlistId: id, connectorId } },
-        update: {
-          remotePlaylistId: result.remotePlaylistId,
-          lastPushedAt: new Date(),
-          lastPushStatus: status,
-          lastPushError: null,
-          unmatchedCount: result.unmatchedTitles.length,
-        },
-        create: {
-          playlistId: id,
-          connectorId,
-          remotePlaylistId: result.remotePlaylistId,
-          lastPushedAt: new Date(),
-          lastPushStatus: status,
-          unmatchedCount: result.unmatchedTitles.length,
-        },
-      });
-
-      return {
-        ok: true,
-        remotePlaylistId: result.remotePlaylistId,
-        matchedCount: result.matchedCount,
-        unmatchedTitles: result.unmatchedTitles,
-      };
+      return await pushPlaylist(id, connectorId);
     } catch (err) {
-      await prisma.playlistSync.upsert({
-        where: { playlistId_connectorId: { playlistId: id, connectorId } },
-        update: { lastPushedAt: new Date(), lastPushStatus: 'failed', lastPushError: (err as Error).message },
-        create: {
-          playlistId: id,
-          connectorId,
-          lastPushedAt: new Date(),
-          lastPushStatus: 'failed',
-          lastPushError: (err as Error).message,
-        },
-      });
       reply.code(502);
       return { ok: false, remotePlaylistId: null, matchedCount: 0, unmatchedTitles: [], error: (err as Error).message };
     }

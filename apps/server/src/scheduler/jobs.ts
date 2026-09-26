@@ -6,6 +6,7 @@ import { pollAndGrabYoutubeSource } from '../pipeline/youtubeSync.js';
 import { checkRootFolders } from '../pipeline/rootFolderHealth.js';
 import { refreshImvdbMetadata } from '../pipeline/metadataRefresh.js';
 import { regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
+import { republishChangedSmartPlaylist } from '../pipeline/playlistPush.js';
 
 export interface ScheduledJob {
   name: string;
@@ -41,7 +42,8 @@ export const JOBS: ScheduledJob[] = [
       let regenerated = 0;
       for (const playlist of playlists) {
         if (playlist.lastGeneratedAt && now - playlist.lastGeneratedAt.getTime() < playlist.regenerateIntervalMinutes! * 60_000) continue;
-        await regenerateSmartPlaylist(playlist.id);
+        const result = await regenerateSmartPlaylist(playlist.id);
+        await republishChangedSmartPlaylist(playlist.id, result.changed);
         regenerated++;
       }
       return `${regenerated} smart playlist(s) regenerated`;

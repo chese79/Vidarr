@@ -93,6 +93,49 @@ describe('playlist routes', () => {
     expect(listed.json()[0]).toMatchObject({ kind: 'smart', ruleMatchMode: 'all', regenerateIntervalMinutes: 1440 });
   });
 
+  it('republishes a previously pushed smart playlist only when membership changes', async () => {
+    const connector = await createLibraryConnector({ type: 'jellyfin' });
+    await prisma.libraryConnector.update({ where: { id: connector.id }, data: { userId: 'user-1', videoLibraryId: 'videos-1' } });
+    const first = await createMusicVideo(artistId, { title: 'First', hasFile: false, releaseYear: 2000 });
+    await createLibraryVideo(connector.id, { musicVideoId: first.id, externalId: 'video-1', title: 'First' });
+    const created = await app.inject({ method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
+      payload: { name: 'Smart publish', filters: { yearMin: 1990 }, matchMode: 'all', smart: true, targetConnectorId: connector.id } });
+    const playlistId = created.json().playlistId;
+    const requests: string[] = [];
+    let nextId = 1;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string }) => {
+      requests.push(`${options.method ?? 'GET'} ${url}`);
+      if (url.includes('/Users/') && url.includes('/Items?')) return { ok: true,
+        json: async () => ({ Items: [
+          { Id: 'video-1', Name: 'First', Artists: ['Test Artist'] },
+          { Id: 'video-2', Name: 'Second', Artists: ['Test Artist'] },
+        ] }) };
+      if (url.endsWith('/Playlists') && options.method === 'POST') return { ok: true, status: 200,
+        text: async () => JSON.stringify({ Id: `playlist-${nextId++}` }) };
+      if (url.includes('/Items/playlist-') && options.method === 'DELETE') return { ok: true, status: 204, text: async () => '' };
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    const firstPush = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/push/${connector.id}`, headers: authHeaders() });
+    const unchanged = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
+    const second = await createMusicVideo(artistId, { title: 'Second', hasFile: false, releaseYear: 2001 });
+    await createLibraryVideo(connector.id, { musicVideoId: second.id, externalId: 'video-2', title: 'Second' });
+    const changed = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
+    const sync = await prisma.playlistSync.findUniqueOrThrow({ where: { playlistId_connectorId: { playlistId, connectorId: connector.id } } });
+    const publishesAfterChange = requests.filter((request) => request.includes('POST') && request.endsWith('/Playlists')).length;
+    await prisma.playlistSync.update({ where: { id: sync.id }, data: { lastPushStatus: 'failed' } });
+    const retry = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
+    const retriedSync = await prisma.playlistSync.findUniqueOrThrow({ where: { id: sync.id } });
+    expect(firstPush.statusCode).toBe(200);
+    expect(unchanged.json().changed).toBe(false);
+    expect(changed.json().changed).toBe(true);
+    expect(publishesAfterChange).toBe(2);
+    expect(retry.json().changed).toBe(false);
+    expect(requests.filter((request) => request.includes('POST') && request.endsWith('/Playlists'))).toHaveLength(3);
+    expect(requests.some((request) => request.includes('DELETE') && request.includes('/Items/playlist-1'))).toBe(true);
+    expect(sync.remotePlaylistId).toBe('playlist-2');
+    expect(retriedSync.remotePlaylistId).toBe('playlist-3');
+  });
+
   it('POST /api/v1/playlist/generate rejects an invalid matchMode', async () => {
     const res = await app.inject({
       method: 'POST',

@@ -105,6 +105,9 @@ or on a schedule, and can republish when membership changes. Playlist ordering m
 and deterministic, with optional shuffle/randomization as a user choice.
 Smart rules are stored with the playlist and regenerate atomically in artist/title order. The
 scheduler checks daily or weekly rules every 15 minutes; users can also regenerate manually.
+When regeneration changes membership, Vidarr republishes only to libraries where the smart
+playlist was previously pushed. A failed publish is recorded in playlist sync status and retried
+at the next regeneration.
 Existing static playlists and their item order are preserved by the additive migration.
 
 ## Current alignment priorities

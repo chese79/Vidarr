@@ -134,7 +134,7 @@ function GeneratePlaylistPanel() {
           <option value="10080">Weekly</option>
         </select>}
       </div>
-      {smart && <p className="empty-state">Regeneration updates this list in Vidarr. Push it to a library to publish the updated list.</p>}
+      {smart && <p className="empty-state">Push this playlist once to publish it. Later membership changes republish to that library automatically.</p>}
 
       <div className="form-row" style={{ alignItems: 'center' }}>
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>

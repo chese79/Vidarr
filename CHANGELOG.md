@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — smart playlist publishing
+
+- Republish a smart playlist to previously pushed playback libraries when manual or scheduled
+  regeneration changes membership. A failed push is recorded for review and retried at the next
+  regeneration; unchanged successful lists are not republished.
+
 ### Improved — playback-library playlists
 
 - Bind a new static or smart playlist to a selected Plex or Jellyfin video library. The picker,
