@@ -5,6 +5,7 @@ import { pruneOldLogs } from '../pipeline/logCleanup.js';
 import { pollAndGrabYoutubeSource } from '../pipeline/youtubeSync.js';
 import { checkRootFolders } from '../pipeline/rootFolderHealth.js';
 import { refreshImvdbMetadata } from '../pipeline/metadataRefresh.js';
+import { regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
 
 export interface ScheduledJob {
   name: string;
@@ -28,6 +29,24 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  {
+    name: 'Smart Playlist Regeneration',
+    defaultIntervalMs: 15 * 60_000,
+    run: async () => {
+      const now = Date.now();
+      const playlists = await prisma.playlist.findMany({
+        where: { kind: 'smart', regenerateIntervalMinutes: { not: null } },
+        select: { id: true, lastGeneratedAt: true, regenerateIntervalMinutes: true },
+      });
+      let regenerated = 0;
+      for (const playlist of playlists) {
+        if (playlist.lastGeneratedAt && now - playlist.lastGeneratedAt.getTime() < playlist.regenerateIntervalMinutes! * 60_000) continue;
+        await regenerateSmartPlaylist(playlist.id);
+        regenerated++;
+      }
+      return `${regenerated} smart playlist(s) regenerated`;
+    },
+  },
   {
     name: 'Download Queue Monitor',
     defaultIntervalMs: 20_000,

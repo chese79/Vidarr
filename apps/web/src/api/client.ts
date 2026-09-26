@@ -308,6 +308,7 @@ export const api = {
     list: () => request<Playlist[]>('/playlist'),
     generate: (data: GeneratePlaylistBody) =>
       request<GeneratePlaylistResult>('/playlist/generate', { method: 'POST', body: JSON.stringify(data) }),
+    regenerate: (id: number) => request<{ matchedCount: number; changed: boolean }>(`/playlist/${id}/regenerate`, { method: 'POST' }),
     create: (data: CreatePlaylist) =>
       request<Playlist>('/playlist', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: number) => request<void>(`/playlist/${id}`, { method: 'DELETE' }),

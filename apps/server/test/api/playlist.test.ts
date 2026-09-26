@@ -75,6 +75,24 @@ describe('playlist routes', () => {
     expect(res.json()).toMatchObject({ matchedCount: 1 });
   });
 
+  it('creates a smart playlist and prevents manual edits to rule-owned items', async () => {
+    const video = await createMusicVideo(artistId, { title: 'Rule Match', hasFile: true, releaseYear: 2000 });
+    await createMusicVideoFile(video.id);
+    const created = await app.inject({
+      method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
+      payload: { name: 'Smart', filters: { yearMin: 1990 }, matchMode: 'all', smart: true, regenerateIntervalMinutes: 1440 },
+    });
+    expect(created.statusCode).toBe(200);
+    const playlistId = created.json().playlistId;
+    const remove = await app.inject({ method: 'DELETE', url: `/api/v1/playlist/${playlistId}/items/${video.id}`, headers: authHeaders() });
+    const regenerate = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
+    const listed = await app.inject({ method: 'GET', url: '/api/v1/playlist', headers: authHeaders() });
+
+    expect(remove.statusCode).toBe(409);
+    expect(regenerate.statusCode).toBe(200);
+    expect(listed.json()[0]).toMatchObject({ kind: 'smart', ruleMatchMode: 'all', regenerateIntervalMinutes: 1440 });
+  });
+
   it('POST /api/v1/playlist/generate rejects an invalid matchMode', async () => {
     const res = await app.inject({
       method: 'POST',

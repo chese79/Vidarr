@@ -97,6 +97,9 @@ specific connector.
 Static playlists are snapshots. Smart playlists retain their rules, can be regenerated on demand
 or on a schedule, and can republish when membership changes. Playlist ordering must be explicit
 and deterministic, with optional shuffle/randomization as a user choice.
+Smart rules are stored with the playlist and regenerate atomically in artist/title order. The
+scheduler checks daily or weekly rules every 15 minutes; users can also regenerate manually.
+Existing static playlists and their item order are preserved by the additive migration.
 
 ## Current alignment priorities
 

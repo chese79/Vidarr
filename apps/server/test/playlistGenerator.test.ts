@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { prisma } from '../src/db/client.js';
-import { generatePlaylistFromFilters } from '../src/pipeline/playlistGenerator.js';
+import { generatePlaylistFromFilters, regenerateSmartPlaylist } from '../src/pipeline/playlistGenerator.js';
 import {
   resetDb,
   createRootFolder,
@@ -137,5 +137,25 @@ describe('generatePlaylistFromFilters', () => {
     const playlist = await prisma.playlist.findUnique({ where: { id: result.playlistId } });
     expect(playlist?.name).toBe('Empty Playlist');
     expect(result.matchedCount).toBe(0);
+  });
+
+  it('persists smart rules and regenerates membership without changing the playlist identity', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const first = await createMusicVideo(artist.id, { title: 'First', hasFile: true, releaseYear: 2000 });
+    await createMusicVideoFile(first.id, { path: '/first.mp4' });
+    const generated = await generatePlaylistFromFilters('Smart', { yearMin: 1990 }, 'all', {
+      smart: true,
+      regenerateIntervalMinutes: 1440,
+    });
+    const second = await createMusicVideo(artist.id, { title: 'Second', hasFile: true, releaseYear: 2001 });
+    await createMusicVideoFile(second.id, { path: '/second.mp4' });
+
+    const refreshed = await regenerateSmartPlaylist(generated.playlistId);
+    const playlist = await prisma.playlist.findUniqueOrThrow({ where: { id: generated.playlistId }, include: { items: true } });
+
+    expect(refreshed).toEqual({ matchedCount: 2, changed: true });
+    expect(playlist).toMatchObject({ kind: 'smart', ruleFilters: '{"yearMin":1990}', ruleMatchMode: 'all', regenerateIntervalMinutes: 1440 });
+    expect(playlist.items.map((item) => item.musicVideoId)).toEqual([first.id, second.id]);
+    expect((await regenerateSmartPlaylist(generated.playlistId)).changed).toBe(false);
   });
 });

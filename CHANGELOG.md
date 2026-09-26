@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — smart playlists
+
+- Save playlist filter rules as smart playlists, regenerate them on demand, or schedule daily or
+  weekly regeneration. Existing playlists remain static, and smart playlist items follow their
+  rules rather than manual item edits.
+
 ### Improved — playlists from media-server videos
 
 - Allow confirmed, available Plex/Jellyfin videos in playlist filter results and the manual picker,

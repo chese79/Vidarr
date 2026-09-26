@@ -756,6 +756,11 @@ export const PlaylistSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   createdAt: z.string(),
+  kind: z.enum(['static', 'smart']),
+  ruleFilters: z.string().nullable(),
+  ruleMatchMode: z.string().nullable(),
+  regenerateIntervalMinutes: z.number().int().nullable(),
+  lastGeneratedAt: z.string().nullable(),
   items: z.array(PlaylistItemSchema),
   syncs: z.array(PlaylistSyncSchema),
 });
@@ -847,6 +852,8 @@ export const GeneratePlaylistBodySchema = z.object({
   name: z.string().min(1),
   filters: PlaylistFiltersSchema,
   matchMode: MatchMode,
+  smart: z.boolean().optional(),
+  regenerateIntervalMinutes: z.number().int().min(60).nullable().optional(),
 });
 export type GeneratePlaylistBody = z.infer<typeof GeneratePlaylistBodySchema>;
 

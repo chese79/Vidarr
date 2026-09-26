@@ -9,6 +9,8 @@ function GeneratePlaylistPanel() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [matchMode, setMatchMode] = useState<MatchMode>('all');
+  const [smart, setSmart] = useState(false);
+  const [regenerateIntervalMinutes, setRegenerateIntervalMinutes] = useState<number | null>(null);
 
   const [enableYear, setEnableYear] = useState(false);
   const [yearMin, setYearMin] = useState('');
@@ -36,7 +38,7 @@ function GeneratePlaylistPanel() {
   });
 
   const generate = useMutation({
-    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode }),
+    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode, smart, regenerateIntervalMinutes }),
     onSuccess: (r) => {
       setResult(`Created "${name}" with ${r.matchedCount} video(s).`);
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
@@ -107,6 +109,16 @@ function GeneratePlaylistPanel() {
           Match ANY enabled filter (OR)
         </label>
       </div>
+
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <label><input type="checkbox" checked={smart} onChange={(e) => setSmart(e.target.checked)} /> Save as smart playlist</label>
+        {smart && <select aria-label="Regeneration schedule" value={regenerateIntervalMinutes ?? ''} onChange={(e) => setRegenerateIntervalMinutes(e.target.value ? Number(e.target.value) : null)}>
+          <option value="">Manual regeneration</option>
+          <option value="1440">Daily</option>
+          <option value="10080">Weekly</option>
+        </select>}
+      </div>
+      {smart && <p className="empty-state">Regeneration updates this list in Vidarr. Push it to a library to publish the updated list.</p>}
 
       <div className="form-row" style={{ alignItems: 'center' }}>
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>
@@ -272,6 +284,10 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
     mutationFn: () => api.playlists.remove(playlistId),
     onSuccess: invalidate,
   });
+  const regenerate = useMutation({
+    mutationFn: () => api.playlists.regenerate(playlistId),
+    onSuccess: invalidate,
+  });
 
   async function handlePush(connectorId: number) {
     setPushStatus((s) => ({ ...s, [connectorId]: 'Pushing…' }));
@@ -296,16 +312,19 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
   return (
     <div className="card">
       <div className="page-header" style={{ marginBottom: 8 }}>
-        <h3 style={{ margin: 0 }}>{playlist.name}</h3>
+        <h3 style={{ margin: 0 }}>{playlist.name}{playlist.kind === 'smart' ? ' · Smart' : ''}</h3>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button
+          {playlist.kind === 'smart' && <button className="secondary" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
+            {regenerate.isPending ? 'Regenerating…' : 'Regenerate'}
+          </button>}
+          {playlist.kind === 'static' && <button
             className="secondary"
             aria-expanded={adding}
             aria-controls={`playlist-${playlistId}-add-videos`}
             onClick={() => setAdding((v) => !v)}
           >
             {adding ? 'Done adding' : 'Add videos'}
-          </button>
+          </button>}
           <button
             className="secondary"
             aria-label={`Delete playlist ${playlist.name}`}
@@ -315,6 +334,9 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
           </button>
         </div>
       </div>
+      {playlist.kind === 'smart' && <p className="empty-state" style={{ padding: '0 0 8px' }}>
+        {playlist.regenerateIntervalMinutes === 1440 ? 'Regenerates daily' : playlist.regenerateIntervalMinutes === 10080 ? 'Regenerates weekly' : 'Regenerates manually'}
+      </p>}
 
       {playlist.items.length ? (
         <div className="video-list">
@@ -328,13 +350,13 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
                 </span>
               </div>
               <div className="video-actions">
-                <button
+                {playlist.kind === 'static' && <button
                   className="secondary"
                   aria-label={`Remove ${item.musicVideo.title} from playlist`}
                   onClick={() => removeItem.mutate(item.musicVideoId)}
                 >
                   Remove
-                </button>
+                </button>}
               </div>
             </div>
           ))}

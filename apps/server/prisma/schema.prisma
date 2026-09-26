@@ -371,6 +371,11 @@ model Playlist {
   id        Int      @id @default(autoincrement())
   name      String
   createdAt DateTime @default(now())
+  kind      String   @default("static") // static | smart
+  ruleFilters String? // validated PlaylistFilters JSON for smart playlists
+  ruleMatchMode String? // all | any
+  regenerateIntervalMinutes Int? // null = manual only
+  lastGeneratedAt DateTime?
 
   items PlaylistItem[]
   syncs PlaylistSync[]

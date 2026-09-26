@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { CreatePlaylistSchema, GeneratePlaylistBodySchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
-import { generatePlaylistFromFilters } from '../pipeline/playlistGenerator.js';
+import { generatePlaylistFromFilters, regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
 
 const playlistInclude = {
   items: {
@@ -48,11 +48,21 @@ export async function playlistRoutes(app: FastifyInstance) {
   app.post('/api/v1/playlist/generate', async (req, reply) => {
     const body = GeneratePlaylistBodySchema.parse(req.body);
     try {
-      return await generatePlaylistFromFilters(body.name, body.filters, body.matchMode);
+      return await generatePlaylistFromFilters(body.name, body.filters, body.matchMode, {
+        smart: body.smart,
+        regenerateIntervalMinutes: body.regenerateIntervalMinutes,
+      });
     } catch (err) {
       reply.code(502);
       return { error: (err as Error).message };
     }
+  });
+
+  app.post('/api/v1/playlist/:id/regenerate', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const playlist = await prisma.playlist.findUnique({ where: { id }, select: { kind: true } });
+    if (!playlist || playlist.kind !== 'smart') return reply.code(404).send({ error: 'Smart playlist not found' });
+    return regenerateSmartPlaylist(id);
   });
 
   app.delete('/api/v1/playlist/:id', async (req, reply) => {
@@ -63,6 +73,8 @@ export async function playlistRoutes(app: FastifyInstance) {
 
   app.post('/api/v1/playlist/:id/items', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
+    const playlist = await prisma.playlist.findUnique({ where: { id }, select: { kind: true } });
+    if (playlist?.kind === 'smart') return reply.code(409).send({ error: 'Regenerate this smart playlist from its saved rules' });
     const body = req.body as { musicVideoId: number };
     const count = await prisma.playlistItem.count({ where: { playlistId: id } });
     const item = await prisma.playlistItem
@@ -77,6 +89,8 @@ export async function playlistRoutes(app: FastifyInstance) {
 
   app.delete('/api/v1/playlist/:id/items/:musicVideoId', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
+    const playlist = await prisma.playlist.findUnique({ where: { id }, select: { kind: true } });
+    if (playlist?.kind === 'smart') return reply.code(409).send({ error: 'Regenerate this smart playlist from its saved rules' });
     const musicVideoId = Number((req.params as { musicVideoId: string }).musicVideoId);
     await prisma.playlistItem.delete({ where: { playlistId_musicVideoId: { playlistId: id, musicVideoId } } });
     reply.code(204);

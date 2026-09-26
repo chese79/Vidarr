@@ -1,4 +1,5 @@
 import { prisma } from '../db/client.js';
+import { MatchMode, PlaylistFiltersSchema } from '@vidarr/shared-types';
 import { normalizeTitle } from './normalize.js';
 
 export interface PlaylistFilters {
@@ -17,11 +18,7 @@ export interface GeneratePlaylistResult {
 
 // A local file or a confirmed available server match can participate in a
 // playlist. Push applies the selected connector's availability boundary.
-export async function generatePlaylistFromFilters(
-  name: string,
-  filters: PlaylistFilters,
-  matchMode: 'all' | 'any',
-): Promise<GeneratePlaylistResult> {
+async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'any'): Promise<number[]> {
   const candidates = await prisma.musicVideo.findMany({
     where: { OR: [
       { hasFile: true },
@@ -30,6 +27,7 @@ export async function generatePlaylistFromFilters(
     include: { artist: true, file: true, libraryVideos: {
       where: { available: true, matchConfidence: null, connector: { enabled: true } },
     } },
+    orderBy: [{ artist: { sortName: 'asc' } }, { title: 'asc' }, { id: 'asc' }],
   });
 
   type Candidate = (typeof candidates)[number];
@@ -75,12 +73,55 @@ export async function generatePlaylistFromFilters(
     ? candidates.filter((v) => (matchMode === 'all' ? checks.every((c) => c(v)) : checks.some((c) => c(v))))
     : [];
 
-  const playlist = await prisma.playlist.create({ data: { name } });
-  if (matched.length) {
+  return matched.map((video) => video.id);
+}
+
+export async function generatePlaylistFromFilters(
+  name: string,
+  filters: PlaylistFilters,
+  matchMode: 'all' | 'any',
+  options: { smart?: boolean; regenerateIntervalMinutes?: number | null } = {},
+): Promise<GeneratePlaylistResult> {
+  const matchedIds = await matchingVideoIds(filters, matchMode);
+
+  const playlist = await prisma.playlist.create({ data: {
+    name,
+    kind: options.smart ? 'smart' : 'static',
+    ruleFilters: options.smart ? JSON.stringify(filters) : null,
+    ruleMatchMode: options.smart ? matchMode : null,
+    regenerateIntervalMinutes: options.smart ? options.regenerateIntervalMinutes ?? null : null,
+    lastGeneratedAt: options.smart ? new Date() : null,
+  } });
+  if (matchedIds.length) {
     await prisma.playlistItem.createMany({
-      data: matched.map((v, i) => ({ playlistId: playlist.id, musicVideoId: v.id, sortOrder: i })),
+      data: matchedIds.map((musicVideoId, sortOrder) => ({ playlistId: playlist.id, musicVideoId, sortOrder })),
     });
   }
 
-  return { playlistId: playlist.id, matchedCount: matched.length };
+  return { playlistId: playlist.id, matchedCount: matchedIds.length };
+}
+
+export async function regenerateSmartPlaylist(playlistId: number): Promise<{ matchedCount: number; changed: boolean }> {
+  const playlist = await prisma.playlist.findUnique({
+    where: { id: playlistId },
+    include: { items: { orderBy: { sortOrder: 'asc' }, select: { musicVideoId: true } } },
+  });
+  if (!playlist || playlist.kind !== 'smart' || !playlist.ruleFilters || !playlist.ruleMatchMode) {
+    throw new Error('Smart playlist not found');
+  }
+  const filters = PlaylistFiltersSchema.parse(JSON.parse(playlist.ruleFilters));
+  const matchMode = MatchMode.parse(playlist.ruleMatchMode);
+  const matchedIds = await matchingVideoIds(filters, matchMode);
+  const previousIds = playlist.items.map((item) => item.musicVideoId);
+  const changed = matchedIds.length !== previousIds.length || matchedIds.some((id, index) => id !== previousIds[index]);
+  await prisma.$transaction(async (tx) => {
+    if (changed) {
+      await tx.playlistItem.deleteMany({ where: { playlistId } });
+      if (matchedIds.length) await tx.playlistItem.createMany({
+        data: matchedIds.map((musicVideoId, sortOrder) => ({ playlistId, musicVideoId, sortOrder })),
+      });
+    }
+    await tx.playlist.update({ where: { id: playlistId }, data: { lastGeneratedAt: new Date() } });
+  });
+  return { matchedCount: matchedIds.length, changed };
 }
