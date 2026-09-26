@@ -73,6 +73,22 @@ export async function searchMusicBrainzArtists(name: string, limit = 5): Promise
   return (body.artists ?? []).map(mapArtist);
 }
 
+export async function lookupRecordingArtistIds(recordingId: string): Promise<string[]> {
+  const body = await rateLimitedGet(`/recording/${encodeURIComponent(recordingId)}?fmt=json&inc=artist-credits`);
+  const credits: Array<{ artist?: { id?: unknown } }> = body['artist-credit'] ?? [];
+  return [...new Set(credits
+    .map((credit) => credit.artist?.id)
+    .filter((id): id is string => typeof id === 'string'))];
+}
+
+export async function lookupReleaseArtistIds(releaseId: string): Promise<string[]> {
+  const body = await rateLimitedGet(`/release/${encodeURIComponent(releaseId)}?fmt=json&inc=artist-credits`);
+  const credits: Array<{ artist?: { id?: unknown } }> = body['artist-credit'] ?? [];
+  return [...new Set(credits
+    .map((credit) => credit.artist?.id)
+    .filter((id): id is string => typeof id === 'string'))];
+}
+
 export interface MusicBrainzVideoRecording {
   id: string;
   title: string;
@@ -117,6 +133,8 @@ export interface ArtistMatchAssessment {
   confidence: number;
   exactName: boolean;
   supportingEvidence: string[];
+  recordingMatchCount: number;
+  releaseMatchCount: number;
 }
 
 // MusicBrainz's search score is useful for candidate ordering but must not be
@@ -125,7 +143,7 @@ export interface ArtistMatchAssessment {
 export function assessArtistCandidate(
   observedName: string,
   candidate: MusicBrainzArtist,
-  evidence: { country?: string | null; artistType?: string | null; genre?: string | null } = {},
+  evidence: { country?: string | null; artistType?: string | null; genre?: string | null; recordingMatchCount?: number; releaseMatchCount?: number } = {},
 ): ArtistMatchAssessment {
   const observed = normalizeTitle(observedName);
   const exactName = [candidate.name, ...candidate.aliases].some((name) => normalizeTitle(name) === observed);
@@ -133,7 +151,13 @@ export function assessArtistCandidate(
   if (evidence.country && candidate.country && evidence.country.toLowerCase() === candidate.country.toLowerCase()) supportingEvidence.push('country');
   if (evidence.artistType && candidate.type && evidence.artistType.toLowerCase() === candidate.type.toLowerCase()) supportingEvidence.push('artistType');
   if (evidence.genre && candidate.genres.some((genre) => normalizeTitle(genre) === normalizeTitle(evidence.genre!))) supportingEvidence.push('genre');
+  const recordingMatchCount = Math.max(0, evidence.recordingMatchCount ?? 0);
+  const releaseMatchCount = Math.max(0, evidence.releaseMatchCount ?? 0);
+  if (recordingMatchCount > 0) supportingEvidence.push('observed-recording-credit');
+  if (releaseMatchCount > 0) supportingEvidence.push('observed-release-credit');
   const searchScore = Math.max(0, Math.min(1, (candidate.score ?? 0) / 100));
-  const confidence = Math.min(0.99, (exactName ? 0.82 : searchScore * 0.7) + supportingEvidence.length * 0.08);
-  return { confidence, exactName, supportingEvidence };
+  const confidence = Math.min(0.99, (exactName ? 0.82 : searchScore * 0.7)
+    + supportingEvidence.filter((source) => source !== 'observed-recording-credit' && source !== 'observed-release-credit').length * 0.08
+    + Math.min(recordingMatchCount + releaseMatchCount, 2) * 0.08);
+  return { confidence, exactName, supportingEvidence, recordingMatchCount, releaseMatchCount };
 }

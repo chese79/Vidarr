@@ -2,6 +2,8 @@ import { prisma, logActivity } from '../db/client.js';
 import {
   assessArtistCandidate,
   lookupMusicBrainzArtist,
+  lookupRecordingArtistIds,
+  lookupReleaseArtistIds,
   searchMusicBrainzArtists,
   getMusicBrainzVideoRecordings,
   type MusicBrainzArtist,
@@ -97,8 +99,54 @@ async function refreshSupplementaryVideos(artistId: number, artistMbid: string) 
 }
 
 async function storeCandidates(artistId: number, observedName: string, candidates: MusicBrainzArtist[], genre?: string | null) {
-  for (const candidate of candidates) {
-    const assessment = assessArtistCandidate(observedName, candidate, { genre });
+  // A recording ID embedded in an observed file is independent evidence of
+  // the credited MusicBrainz artist. Bound lookups for large audio libraries;
+  // a failed lookup must not prevent ordinary name-based review.
+  const recordings = await prisma.libraryRecording.findMany({
+    where: {
+      OR: [{ artistName: observedName }, { albumArtistName: observedName }],
+      musicbrainzRecordingId: { not: null },
+    },
+    select: { musicbrainzRecordingId: true },
+    distinct: ['musicbrainzRecordingId'],
+    take: 2,
+  });
+  const recordingMatches = new Map<string, number>();
+  for (const recording of recordings) {
+    try {
+      const creditedIds = await lookupRecordingArtistIds(recording.musicbrainzRecordingId!);
+      for (const id of creditedIds) recordingMatches.set(id, (recordingMatches.get(id) ?? 0) + 1);
+    } catch {
+      // Search results remain usable while MusicBrainz is temporarily unavailable.
+    }
+  }
+  const releases = await prisma.libraryRecording.findMany({
+    where: {
+      OR: [{ albumArtistName: observedName }, { albumArtistName: null, artistName: observedName }],
+      musicbrainzReleaseId: { not: null },
+    },
+    select: { musicbrainzReleaseId: true },
+    distinct: ['musicbrainzReleaseId'],
+    take: 2,
+  });
+  const releaseMatches = new Map<string, number>();
+  for (const release of releases) {
+    try {
+      const creditedIds = await lookupReleaseArtistIds(release.musicbrainzReleaseId!);
+      for (const id of creditedIds) releaseMatches.set(id, (releaseMatches.get(id) ?? 0) + 1);
+    } catch {
+      // A release lookup is optional evidence, not a prerequisite for review.
+    }
+  }
+  const assessed = candidates.map((candidate) => ({
+    candidate,
+    assessment: assessArtistCandidate(observedName, candidate, {
+      genre,
+      recordingMatchCount: recordingMatches.get(candidate.id) ?? 0,
+      releaseMatchCount: releaseMatches.get(candidate.id) ?? 0,
+    }),
+  })).sort((left, right) => right.assessment.confidence - left.assessment.confidence);
+  for (const { candidate, assessment } of assessed) {
     await prisma.musicBrainzArtistCandidate.upsert({
       where: { artistId_musicbrainzArtistId: { artistId, musicbrainzArtistId: candidate.id } },
       update: {
@@ -124,14 +172,14 @@ async function storeCandidates(artistId: number, observedName: string, candidate
       },
     });
   }
-  const best = candidates[0];
-  const assessment = best ? assessArtistCandidate(observedName, best, { genre }) : null;
+  const best = assessed[0];
+  const runnerUp = assessed[1];
   await prisma.artist.update({
     where: { id: artistId },
     data: {
-      musicbrainzMatchStatus: best ? (candidates.length > 1 && (best.score ?? 0) - (candidates[1].score ?? 0) < 10 ? 'ambiguous' : 'suggested') : 'notFound',
-      musicbrainzMatchConfidence: assessment?.confidence ?? null,
-      musicbrainzMatchEvidence: assessment ? evidenceJson(assessment) : null,
+      musicbrainzMatchStatus: best ? (runnerUp && best.assessment.confidence - runnerUp.assessment.confidence < 0.1 ? 'ambiguous' : 'suggested') : 'notFound',
+      musicbrainzMatchConfidence: best?.assessment.confidence ?? null,
+      musicbrainzMatchEvidence: best ? evidenceJson(best.assessment) : null,
       musicbrainzRefreshedAt: new Date(),
     },
   });

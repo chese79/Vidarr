@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — MusicBrainz artist review
+
+- Use artist credits from up to two observed MusicBrainz recordings and two observed releases to
+  rank otherwise ambiguous artist candidates. The review screen shows the credited evidence;
+  matching remains a user confirmation step.
+
 ### Added — embedded Picard scanning and bulk identity review
 
 - Allow each library connector to scan an optional read-only audio path for embedded Picard tags,

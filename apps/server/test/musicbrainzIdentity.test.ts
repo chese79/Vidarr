@@ -38,4 +38,22 @@ describe('MusicBrainz artist candidate assessment', () => {
     expect(result.exactName).toBe(false);
     expect(result.confidence).toBeLessThan(0.8);
   });
+
+  it('uses observed recording and release credits to distinguish otherwise identical candidates', () => {
+    const supported = assessArtistCandidate('Depeche Mode', candidate, {
+      recordingMatchCount: 1,
+      releaseMatchCount: 1,
+    });
+    const nameOnly = assessArtistCandidate('Depeche Mode', candidate);
+    expect(supported.supportingEvidence).toEqual(['observed-recording-credit', 'observed-release-credit']);
+    expect(supported.confidence).toBeGreaterThan(nameOnly.confidence);
+    expect(supported.recordingMatchCount).toBe(1);
+    expect(supported.releaseMatchCount).toBe(1);
+    expect(supported.confidence).toBeLessThan(1);
+  });
+
+  it('does not score missing recording or release evidence against a candidate', () => {
+    expect(assessArtistCandidate('Depeche Mode', candidate, { recordingMatchCount: 0, releaseMatchCount: 0 }))
+      .toEqual(assessArtistCandidate('Depeche Mode', candidate));
+  });
 });

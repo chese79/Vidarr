@@ -66,6 +66,7 @@ relationships may be retained as sources.
 | Identity review API | candidate list, discover, and confirm artist routes |
 | Direct embedded tag scanner | Complete: optional connector `musicPath`, recursive read-only ffprobe scan |
 | Observed releases/recordings only | Complete: connector-scoped `LibraryRecording` inventory and safe reconciliation |
+| Observed release/recording match evidence | Complete: bounded MusicBrainz artist-credit lookups raise candidate scores and appear in review |
 | Bulk match-review UI | Complete: match filter, candidate discovery, preview, and inline confirmation |
 | Discover filter parity | Complete: URL filters, A-Z rail, counts, selection, and bulk actions |
 

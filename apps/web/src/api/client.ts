@@ -176,11 +176,11 @@ export const api = {
       request<StandardGenreMatch>(`/artist/${id}/match-genre`, { method: 'POST' }),
     musicbrainzCandidates: (id: number) => request<Array<{
       id: number; musicbrainzArtistId: string; name: string; sortName: string | null;
-      artistType: string | null; country: string | null; disambiguation: string | null; score: number;
+      artistType: string | null; country: string | null; disambiguation: string | null; score: number; evidence: string;
     }>>(`/artist/${id}/musicbrainz/candidates`),
     discoverMusicbrainzCandidates: (id: number) => request<Array<{
       id: number; musicbrainzArtistId: string; name: string; sortName: string | null;
-      artistType: string | null; country: string | null; disambiguation: string | null; score: number;
+      artistType: string | null; country: string | null; disambiguation: string | null; score: number; evidence: string;
     }>>(`/artist/${id}/musicbrainz/discover`, { method: 'POST' }),
     confirmMusicbrainz: (id: number, musicbrainzArtistId: string) => request<Artist>(`/artist/${id}/musicbrainz/confirm`, {
       method: 'POST', body: JSON.stringify({ musicbrainzArtistId }),

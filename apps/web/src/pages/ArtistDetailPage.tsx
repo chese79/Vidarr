@@ -18,6 +18,18 @@ const OWNERSHIP_LABEL: Record<VideoOwnership, string> = {
   none: 'Missing',
 };
 
+function recordingEvidenceLabel(evidence: string): string | null {
+  try {
+    const parsed = JSON.parse(evidence) as { recordingMatchCount?: number; releaseMatchCount?: number };
+    const recordings = parsed.recordingMatchCount ?? 0;
+    const releases = parsed.releaseMatchCount ?? 0;
+    if (!recordings && !releases) return null;
+    return `${recordings} recording${recordings === 1 ? '' : 's'}, ${releases} release${releases === 1 ? '' : 's'} credited`;
+  } catch {
+    return null;
+  }
+}
+
 function ArtistHeaderImage({ artistId, name }: { artistId: number; name: string }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -492,7 +504,7 @@ export default function ArtistDetailPage() {
 
       {!artist.data.musicbrainzArtistId && <section className="card">
         <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr builds the IMVDb catalog.</p></div><button className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</button></div>
-        {musicbrainzCandidates.data?.map((candidate) => <div key={candidate.id} className="form-row" style={{ alignItems: 'center' }}><strong>{candidate.name}</strong><span>{candidate.artistType ?? 'Unknown type'} · {candidate.country ?? 'Unknown country'}{candidate.disambiguation ? ` · ${candidate.disambiguation}` : ''} · {Math.round(candidate.score * 100)}%</span><button onClick={() => confirmMusicbrainz.mutate(candidate.musicbrainzArtistId)} disabled={confirmMusicbrainz.isPending}>Confirm</button></div>)}
+        {musicbrainzCandidates.data?.map((candidate) => <div key={candidate.id} className="form-row" style={{ alignItems: 'center' }}><strong>{candidate.name}</strong><span>{candidate.artistType ?? 'Unknown type'} · {candidate.country ?? 'Unknown country'}{candidate.disambiguation ? ` · ${candidate.disambiguation}` : ''} · {Math.round(candidate.score * 100)}%{recordingEvidenceLabel(candidate.evidence) ? ` · ${recordingEvidenceLabel(candidate.evidence)}` : ''}</span><button onClick={() => confirmMusicbrainz.mutate(candidate.musicbrainzArtistId)} disabled={confirmMusicbrainz.isPending}>Confirm</button></div>)}
       </section>}
 
       {monitorMessage && (

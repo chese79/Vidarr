@@ -25,6 +25,9 @@ the files present there: title, album, credited artist, album artist, track/disc
 and embedded MusicBrainz artist, recording, release, and release-group IDs. These observations are
 matching evidence, not a request to import the artist's complete MusicBrainz discography. A fully
 empty scan preserves prior observations because the mount may be temporarily unavailable.
+During artist match review, Vidarr may look up a bounded sample of those observed recording and
+release IDs to compare MusicBrainz artist credits with proposed candidates. Credited evidence
+helps rank candidates but never confirms a name-only match without user review.
 
 Artist observations are formed from the normalized union of:
 
