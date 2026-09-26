@@ -7,6 +7,7 @@ import { checkRootFolders } from '../pipeline/rootFolderHealth.js';
 import { refreshImvdbMetadata } from '../pipeline/metadataRefresh.js';
 import { regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
 import { republishChangedSmartPlaylist } from '../pipeline/playlistPush.js';
+import { reconcilePendingImports } from '../pipeline/pendingImportReconciliation.js';
 
 export interface ScheduledJob {
   name: string;
@@ -30,6 +31,14 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  {
+    name: 'Pending Import Reconciliation',
+    defaultIntervalMs: 5 * 60_000,
+    run: async () => {
+      const result = await reconcilePendingImports();
+      return `${result.confirmed} of ${result.checked} pending import(s) confirmed in playback libraries`;
+    },
+  },
   {
     name: 'Smart Playlist Regeneration',
     defaultIntervalMs: 15 * 60_000,

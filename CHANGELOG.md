@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — imported video reconciliation
+
+- Check pending imports against their configured playback library every five minutes after a
+  refresh. Confirm only a unique exact artist/title match, retain pending state after empty or
+  ambiguous or conflicting scans, and honor previously rejected matches.
+
 ### Fixed — quality upgrade import safety
 
 - Keep the previous video file until its replacement and import history are committed to the

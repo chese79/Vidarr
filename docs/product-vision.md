@@ -79,6 +79,10 @@ metadata; availability there remains distinct from Vidarr's local-file ownership
 
 After import, Vidarr should request a media-server library refresh, wait for or later reconcile the
 new server item, and surface whether the file is merely on disk or fully available in the player.
+Pending imports are checked against the root folder's selected playback connector every five
+minutes. Only a unique exact artist/title match clears the pending state; empty scans, duplicate
+matches, conflicting year or duration, and previously rejected matches leave it pending for later
+review or retry.
 Existing files and media-server records must never be deleted merely because a connector sync
 temporarily fails.
 During a quality upgrade, the previous file remains in place until the replacement is recorded
