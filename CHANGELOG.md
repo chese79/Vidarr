@@ -9,6 +9,8 @@ under **Unreleased** in the same commit as the change.
 
 - Automatically collect video sources after MusicBrainz confirmation and backfill confirmed
   artists that were already in the library. Record each artist's last source check and error.
+- Find IMVDb artist pages by the confirmed MusicBrainz name when MusicBrainz has no direct IMVDb
+  link; accept only an exact displayed-name match and recheck previously missed artists.
 - Collect a confirmed artist's IMVDb videography, MusicBrainz-linked YouTube channel uploads,
   and matching local files into a per-artist source record. Refresh all three sources together.
 - Read IMVDb's direct artist link from MusicBrainz and use the public artist videography when

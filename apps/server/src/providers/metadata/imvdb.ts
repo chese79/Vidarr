@@ -118,6 +118,24 @@ export async function searchArtists(apiKey: string, query: string): Promise<Imvd
 
 const MAX_VIDEO_SEARCH_PAGES = 4; // up to 200 results — IMVDb has no "videos by artist" endpoint
 
+// MusicBrainz does not link every existing IMVDb artist page. Probe the
+// canonical name's public slug, but only accept a page whose displayed name
+// matches exactly; a coincidental slug must not attach another artist's list.
+export async function findPublicArtistSlug(artistName: string): Promise<string | null> {
+  const slug = artistName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (!slug) return null;
+  const response = await fetch(`https://imvdb.com/n/${slug}`, {
+    headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) return null;
+  const html = await response.text();
+  const displayed = /<title>\s*([^<]+?)\s*\|\s*IMVDb\s*<\/title>/i.exec(html)?.[1];
+  const comparable = (value: string) => decodeHtml(value).normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return displayed && comparable(displayed) === comparable(artistName) ? slug : null;
+}
+
 function decodeHtml(value: string): string {
   return value.replace(/&(#(?:x[0-9a-f]+|\d+)|amp|quot|apos|lt|gt|nbsp|#039);/gi, (_match, entity: string) => {
     if (entity.startsWith('#')) {

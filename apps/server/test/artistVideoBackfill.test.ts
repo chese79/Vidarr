@@ -17,6 +17,10 @@ vi.mock('../src/providers/youtube/ytdlp.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/providers/youtube/ytdlp.js')>()),
   listChannelVideos: vi.fn().mockResolvedValue([{ youtubeVideoId: 'test-song', title: 'Test Artist - Song (Official Music Video)' }]),
 }));
+vi.mock('../src/providers/metadata/imvdb.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/providers/metadata/imvdb.js')>()),
+  findPublicArtistSlug: vi.fn().mockResolvedValue(null),
+}));
 
 describe('automatic video inventory backfill', () => {
   let rootPath: string;

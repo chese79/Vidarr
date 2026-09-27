@@ -7,7 +7,7 @@ import {
   searchMusicBrainzArtists,
   type MusicBrainzArtist,
 } from '../providers/metadata/musicbrainz.js';
-import { searchArtists as searchImvdbArtists } from '../providers/metadata/imvdb.js';
+import { findPublicArtistSlug, searchArtists as searchImvdbArtists } from '../providers/metadata/imvdb.js';
 import { refreshArtistMetadata } from './metadataRefresh.js';
 import { normalizeTitle } from './normalize.js';
 import { collectArtistVideoInventory } from './artistVideoInventory.js';
@@ -19,6 +19,8 @@ function evidenceJson(value: unknown) {
 export async function enrichConfirmedArtist(artistId: number, mbid: string, observedGenre?: string | null) {
   const metadata = await lookupMusicBrainzArtist(mbid);
   const current = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+  const imvdbSlug = current.imvdbArtistId ?? metadata.imvdbSlug
+    ?? await findPublicArtistSlug(metadata.name).catch(() => null);
   const genre = current.genre ?? observedGenre ?? metadata.genres[0] ?? null;
   const genreSource = current.genre
     ? current.genreSource
@@ -38,7 +40,7 @@ export async function enrichConfirmedArtist(artistId: number, mbid: string, obse
       genre,
       genreSource,
       musicbrainzArtistId: mbid,
-      imvdbArtistId: current.imvdbArtistId ?? metadata.imvdbSlug ?? null,
+      imvdbArtistId: imvdbSlug,
       musicbrainzMatchStatus: 'confirmed',
       musicbrainzMatchConfidence: 1,
       musicbrainzMatchEvidence: evidenceJson({ source: 'embedded-or-connector-mbid' }),

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mapArtist } from '../src/providers/metadata/musicbrainz.js';
-import { parsePublicArtistVideos } from '../src/providers/metadata/imvdb.js';
+import { findPublicArtistSlug, parsePublicArtistVideos } from '../src/providers/metadata/imvdb.js';
 import { channelVideosUrl } from '../src/providers/youtube/ytdlp.js';
 import { excludedMusicVideoTitleReason } from '../src/pipeline/youtubeValidation.js';
 
@@ -23,6 +23,17 @@ describe('Amy Grant full-scope source boundaries', () => {
     expect(parsePublicArtistVideos(html, 'amy-grant').map((video) => video.title)).toEqual([
       'House of Love', 'House of Love (Version 2)', 'Baby, Baby',
     ]);
+  });
+
+  it('finds an unlinked public artist page only when its displayed identity matches', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, text: async () => '<title>Mike Watt | IMVDb</title>' })
+      .mockResolvedValueOnce({ ok: true, text: async () => '<title>Someone Else | IMVDb</title>' });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      expect(await findPublicArtistSlug('Mike Watt')).toBe('mike-watt');
+      expect(await findPublicArtistSlug('Mike Watt')).toBeNull();
+      expect(fetchMock).toHaveBeenCalledWith('https://imvdb.com/n/mike-watt', expect.any(Object));
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('scans the channel video tab and filters Amy Grant podcast, lyric, and live uploads', () => {
