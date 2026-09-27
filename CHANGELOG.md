@@ -14,6 +14,8 @@ under **Unreleased** in the same commit as the change.
 - Scan the YouTube Videos tab rather than channel releases and playlists; exclude clear podcast,
   lyric, and live uploads from music-video review. Recognize local files named `Song - Artist`.
 - Reject uploads explicitly labeled `Live Music Video` from song music-video review.
+- Reclassify pending YouTube uploads when a refreshed exclusion rule applies, while preserving
+  decisions already made by a person.
 
 ### Changed — confirmed artist and music-video catalog
 

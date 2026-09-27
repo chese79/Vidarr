@@ -50,7 +50,12 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
         decision: excluded ? 'rejected' : 'pending', reason,
       },
     });
-    if (candidate.decision === 'pending') pending++;
+    if (excluded && candidate.decision === 'pending') {
+      await prisma.videoReviewCandidate.updateMany({
+        where: { id: candidate.id, decision: 'pending' },
+        data: { decision: 'rejected', reason },
+      });
+    } else if (candidate.decision === 'pending') pending++;
     else if (candidate.decision === 'approved') matched++;
   }
 

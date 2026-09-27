@@ -34,5 +34,13 @@ describe('YouTube channel discovery', () => {
         expect.objectContaining({ externalId: 'song-video', decision: 'pending', artistId: artist.id }),
         expect.objectContaining({ externalId: 'interview', decision: 'rejected' }),
       ]));
+
+    await prisma.videoReviewCandidate.update({ where: { source_externalId: { source: 'youtube', externalId: 'interview' } }, data: { decision: 'pending' } });
+    await prisma.videoReviewCandidate.update({ where: { source_externalId: { source: 'youtube', externalId: 'song-video' } }, data: { decision: 'approved' } });
+    await pollAndGrabYoutubeSource(source.id);
+    expect(await prisma.videoReviewCandidate.findUnique({ where: { source_externalId: { source: 'youtube', externalId: 'interview' } } }))
+      .toMatchObject({ decision: 'rejected' });
+    expect(await prisma.videoReviewCandidate.findUnique({ where: { source_externalId: { source: 'youtube', externalId: 'song-video' } } }))
+      .toMatchObject({ decision: 'approved' });
   });
 });
