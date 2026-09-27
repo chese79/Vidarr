@@ -44,6 +44,7 @@ model Artist {
   youtubeSources YoutubeSource[]
   sources       ArtistSource[]
   musicbrainzCandidates MusicBrainzArtistCandidate[]
+  videoReviewCandidates VideoReviewCandidate[]
 }
 
 model MusicVideo {
@@ -448,6 +449,27 @@ model MusicBrainzArtistCandidate {
 
   @@unique([artistId, musicbrainzArtistId])
   @@index([artistId, status, score])
+}
+
+// Discovery evidence is not a catalog video. A candidate enters MusicVideo
+// only after it is identified as a song music video for a confirmed artist.
+model VideoReviewCandidate {
+  id          Int      @id @default(autoincrement())
+  source      String   // youtube | local
+  externalId  String   // YouTube id or absolute local path
+  artistId    Int?
+  artist      Artist?  @relation(fields: [artistId], references: [id], onDelete: SetNull)
+  artistName  String
+  title       String
+  url         String?
+  filePath    String?
+  decision    String   @default("pending") // pending | approved | rejected
+  reason      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([source, externalId])
+  @@index([decision, artistId])
 }
 
 model RecommendationProviderConfig {

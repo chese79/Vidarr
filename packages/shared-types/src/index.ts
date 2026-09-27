@@ -573,6 +573,7 @@ export type CreateYoutubeSource = z.infer<typeof CreateYoutubeSourceSchema>;
 export const YoutubeSourceSyncResultSchema = z.object({
   matched: z.number().int(),
   created: z.number().int(),
+  pending: z.number().int(),
   isInitialSync: z.boolean(),
 });
 export type YoutubeSourceSyncResult = z.infer<typeof YoutubeSourceSyncResultSchema>;
@@ -831,6 +832,7 @@ export type CommitYoutubePlaylistBody = z.infer<typeof CommitYoutubePlaylistBody
 export const ImportCommitResultSchema = z.object({
   artistsCreated: z.number().int(),
   videosAdded: z.number().int(),
+  pendingReview: z.number().int(),
   skipped: z.number().int(),
 });
 export type ImportCommitResult = z.infer<typeof ImportCommitResultSchema>;

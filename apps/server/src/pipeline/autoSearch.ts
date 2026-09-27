@@ -69,6 +69,9 @@ export async function autoSearchAndGrab(
   if (musicVideo.ignored) {
     return { musicVideoId, grabbed: false, reason: 'Video is ignored' };
   }
+  if (musicVideo.artist.musicbrainzMatchStatus !== 'confirmed' || !musicVideo.artist.musicbrainzArtistId) {
+    return { musicVideoId, grabbed: false, reason: 'Artist needs MusicBrainz confirmation' };
+  }
   if (musicVideo.catalogKind === 'inventory') {
     return { musicVideoId, grabbed: false, reason: 'Inventory-only video is not an acquisition target' };
   }
@@ -159,6 +162,18 @@ export async function autoSearchAndGrab(
         }
 
         await recordCandidateDecision(musicVideoId, match.candidate.youtubeVideoId, match.candidate.title, validation);
+        await prisma.videoReviewCandidate.upsert({
+          where: { source_externalId: { source: 'youtube', externalId: match.candidate.youtubeVideoId } },
+          update: { reason: validation.reason },
+          create: {
+            source: 'youtube', externalId: match.candidate.youtubeVideoId,
+            artistId: musicVideo.artistId, artistName: musicVideo.artist.name,
+            title: musicVideo.title,
+            url: `https://www.youtube.com/watch?v=${match.candidate.youtubeVideoId}`,
+            decision: validation.decision === 'reject' ? 'rejected' : 'pending',
+            reason: validation.reason,
+          },
+        });
         // fall through to indexer search below — a rejected/held YouTube
         // candidate doesn't stop the search, it just isn't grabbed from here.
       }

@@ -29,6 +29,7 @@ import { bulkImportRoutes } from './api/bulkimport.js';
 import { setupRoutes } from './api/setup.js';
 import { googleAuthRoutes } from './api/googleAuth.js';
 import { localAuthRoutes } from './api/localAuth.js';
+import { videoReviewRoutes } from './api/videoReview.js';
 
 // Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
 // MusicVideoFile.sizeBytes); JSON.stringify can't serialize BigInt natively.
@@ -142,6 +143,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(googleAuthRoutes);
   await app.register(localAuthRoutes);
   await app.register(artistRoutes);
+  await app.register(videoReviewRoutes);
   await app.register(musicVideoRoutes);
   await app.register(qualityProfileRoutes);
   await app.register(rootFolderRoutes);

@@ -28,6 +28,10 @@ export async function musicVideoRoutes(app: FastifyInstance) {
 
   app.post('/api/v1/musicvideo', async (req, reply) => {
     const body = CreateMusicVideoSchema.parse(req.body);
+    const artist = await prisma.artist.findUnique({ where: { id: body.artistId } });
+    if (!artist || artist.musicbrainzMatchStatus !== 'confirmed' || !artist.musicbrainzArtistId) {
+      return reply.code(409).send({ error: 'Confirm the MusicBrainz artist before adding a music video' });
+    }
     const created = await prisma.musicVideo.create({
       data: {
         artistId: body.artistId,

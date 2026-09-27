@@ -64,8 +64,11 @@ export default function DiscoverPage() {
   return <div>
     <div className="page-header"><h2>Discover</h2><button onClick={refresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh Recommendations'}</button></div>
     {message && <p className="empty-state" role="status">{message}</p>}
-    {!canAdd && <p className="empty-state">Add a root folder and a quality profile before you can add recommended artists.</p>}
-    <nav className="letter-rail" aria-label="Filter recommendations by letter">{LETTERS.map((item) => <button key={item} type="button" disabled={!availableLetters.has(item)} className={letter === item ? 'active' : ''} onClick={() => update('letter', letter === item ? '' : item)}>{item}</button>)}</nav>
+    {(rootFolders.isError || qualityProfiles.isError) && <p className="empty-state" role="alert">Could not load root folders or quality profiles. Check your connection and reload.</p>}
+    {rootFolders.isSuccess && qualityProfiles.isSuccess && !canAdd && <p className="empty-state">Add a root folder and a quality profile before you can add recommended artists.</p>}
+    {recommendations.isPending ? <p className="empty-state" role="status">Loading recommendations…</p> : recommendations.isError ? <p className="empty-state" role="alert">Could not load recommendations. Check your connection and reload.</p> : <div className="library-layout">
+    {all.length > 0 && <nav className="letter-rail" aria-label="Filter recommendations by letter">{LETTERS.map((item) => <button key={item} type="button" disabled={!availableLetters.has(item)} className={letter === item ? 'active' : ''} onClick={() => update('letter', letter === item ? '' : item)}>{item}</button>)}</nav>}
+    <div className="library-main">
     <div className="library-filter-bar">
       <input aria-label="Search recommended artists" placeholder="Search artists" value={search} onChange={(e) => update('search', e.target.value)} />
       <select aria-label="Filter recommendation genre" value={genre} onChange={(e) => update('genre', e.target.value)}><option value="">All genres</option>{genres.map((item) => <option key={item}>{item}</option>)}</select>
@@ -80,5 +83,6 @@ export default function DiscoverPage() {
     {visible.length ? <table><thead><tr><th><input type="checkbox" aria-label="Select visible recommendations" checked={visible.every((item) => selected.has(item.id))} onChange={(e) => setSelected(e.target.checked ? new Set(visible.map((item) => item.id)) : new Set())} /></th><th>Artist</th><th>Score</th><th>Genre</th><th>Why</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>
       {visible.map((item) => <tr key={item.id}><td><input type="checkbox" aria-label={`Select ${item.artistName}`} checked={selected.has(item.id)} onChange={() => setSelected((current) => { const next = new Set(current); next.has(item.id) ? next.delete(item.id) : next.add(item.id); return next; })} /></td><td>{item.artistName} · {item.mbid ? 'MB matched' : 'needs match'}</td><td>{item.aggregateScore.toFixed(2)}</td><td>{item.genre ?? 'Unknown'}</td><td>{[...new Set(item.sourceHits.map((hit) => SOURCE_LABEL[hit.source] ?? hit.source))].join(', ')}</td><td style={{ display: 'flex', gap: 6 }}><button disabled={!canAdd} onClick={() => add.mutate(item.id)}>Add to Library</button><button className="secondary" onClick={() => dismiss.mutate(item.id)}>Dismiss</button></td></tr>)}
     </tbody></table> : <p className="empty-state">No recommendations match these filters. Sync a connector or refresh recommendation providers.</p>}
+    </div></div>}
   </div>;
 }

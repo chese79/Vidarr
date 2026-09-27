@@ -75,7 +75,9 @@ describe('recommendation routes', () => {
     expect(res.json()).toMatchObject({ name: 'The New Artist', sortName: 'New Artist', monitored: false });
 
     const artistList = await app.inject({ method: 'GET', url: '/api/v1/artist', headers: authHeaders() });
-    expect(artistList.json()).toHaveLength(1);
+    expect(artistList.json()).toHaveLength(0);
+    const review = await app.inject({ method: 'GET', url: '/api/v1/artist/match-review', headers: authHeaders() });
+    expect(review.json()).toEqual([expect.objectContaining({ name: 'The New Artist' })]);
   });
 
   it('POST /api/v1/recommendation/:id/add 404s for a nonexistent recommendation', async () => {

@@ -1,6 +1,8 @@
 import { prisma, logActivity } from '../db/client.js';
 import { listPlaylistVideos } from '../providers/youtube/ytdlp.js';
 import { normalizeTitle, squash, sortNameFor } from './normalize.js';
+import { artistNameHint } from './artistObservation.js';
+import { excludedMusicVideoTitleReason } from './youtubeValidation.js';
 
 export interface PlaylistImportCandidate {
   youtubeVideoId: string;
@@ -84,6 +86,7 @@ export interface ImportArtistGroup {
 export interface CommitResult {
   artistsCreated: number;
   videosAdded: number;
+  pendingReview: number;
   skipped: number;
 }
 
@@ -102,6 +105,7 @@ export async function commitYoutubePlaylistImport(
 ): Promise<CommitResult> {
   let artistsCreated = 0;
   let videosAdded = 0;
+  let pendingReview = 0;
   let skipped = 0;
 
   for (const group of groups) {
@@ -120,11 +124,11 @@ export async function commitYoutubePlaylistImport(
     } else {
       const created = await prisma.artist.create({
         data: {
-          name: group.artistName,
-          sortName: sortNameFor(group.artistName),
+          name: artistNameHint(group.artistName),
+          sortName: sortNameFor(artistNameHint(group.artistName)),
           rootFolderId,
           qualityProfileId,
-          monitored: group.monitor,
+          monitored: false,
         },
       });
       artistId = created.id;
@@ -136,29 +140,20 @@ export async function commitYoutubePlaylistImport(
 
     for (const video of included) {
       try {
-        const createdVideo = await prisma.musicVideo.create({
-          data: {
-            artistId,
-            title: video.title,
-            normalizedTitle: normalizeTitle(video.title),
-            youtubeVideoId: video.youtubeVideoId,
-            monitored: true,
+        if (await prisma.musicVideo.findUnique({ where: { youtubeVideoId: video.youtubeVideoId } })) { skipped++; continue; }
+        const excluded = excludedMusicVideoTitleReason(video.title);
+        const candidate = await prisma.videoReviewCandidate.upsert({
+          where: { source_externalId: { source: 'youtube', externalId: video.youtubeVideoId } },
+          update: {},
+          create: {
+            source: 'youtube', externalId: video.youtubeVideoId,
+            artistId, artistName: artistNameHint(group.artistName), title: video.title,
+            url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
+            decision: excluded ? 'rejected' : 'pending',
+            reason: excluded ?? 'Playlist selection needs song music-video review.',
           },
         });
-        const url = `https://www.youtube.com/watch?v=${video.youtubeVideoId}`;
-        await prisma.acquisitionSource.create({
-          data: {
-            musicVideoId: createdVideo.id,
-            provider: 'youtube',
-            externalId: video.youtubeVideoId,
-            url,
-            authority: 'manual',
-            confidence: 'confirmed',
-            discoveryOrigin: 'playlist-import',
-            accepted: true,
-          },
-        });
-        videosAdded++;
+        if (candidate.decision === 'pending') pendingReview++;
       } catch (err) {
         // artistId+normalizedTitle or youtubeVideoId collision — same video
         // already tracked for this artist. Not an error worth surfacing.
@@ -168,5 +163,5 @@ export async function commitYoutubePlaylistImport(
     }
   }
 
-  return { artistsCreated, videosAdded, skipped };
+  return { artistsCreated, videosAdded, pendingReview, skipped };
 }

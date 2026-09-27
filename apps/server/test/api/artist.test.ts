@@ -8,13 +8,24 @@ import {
   createRootFolder,
   createQuality,
   createQualityProfile,
-  createArtist,
+  createArtist as createUnconfirmedArtist,
   createMusicVideo,
   createMusicVideoFile,
   createLibraryConnector,
   createLibraryVideo,
 } from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
+
+async function createArtist(...args: Parameters<typeof createUnconfirmedArtist>) {
+  const artist = await createUnconfirmedArtist(...args);
+  return prisma.artist.update({
+    where: { id: artist.id },
+    data: {
+      musicbrainzArtistId: `00000000-0000-4000-8000-${artist.id.toString(16).padStart(12, '0')}`,
+      musicbrainzMatchStatus: 'confirmed',
+    },
+  });
+}
 
 // Mocks a fetch() Response carrying an image body, matching the shape
 // pipeline/safeImageFetch.ts actually reads from: a streamed `body` (via
@@ -328,7 +339,7 @@ describe('artist routes', () => {
     });
 
     it('filters by MusicBrainz match state and exposes the best review candidate', async () => {
-      const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Review Artist' });
+      const artist = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Artist' });
       await prisma.artist.update({ where: { id: artist.id }, data: { musicbrainzMatchStatus: 'suggested' } });
       await prisma.musicBrainzArtistCandidate.create({
         data: {
@@ -339,20 +350,22 @@ describe('artist routes', () => {
           evidence: '{}',
         },
       });
-      await createArtist(rootFolderId, qualityProfileId, { name: 'Unmatched Artist' });
+      await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Unmatched Artist' });
 
       const res = await app.inject({
         method: 'GET',
-        url: '/api/v1/artist/summary?musicbrainzStatus=suggested',
+        url: '/api/v1/artist/match-review',
         headers: authHeaders(),
       });
-      expect(res.json().items).toHaveLength(1);
-      expect(res.json().items[0]).toMatchObject({
+      expect(res.json()).toHaveLength(2);
+      expect(res.json().find((item: { id: number }) => item.id === artist.id)).toMatchObject({
         id: artist.id,
         musicbrainzMatchStatus: 'suggested',
-        musicbrainzCandidateId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        musicbrainzCandidateName: 'Review Artist',
-        musicbrainzCandidateScore: 0.82,
+        musicbrainzCandidates: [expect.objectContaining({
+          musicbrainzArtistId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          name: 'Review Artist',
+          score: 0.82,
+        })],
       });
     });
 

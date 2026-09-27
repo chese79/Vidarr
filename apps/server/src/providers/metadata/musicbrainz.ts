@@ -14,6 +14,7 @@ export interface MusicBrainzArtist {
   disambiguation: string | null;
   genres: string[];
   aliases: string[];
+  youtubeChannels?: string[];
   score?: number;
 }
 
@@ -45,6 +46,10 @@ async function rateLimitedGet(path: string): Promise<any> {
 }
 
 function mapArtist(value: any): MusicBrainzArtist {
+  const youtubeChannels = (value.relations ?? [])
+    .filter((relation: any) => ['6a540e5b-58c6-4192-b6ba-dbc71ec8fcf0', '631712a0-7525-42ba-b7a3-605aa7a238c4'].includes(String(relation['type-id'] ?? '').toLowerCase()))
+    .map((relation: any) => String(relation.url?.resource ?? ''))
+    .filter((url: string) => /^https:\/\/(?:www\.|music\.)?youtube\.com\/(?:channel\/|user\/|c\/|@)/i.test(url));
   return {
     id: String(value.id),
     name: String(value.name ?? ''),
@@ -54,12 +59,13 @@ function mapArtist(value: any): MusicBrainzArtist {
     disambiguation: value.disambiguation ?? null,
     genres: (value.genres ?? []).map((genre: any) => String(genre.name)),
     aliases: (value.aliases ?? []).map((alias: any) => String(alias.name)),
+    youtubeChannels,
     score: typeof value.score === 'number' ? value.score : undefined,
   };
 }
 
 export async function lookupMusicBrainzArtist(mbid: string): Promise<MusicBrainzArtist> {
-  const value = await rateLimitedGet(`/artist/${encodeURIComponent(mbid)}?fmt=json&inc=aliases+genres`);
+  const value = await rateLimitedGet(`/artist/${encodeURIComponent(mbid)}?fmt=json&inc=aliases+genres+url-rels`);
   return mapArtist(value);
 }
 

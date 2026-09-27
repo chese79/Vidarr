@@ -41,11 +41,16 @@ removed or renamed library entries without deleting a manually managed artist. S
 connector must be repeatable, deduplicate equivalent names, and remove stale connector-owned
 records safely.
 
+For launch, only MusicBrainz-confirmed artists appear as top-level Library entries. An audio-track
+credit or a video uploader name is an observation, not an artist identity. Unresolved observations
+belong in a separate Match Review list until a MusicBrainz identity is confirmed. A channel such as
+`311VEVO` may suggest the artist 311, but the channel name is never promoted as an artist.
+
 After artist identity is resolved, IMVDb defines the authoritative list of expected official music
 videos. IMVDb completeness is therefore separate from source discovery and local ownership.
-MusicBrainz recording/video relationships may add supplementary videos and verified source URLs,
-but supplementary videos are unmonitored by default and never change IMVDb completeness. Artist
-channel links are discovery hints, not proof that an individual upload is an official video.
+MusicBrainz recording credits can support artist matching, but audio recordings never become
+music-video catalog entries. Artist channel links are discovery hints, not proof that an individual
+upload is an official video.
 
 The selected music-video library also establishes the owned-video inventory. Vidarr should know
 which canonical videos already exist in each media server, even when Vidarr did not originally
@@ -64,6 +69,14 @@ Preferred source order:
 2. a confidently matched official artist or VEVO upload on YouTube;
 3. another user-reviewed YouTube or Vimeo result; and
 4. a configured Torznab/Newznab indexer and download client.
+
+The launch catalog has three discovery inputs: IMVDb's official music-video list; the confirmed
+artist's YouTube and YouTube Music channels; and existing local video files. Other catalog inputs
+are future scope. An empty IMVDb catalog is valid and does not cause audio tracks to be added as
+videos. YouTube and local candidates are reviewed when their artist, song, or content type is
+uncertain. Only an official music video for a song enters the launch catalog. Official interviews,
+live performances, live songs, lyric videos, visualizers, and static-art or audio-only uploads do
+not enter it. Live material may receive a separate category later.
 
 Source records should be provider-neutral and retain the provider, external identifier, URL,
 authority/confidence, and discovery origin. `yt-dlp` can perform the actual transfer for supported

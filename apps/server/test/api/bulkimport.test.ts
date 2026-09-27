@@ -51,6 +51,6 @@ describe('bulkimport routes', () => {
       payload: { groups: [], rootFolderId: 1, qualityProfileId: 1 },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ artistsCreated: 0, videosAdded: 0, skipped: 0 });
+    expect(res.json()).toEqual({ artistsCreated: 0, videosAdded: 0, pendingReview: 0, skipped: 0 });
   });
 });

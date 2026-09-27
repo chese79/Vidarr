@@ -5,7 +5,6 @@ import {
   lookupRecordingArtistIds,
   lookupReleaseArtistIds,
   searchMusicBrainzArtists,
-  getMusicBrainzVideoRecordings,
   type MusicBrainzArtist,
 } from '../providers/metadata/musicbrainz.js';
 import { searchArtists as searchImvdbArtists } from '../providers/metadata/imvdb.js';
@@ -49,53 +48,12 @@ async function enrichConfirmedArtist(artistId: number, mbid: string, observedGen
     update: { externalId: mbid, lastSeenAt: new Date() },
     create: { artistId, provider: 'musicbrainz', externalId: mbid, origin: 'identity-resolution' },
   });
-  return metadata;
-}
-
-async function refreshSupplementaryVideos(artistId: number, artistMbid: string) {
-  const recordings = await getMusicBrainzVideoRecordings(artistMbid);
-  for (const recording of recordings) {
-    const normalizedTitle = normalizeTitle(recording.title);
-    const collision = await prisma.musicVideo.findFirst({ where: { artistId, normalizedTitle } });
-    const saved = collision
-      ? await prisma.musicVideo.update({
-          where: { id: collision.id },
-          data: {
-            musicbrainzRecordingId: collision.musicbrainzRecordingId ?? recording.id,
-            musicbrainzAudioRecordingId: collision.musicbrainzAudioRecordingId ?? recording.audioRecordingId,
-          },
-        })
-      : await prisma.musicVideo.upsert({
-          where: { musicbrainzRecordingId: recording.id },
-          update: { title: recording.title, releaseYear: recording.releaseYear },
-          create: {
-            artistId,
-            title: recording.title,
-            normalizedTitle,
-            releaseYear: recording.releaseYear,
-            musicbrainzRecordingId: recording.id,
-            musicbrainzAudioRecordingId: recording.audioRecordingId,
-            catalogKind: 'supplementary',
-            monitored: false,
-          },
-        });
-    for (const source of recording.sources) {
-      await prisma.acquisitionSource.upsert({
-        where: { musicVideoId_provider_url: { musicVideoId: saved.id, provider: source.provider, url: source.url } },
-        update: { externalId: source.externalId, confidence: 'confirmed' },
-        create: {
-          musicVideoId: saved.id,
-          provider: source.provider,
-          externalId: source.externalId,
-          url: source.url,
-          authority: 'verified',
-          confidence: 'confirmed',
-          discoveryOrigin: 'musicbrainz-recording-relation',
-          accepted: true,
-        },
-      });
+  for (const url of metadata.youtubeChannels ?? []) {
+    if (!await prisma.youtubeSource.findFirst({ where: { artistId, url } })) {
+      await prisma.youtubeSource.create({ data: { artistId, url, type: 'channel', monitored: false } });
     }
   }
+  return metadata;
 }
 
 async function storeCandidates(artistId: number, observedName: string, candidates: MusicBrainzArtist[], genre?: string | null) {
@@ -203,7 +161,9 @@ export async function resolveArtistIdentityAndCatalog(
     }
 
     const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
-    await refreshSupplementaryVideos(artistId, metadata.id);
+    // MusicBrainz recording relationships are identity evidence, not a
+    // music-video catalog. A recording flagged as video can still be a live
+    // performance or another non-song-music-video item.
     const settings = await prisma.settings.findUnique({ where: { id: 1 } });
     if (!artist.imvdbArtistId && settings?.imvdbApiKey) {
       const candidates = await searchImvdbArtists(settings.imvdbApiKey, metadata.name);
@@ -215,7 +175,12 @@ export async function resolveArtistIdentityAndCatalog(
     const updated = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
     if (updated.imvdbArtistId) await refreshArtistMetadata(artistId);
   } catch (error) {
-    await prisma.artist.update({ where: { id: artistId }, data: { musicbrainzMatchStatus: 'failed' } });
+    // A metadata provider failure must not undo a MusicBrainz identity that
+    // was already confirmed earlier in this run.
+    const current = await prisma.artist.findUnique({ where: { id: artistId }, select: { musicbrainzMatchStatus: true } });
+    if (current?.musicbrainzMatchStatus !== 'confirmed') {
+      await prisma.artist.update({ where: { id: artistId }, data: { musicbrainzMatchStatus: 'failed' } });
+    }
     await logActivity('warn', 'artist-identity', error);
   }
 }

@@ -10,6 +10,7 @@ import { matchLibraryVideo, type CanonicalVideo, type MatchConfidence } from '..
 import { resolveArtistIdentityAndCatalog } from '../pipeline/artistIdentity.js';
 import { scanEmbeddedMusicLibrary } from '../pipeline/embeddedMusicScan.js';
 import { syncLibraryRecordings } from '../pipeline/libraryRecordingSync.js';
+import { artistNameHint, isUsableArtistHint } from '../pipeline/artistObservation.js';
 
 export async function libraryConnectorRoutes(app: FastifyInstance) {
   app.get('/api/v1/libraryconnector', async () => {
@@ -253,7 +254,9 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         });
         const canonicalByExternalId = new Map(existingSources.map((source) => [source.externalId!, source.artist]));
         for (const observation of artists) {
-          const key = normalizeTitle(observation.name);
+          const nameHint = artistNameHint(observation.name);
+          if (!isUsableArtistHint(nameHint)) continue;
+          const key = normalizeTitle(nameHint);
           // Stable connector identity wins over a display name. MusicBrainz
           // enrichment may rename an artist to its canonical spelling; the
           // next connector sync must update that artist, not recreate the old
@@ -262,8 +265,8 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           if (!canonical) {
             canonical = await prisma.artist.create({
               data: {
-                name: observation.name,
-                sortName: observation.name.replace(/^the\s+/i, ''),
+                name: nameHint,
+                sortName: nameHint.replace(/^the\s+/i, ''),
                 monitored: false,
                 rootFolderId: defaults[0].id,
                 qualityProfileId: defaults[1].id,
@@ -282,7 +285,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           // sync. Name-only observations stay unmatched until candidate
           // discovery can present them for review.
           if (observation.musicbrainzArtistId) {
-            await resolveArtistIdentityAndCatalog(canonical.id, observation);
+            await resolveArtistIdentityAndCatalog(canonical.id, { ...observation, name: nameHint });
           }
         }
       }
@@ -294,14 +297,15 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
       if (defaults[0] && defaults[1]) {
         const sourcedVideoArtists = new Set<number>();
         for (const video of videos) {
-          const key = normalizeTitle(video.artistName);
-          if (!key) continue;
+          const nameHint = artistNameHint(video.artistName);
+          if (!isUsableArtistHint(nameHint)) continue;
+          const key = normalizeTitle(nameHint);
           let canonical = canonicalByName.get(key);
           if (!canonical) {
             canonical = await prisma.artist.create({
               data: {
-                name: video.artistName,
-                sortName: video.artistName.replace(/^the\s+/i, ''),
+                name: nameHint,
+                sortName: nameHint.replace(/^the\s+/i, ''),
                 monitored: false,
                 rootFolderId: defaults[0].id,
                 qualityProfileId: defaults[1].id,
@@ -362,7 +366,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         await prisma.$transaction([
           prisma.libraryVideo.updateMany({ where: { connectorId: id }, data: { available: false } }),
           ...videos.map((video) => {
-            const normalizedArtistName = normalizeTitle(video.artistName);
+            const normalizedArtistName = normalizeTitle(artistNameHint(video.artistName));
             const normalizedTitle = normalizeTitle(video.title);
             const existing = existingByExternalId.get(video.externalId);
             const match = matchLibraryVideo(
@@ -417,7 +421,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           .map((video) => {
             const match = matchLibraryVideo(
               {
-                normalizedArtistName: normalizeTitle(video.artistName),
+                normalizedArtistName: normalizeTitle(artistNameHint(video.artistName)),
                 normalizedTitle: normalizeTitle(video.title),
                 releaseYear: video.releaseYear ?? null,
                 durationSeconds: video.durationSeconds ?? null,

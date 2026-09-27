@@ -5,6 +5,21 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — confirmed artist and music-video catalog
+
+- Keep unmatched artist observations in Match Review until MusicBrainz identity is confirmed;
+  Library lists confirmed artists only. VEVO uploader names are treated as artist hints.
+- Stop importing MusicBrainz audio/video recording entries as catalog music videos.
+- Discover YouTube channel uploads and existing local files as Video Review candidates. Only
+  approved song music videos enter the catalog; interviews, live performances, lyric videos,
+  visualizers, and audio uploads are excluded or held for review.
+- Discover confirmed artists' YouTube and YouTube Music channel links from MusicBrainz.
+
+### Fixed — Discover page layout
+
+- Keep the alphabet rail beside the recommendation filters and hide it when there are no
+  recommendations. Show loading and request-error states instead of misleading empty/setup messages.
+
 ### Fixed — direct download source priority
 
 - Choose accepted direct links by explicit authority priority: IMVDb authoritative, verified,

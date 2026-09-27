@@ -5,6 +5,8 @@ import QualityProfilesPage from './pages/QualityProfilesPage';
 import RootFoldersPage from './pages/RootFoldersPage';
 import SettingsPage from './pages/SettingsPage';
 import DiscoverPage from './pages/DiscoverPage';
+import MatchReviewPage from './pages/MatchReviewPage';
+import VideoReviewPage from './pages/VideoReviewPage';
 import LibraryConnectorsPage from './pages/LibraryConnectorsPage';
 import PlaylistsPage from './pages/PlaylistsPage';
 import ImportPage from './pages/ImportPage';
@@ -19,6 +21,8 @@ const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
   { to: '/calendar', label: 'Calendar' },
   { to: '/discover', label: 'Discover' },
+  { to: '/match-review', label: 'Match Review' },
+  { to: '/video-review', label: 'Video Review' },
   { to: '/import', label: 'Import' },
   { to: '/playlists', label: 'Playlists' },
   { to: '/queue', label: 'Queue' },
@@ -56,6 +60,8 @@ export default function App() {
           <Route path="/quality-profiles" element={<QualityProfilesPage />} />
           <Route path="/root-folders" element={<RootFoldersPage />} />
           <Route path="/discover" element={<DiscoverPage />} />
+          <Route path="/match-review" element={<MatchReviewPage />} />
+          <Route path="/video-review" element={<VideoReviewPage />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/playlists" element={<PlaylistsPage />} />
           <Route path="/connectors" element={<LibraryConnectorsPage />} />

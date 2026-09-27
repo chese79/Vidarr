@@ -1,5 +1,6 @@
 import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from './normalize.js';
+import { artistNameHint, isUsableArtistHint } from './artistObservation.js';
 import { createLastFmProvider } from '../providers/recommendation/lastfm.js';
 import { createMusicBrainzProvider } from '../providers/recommendation/musicbrainz.js';
 import { createSpotifyProvider } from '../providers/recommendation/spotify.js';
@@ -47,10 +48,11 @@ async function buildSeedSet(): Promise<{ seedNames: string[]; excludedNormalized
   const seen = new Set<string>();
   for (const name of [
     ...artists.map((a) => a.name),
-    ...libraryArtists.map((a) => a.name),
-    ...libraryVideoArtists.map((a) => a.artistName),
+    ...libraryArtists.map((a) => artistNameHint(a.name)),
+    ...libraryVideoArtists.map((a) => artistNameHint(a.artistName)),
   ]) {
     const norm = normalizeTitle(name);
+    if (!isUsableArtistHint(name)) continue;
     if (seen.has(norm)) continue;
     seen.add(norm);
     seedNames.push(name);
@@ -119,26 +121,29 @@ export async function refreshRecommendations(): Promise<{
     where: { connector: { enabled: true } },
   });
   for (const la of libraryArtists) {
-    if (excludedNormalized.has(normalizeTitle(la.name))) continue;
-    upsertPending(pending, la.name, {
+    const name = artistNameHint(la.name);
+    if (!isUsableArtistHint(name) || excludedNormalized.has(normalizeTitle(name))) continue;
+    upsertPending(pending, name, {
       source: 'library',
-      seedArtistName: la.name,
+      seedArtistName: name,
       score: 1,
       reason: 'You listen to this artist',
-    });
+    }, la.musicbrainzArtistId ?? undefined);
   }
   const libraryVideos = await prisma.libraryVideo.findMany({
     where: { available: true, connector: { enabled: true } },
   });
   const seenVideoArtists = new Set<string>();
   for (const video of libraryVideos) {
-    const normalizedArtist = normalizeTitle(video.artistName);
+    const name = artistNameHint(video.artistName);
+    if (!isUsableArtistHint(name)) continue;
+    const normalizedArtist = normalizeTitle(name);
     if (excludedNormalized.has(normalizedArtist) || seenVideoArtists.has(normalizedArtist)) continue;
     seenVideoArtists.add(normalizedArtist);
-    upsertPending(pending, video.artistName, {
+    upsertPending(pending, name, {
       source: 'library',
       sourceRef: `video:${video.connectorId}:${video.externalId}`,
-      seedArtistName: video.artistName,
+      seedArtistName: name,
       score: 1,
       reason: 'You have a music video by this artist',
     });

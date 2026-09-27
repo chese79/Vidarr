@@ -49,7 +49,18 @@ interface ArtistSummaryRow {
 
 export async function artistRoutes(app: FastifyInstance) {
   app.get('/api/v1/artist', async () => {
-    return prisma.artist.findMany({ orderBy: { sortName: 'asc' } });
+    return prisma.artist.findMany({
+      where: { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null } },
+      orderBy: { sortName: 'asc' },
+    });
+  });
+
+  app.get('/api/v1/artist/match-review', async () => {
+    return prisma.artist.findMany({
+      where: { OR: [{ musicbrainzMatchStatus: { not: 'confirmed' } }, { musicbrainzArtistId: null }] },
+      include: { musicbrainzCandidates: { where: { status: 'suggested' }, orderBy: { score: 'desc' }, take: 3 } },
+      orderBy: { sortName: 'asc' },
+    });
   });
 
   app.get('/api/v1/artist/:id/musicbrainz/candidates', async (req) => {
@@ -118,7 +129,7 @@ export async function artistRoutes(app: FastifyInstance) {
   app.get('/api/v1/artist/summary', async (req) => {
     const query = ArtistSummaryQuerySchema.parse(req.query);
 
-    const baseConditions: Prisma.Sql[] = [Prisma.sql`1=1`];
+    const baseConditions: Prisma.Sql[] = [Prisma.sql`a."musicbrainzMatchStatus" = 'confirmed' AND a."musicbrainzArtistId" IS NOT NULL`];
     if (query.search) {
       baseConditions.push(Prisma.sql`a."name" LIKE ${'%' + escapeLikeTerm(query.search) + '%'} ESCAPE '\\'`);
     }

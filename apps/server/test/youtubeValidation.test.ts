@@ -4,7 +4,7 @@ import type { YoutubeVideoMetadata } from '../src/providers/youtube/ytdlp.js';
 
 function metadata(overrides: Partial<YoutubeVideoMetadata> = {}): YoutubeVideoMetadata {
   return {
-    title: 'Blinding Lights',
+    title: 'Blinding Lights (Official Music Video)',
     channel: 'The Weeknd',
     description: 'Official music video.',
     channelIsVerified: false,

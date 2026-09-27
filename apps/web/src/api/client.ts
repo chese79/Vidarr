@@ -140,6 +140,9 @@ async function requestBlob(path: string): Promise<Blob> {
 export const api = {
   artists: {
     list: () => request<Artist[]>('/artist'),
+    matchReview: () => request<Array<Artist & { musicbrainzCandidates: Array<{
+      id: number; musicbrainzArtistId: string; name: string; score: number; disambiguation: string | null;
+    }> }>>('/artist/match-review'),
     get: (id: number) =>
       request<
         Artist & {
@@ -222,6 +225,17 @@ export const api = {
     reconcile: (id: number) => request<{ confident: number; review: number; unmatched: number }>(`/artist/${id}/reconcile`, { method: 'POST' }),
     monitorVideos: (id: number, mode: 'all' | 'none' | 'missing') => request<{ updated: number }>(`/artist/${id}/monitor-videos`, { method: 'POST', body: JSON.stringify({ mode }) }),
     searchMissing: (id: number) => request<BulkSearchResult>(`/artist/${id}/search-missing`, { method: 'POST' }),
+  },
+  videoReview: {
+    list: () => request<Array<{
+      id: number; source: string; externalId: string; artistId: number | null;
+      artistName: string; title: string; url: string | null; filePath: string | null; reason: string | null;
+    }>>('/video-review'),
+    scanLocal: () => request<{ scanned: number; pending: number; roots: number }>('/video-review/scan-local', { method: 'POST' }),
+    approve: (id: number, artistId: number, title: string) => request<MusicVideo>(`/video-review/${id}/approve`, {
+      method: 'POST', body: JSON.stringify({ artistId, title }),
+    }),
+    reject: (id: number) => request<void>(`/video-review/${id}/reject`, { method: 'POST' }),
   },
   musicVideos: {
     list: (opts?: { artistId?: number; hasFile?: boolean; playable?: boolean; playableConnectorId?: number }) => {

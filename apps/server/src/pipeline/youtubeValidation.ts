@@ -27,10 +27,19 @@ const REJECT_TITLE_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /\bvisualizer\b/, label: 'visualizer' },
   { pattern: /\breaction\b/, label: 'reaction video' },
   { pattern: /\blive at\b|\bconcert\b/, label: 'live/concert footage' },
+  { pattern: /\blive\s+(?:performance|session|version|song)\b|\bperformance\s+live\b/, label: 'live performance' },
+  { pattern: /\binterview\b|\bpress conference\b|\bq\s+a\b/, label: 'interview' },
+  { pattern: /\bofficial audio\b|\baudio only\b|\bart track\b/, label: 'audio upload' },
   { pattern: /\binstrumental\b/, label: 'instrumental' },
   { pattern: /\btrailer\b|\bteaser\b/, label: 'trailer/teaser' },
   { pattern: /\bbehind the scenes\b/, label: 'behind-the-scenes' },
 ];
+
+export function excludedMusicVideoTitleReason(title: string): string | null {
+  const normalized = normalizeTitle(title);
+  const match = REJECT_TITLE_PATTERNS.find(({ pattern }) => pattern.test(normalized));
+  return match ? `Title indicates ${match.label}, not a song music video.` : null;
+}
 
 // A bare /\bcover\b/ against the fully-normalized title (normalizeTitle
 // strips ALL punctuation to spaces) rejected legitimate official videos
@@ -120,5 +129,14 @@ export async function validateCandidate(youtubeVideoId: string, expectedTitle?: 
   const metadata = await getVideoMetadata(youtubeVideoId);
   const classification = classifyCandidate(metadata, expectedTitle);
   if (classification.decision !== 'review') return classification;
+  // Motion alone also describes interviews and live footage. Only a title
+  // explicitly identifying a song music video may pass automatic validation;
+  // other moving uploads wait for a person in Video Review.
+  if (!/\bofficial\s+(?:music\s+)?video\b/i.test(metadata.title)) {
+    return { decision: 'review', reason: 'Upload is not explicitly identified as an official song music video.' };
+  }
+  if (expectedTitle && !normalizeTitle(metadata.title).includes(normalizeTitle(expectedTitle))) {
+    return { decision: 'review', reason: 'Upload title does not identify the expected song.' };
+  }
   return resolveReview(youtubeVideoId);
 }

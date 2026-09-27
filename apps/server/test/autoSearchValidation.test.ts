@@ -5,9 +5,17 @@ import {
   createRootFolder,
   createQuality,
   createQualityProfile,
-  createArtist,
+  createArtist as createUnconfirmedArtist,
   createMusicVideo,
 } from './support/db.js';
+
+async function createArtist(...args: Parameters<typeof createUnconfirmedArtist>) {
+  const artist = await createUnconfirmedArtist(...args);
+  return prisma.artist.update({ where: { id: artist.id }, data: {
+    musicbrainzArtistId: `00000000-0000-4000-8000-${artist.id.toString(16).padStart(12, '0')}`,
+    musicbrainzMatchStatus: 'confirmed',
+  } });
+}
 
 // autoSearchAndGrab's YouTube branch is tested here in isolation — the
 // heuristic search (youtubeMatch.js) and the actual grab (grab.js) are

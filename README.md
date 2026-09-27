@@ -22,10 +22,13 @@ not-yet-started ideas (concert videos, web-series content types, curated list im
 ## Features
 
 **Library & metadata**
-- Add an artist by searching [IMVDb](https://imvdb.com); their video catalog (title, year,
-  director, thumbnail) is pulled in automatically and kept in sync on a daily refresh job.
-- Artist page mirrors IMVDb's own videography layout — thumbnails, director, chronological by year.
-- Manual artist/video entry also works for anything IMVDb doesn't have.
+- Audio and video scans create artist observations in **Match Review**. Confirm the MusicBrainz
+  identity before the artist appears in Library; uploader names such as `311VEVO` are never artists.
+- The artist page contains music videos only. [IMVDb](https://imvdb.com) supplies its official
+  catalog when available; an empty IMVDb catalog is valid and never filled with audio tracks.
+- MusicBrainz channel links, YouTube uploads, and existing local videos are discovery inputs.
+  Review uncertain uploads and files in **Video Review** before adding a song music video.
+- Manual video entry is available for a confirmed artist when IMVDb has no entry.
 
 **Finding & grabbing videos** — searched and grabbed automatically per video, in this priority order:
 1. **IMVDb curated source** — IMVDb sometimes has an editor-verified exact YouTube video link on
@@ -35,9 +38,9 @@ not-yet-started ideas (concert videos, web-series content types, curated list im
 4. **Torznab/Newznab indexer** — falls back to a scoped indexer search (`3020` "Audio > Video"
    category, plus a result-level filter) against your configured indexer(s) and download client
    (qBittorrent or SABnzbd).
-- You can also subscribe to a YouTube channel/playlist directly (`YoutubeSource`) instead of relying
-  on search, or bulk-add many videos at once from the **Import** page by pasting any YouTube
-  playlist URL — each video's artist is guessed from its title, reviewable before committing.
+- You can scan a confirmed artist's YouTube channel (`YoutubeSource`) or submit a playlist on the
+  **Import** page. Uploads enter Video Review; interviews, live performances, lyric videos,
+  visualizers, and audio uploads are not automatically added as catalog music videos.
 - Every downloaded file is validated before it's accepted: `ffprobe` confirms it actually has a
   video stream, and `ffmpeg`'s `freezedetect` filter confirms there's real motion — catching
   audio-only rips and static-album-art "videos" that would otherwise slip through.

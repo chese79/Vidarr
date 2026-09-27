@@ -27,7 +27,8 @@ existing video files. A user's extra videos remain visible without changing offi
 4. Confirm direct IDs automatically. Present ambiguous, fuzzy, and name-only matches for review.
 5. Enrich confirmed artists with canonical name/sort name, type, country, disambiguation, and genre.
 6. Resolve confirmed artists to one exact IMVDb artist and refresh the official video catalog.
-7. Import direct MusicBrainz video recording relationships as supplementary, unmonitored videos.
+7. Use MusicBrainz recording credits as artist-match evidence only; do not promote audio recordings
+   or ambiguous video recordings into the launch music-video catalog.
 8. Reconcile owned videos only after catalog construction. Preserve unmatched artist inventory.
 9. Compute known/available/missing completeness from active official IMVDb videos only.
 10. Permit explicitly monitored supplementary videos to use verified direct sources; never acquire
@@ -61,7 +62,7 @@ relationships may be retained as sources.
 | Connector MusicBrainz IDs | Plex, Jellyfin, and Subsonic library providers |
 | MusicBrainz enrichment and candidate search | `providers/metadata/musicbrainz.ts`, `pipeline/artistIdentity.ts` |
 | IMVDb-only official completeness | artist summary catalog-kind filter |
-| Supplementary MusicBrainz videos | recording relationship import with verified sources |
+| MusicBrainz recording evidence | bounded credit lookups rank artist candidates; recordings never create catalog videos |
 | Preserve unmatched existing videos | `LibraryVideo` inventory plus `inventory` catalog kind |
 | Identity review API | candidate list, discover, and confirm artist routes |
 | Direct embedded tag scanner | Complete: optional connector `musicPath`, recursive read-only ffprobe scan |
@@ -69,6 +70,11 @@ relationships may be retained as sources.
 | Observed release/recording match evidence | Complete: bounded MusicBrainz artist-credit lookups raise candidate scores and appear in review |
 | Bulk match-review UI | Complete: match filter, candidate discovery, preview, and inline confirmation |
 | Discover filter parity | Complete: URL filters, A-Z rail, counts, selection, and bulk actions |
+| Artist and video review | Separate Match Review and Video Review queues keep unresolved names and uncertain uploads/files outside Library |
+
+Discover places its vertical A-Z rail beside the filters and results, and omits the rail when there
+are no recommendations. Loading or failed data requests have distinct messages so they do not
+appear as an empty catalog or missing setup.
 
 ## Verification
 

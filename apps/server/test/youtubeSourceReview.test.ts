@@ -1,0 +1,38 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { prisma } from '../src/db/client.js';
+import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist } from './support/db.js';
+
+vi.mock('../src/providers/youtube/ytdlp.js', () => ({
+  listChannelVideos: vi.fn().mockResolvedValue([
+    { youtubeVideoId: 'song-video', title: '311 - Down (Official Music Video)' },
+    { youtubeVideoId: 'interview', title: '311 Official Interview' },
+  ]),
+}));
+
+describe('YouTube channel discovery', () => {
+  beforeEach(async () => { await resetDb(); });
+
+  it('holds song uploads for review and excludes interviews without creating catalog videos', async () => {
+    const root = await createRootFolder();
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const artist = await createArtist(root.id, profile.id, { name: '311' });
+    await prisma.artist.update({ where: { id: artist.id }, data: {
+      musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    } });
+    const source = await prisma.youtubeSource.create({ data: {
+      artistId: artist.id, type: 'channel', url: 'https://www.youtube.com/@311', monitored: true,
+    } });
+
+    const { pollAndGrabYoutubeSource } = await import('../src/pipeline/youtubeSync.js');
+    const result = await pollAndGrabYoutubeSource(source.id);
+
+    expect(result).toMatchObject({ created: 0, pending: 1, grabbed: 0 });
+    expect(await prisma.musicVideo.count()).toBe(0);
+    expect(await prisma.videoReviewCandidate.findMany({ orderBy: { externalId: 'asc' } }))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ externalId: 'song-video', decision: 'pending', artistId: artist.id }),
+        expect.objectContaining({ externalId: 'interview', decision: 'rejected' }),
+      ]));
+  });
+});

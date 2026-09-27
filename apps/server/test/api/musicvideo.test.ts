@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
+import { prisma } from '../../src/db/client.js';
 import {
   resetDb,
   ensureSettings,
@@ -32,6 +33,10 @@ describe('musicvideo routes', () => {
     const quality = await createQuality();
     const qualityProfile = await createQualityProfile(quality.id);
     artistId = (await createArtist(rootFolder.id, qualityProfile.id)).id;
+    await prisma.artist.update({ where: { id: artistId }, data: {
+      musicbrainzArtistId: `00000000-0000-4000-8000-${artistId.toString(16).padStart(12, '0')}`,
+      musicbrainzMatchStatus: 'confirmed',
+    } });
   });
 
   it('POST /api/v1/musicvideo creates a video and derives normalizedTitle', async () => {
