@@ -33,4 +33,21 @@ describe('local video scan', () => {
       source: 'local', decision: 'pending', title: 'Thunderstruck',
     });
   });
+
+  it('recognizes a confirmed artist at the end of a flat local filename', async () => {
+    const root = await createRootFolder({ path: directory });
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const artist = await createArtist(root.id, profile.id, { name: 'Amy Grant' });
+    await prisma.artist.update({ where: { id: artist.id }, data: {
+      musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: '3cd18a93-1797-4bbb-9b8a-c096d5e7864c',
+    } });
+    await fs.writeFile(path.join(directory, 'Baby Baby - Amy Grant.mp4'), 'video bytes');
+    await fs.writeFile(path.join(directory, 'Unrelated - Other Artist.mp4'), 'video bytes');
+
+    expect(await scanLocalVideoCandidates(artist.id)).toMatchObject({ scanned: 2, pending: 1 });
+    expect(await prisma.videoReviewCandidate.findMany()).toEqual([
+      expect.objectContaining({ artistId: artist.id, artistName: 'Amy Grant', title: 'Baby Baby' }),
+    ]);
+  });
 });

@@ -28,6 +28,9 @@ not-yet-started ideas (concert videos, web-series content types, curated list im
   catalog when available; an empty IMVDb catalog is valid and never filled with audio tracks.
 - MusicBrainz channel links, YouTube uploads, and existing local videos are discovery inputs.
   Review uncertain uploads and files in **Video Review** before adding a song music video.
+- A confirmed artist's **Video source record** collects those inputs together and can be
+  refreshed from the artist page. It shows official catalog counts, pending review counts,
+  and the linked channels' scan state.
 - Manual video entry is available for a confirmed artist when IMVDb has no entry.
 
 **Finding & grabbing videos** — searched and grabbed automatically per video, in this priority order:

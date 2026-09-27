@@ -15,6 +15,7 @@ export interface MusicBrainzArtist {
   genres: string[];
   aliases: string[];
   youtubeChannels?: string[];
+  imvdbSlug?: string | null;
   score?: number;
 }
 
@@ -45,11 +46,15 @@ async function rateLimitedGet(path: string): Promise<any> {
   }
 }
 
-function mapArtist(value: any): MusicBrainzArtist {
+export function mapArtist(value: any): MusicBrainzArtist {
   const youtubeChannels = (value.relations ?? [])
     .filter((relation: any) => ['6a540e5b-58c6-4192-b6ba-dbc71ec8fcf0', '631712a0-7525-42ba-b7a3-605aa7a238c4'].includes(String(relation['type-id'] ?? '').toLowerCase()))
     .map((relation: any) => String(relation.url?.resource ?? ''))
     .filter((url: string) => /^https:\/\/(?:www\.|music\.)?youtube\.com\/(?:channel\/|user\/|c\/|@)/i.test(url));
+  const imvdbSlug = (value.relations ?? [])
+    .map((relation: any) => String(relation.url?.resource ?? ''))
+    .map((url: string) => /^https?:\/\/(?:www\.)?imvdb\.com\/n\/([a-z0-9-]+)\/?(?:[?#].*)?$/i.exec(url)?.[1] ?? null)
+    .find((slug: string | null) => slug !== null) ?? null;
   return {
     id: String(value.id),
     name: String(value.name ?? ''),
@@ -60,6 +65,7 @@ function mapArtist(value: any): MusicBrainzArtist {
     genres: (value.genres ?? []).map((genre: any) => String(genre.name)),
     aliases: (value.aliases ?? []).map((alias: any) => String(alias.name)),
     youtubeChannels,
+    imvdbSlug,
     score: typeof value.score === 'number' ? value.score : undefined,
   };
 }

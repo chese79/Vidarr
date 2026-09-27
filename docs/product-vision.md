@@ -78,6 +78,13 @@ uncertain. Only an official music video for a song enters the launch catalog. Of
 live performances, live songs, lyric videos, visualizers, and static-art or audio-only uploads do
 not enter it. Live material may receive a separate category later.
 
+Confirming an artist collects a source record for that artist: every IMVDb artist-credit video,
+the uploads in each linked YouTube channel's Videos tab, and files in configured local video
+roots whose filename or folder identifies the artist. The artist page can refresh this record
+and show source counts, scan state, and pending review items. A direct IMVDb URL in MusicBrainz
+resolves the artist slug; the public IMVDb videography is used when the API is unavailable.
+Repeated song titles may be distinct official video versions and must remain separate.
+
 Source records should be provider-neutral and retain the provider, external identifier, URL,
 authority/confidence, and discovery origin. `yt-dlp` can perform the actual transfer for supported
 video sites, but the domain model must not assume every direct source is YouTube.

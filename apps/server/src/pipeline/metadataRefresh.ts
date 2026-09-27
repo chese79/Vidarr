@@ -16,24 +16,26 @@ export interface MetadataRefreshResult {
 export async function refreshArtistMetadata(artistId: number): Promise<MetadataRefreshResult> {
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
-  if (!settings?.imvdbApiKey || !artist.imvdbArtistId) {
+  if (!artist.imvdbArtistId) {
     return { videosAdded: 0, videosUpdated: 0, videosFlaggedForReview: 0 };
   }
 
-  const videos = await getArtistVideos(settings.imvdbApiKey, artist.imvdbArtistId, artist.name);
+  const videos = await getArtistVideos(settings?.imvdbApiKey ?? null, artist.imvdbArtistId, artist.name);
   const existing = await prisma.musicVideo.findMany({
-    where: { artistId, imvdbVideoId: { not: null } },
-    select: { id: true, imvdbVideoId: true },
+    where: { artistId },
+    select: { id: true, imvdbVideoId: true, normalizedTitle: true },
   });
-  const existingByImvdbId = new Map(existing.map((v) => [v.imvdbVideoId as string, v.id]));
-  const seenIds = new Set(videos.map((video) => video.imvdbVideoId));
+  const existingByImvdbId = new Map(existing.filter((v) => v.imvdbVideoId).map((v) => [v.imvdbVideoId as string, v.id]));
+  const existingByTitle = new Map(existing.map((v) => [v.normalizedTitle, v.id]));
+  const savedIds = new Set<number>();
 
   let videosAdded = 0;
   let videosUpdated = 0;
   for (const video of videos) {
     try {
-      const existingId = existingByImvdbId.get(video.imvdbVideoId);
+      const existingId = existingByImvdbId.get(video.imvdbVideoId) ?? existingByTitle.get(normalizeTitle(video.title));
       const data = {
+        imvdbVideoId: video.imvdbVideoId,
         title: video.title,
         normalizedTitle: normalizeTitle(video.title),
         releaseYear: video.year,
@@ -51,10 +53,10 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
         : await prisma.musicVideo.create({
           data: {
           artistId,
-          imvdbVideoId: video.imvdbVideoId,
           monitored: true,
           ...data,
         } });
+      savedIds.add(saved.id);
       if (existingId) videosUpdated++;
       else videosAdded++;
       for (const source of video.sources) {
@@ -89,7 +91,7 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
     }
   }
 
-  const removed = existing.filter((video) => !seenIds.has(video.imvdbVideoId as string));
+  const removed = existing.filter((video) => video.imvdbVideoId && !savedIds.has(video.id));
   if (removed.length) {
     await prisma.musicVideo.updateMany({
       where: { id: { in: removed.map((video) => video.id) } },
@@ -110,8 +112,6 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
 
 export async function refreshImvdbMetadata(): Promise<{ artistsChecked: number; videosAdded: number }> {
   const settings = await prisma.settings.findUnique({ where: { id: 1 } });
-  if (!settings?.imvdbApiKey) return { artistsChecked: 0, videosAdded: 0 };
-
   const artists = await prisma.artist.findMany({ where: { imvdbArtistId: { not: null } } });
   let videosAdded = 0;
 

@@ -12,6 +12,18 @@ export interface YoutubeVideoListing {
   title: string;
 }
 
+export function channelVideosUrl(sourceUrl: string): string {
+  try {
+    const url = new URL(sourceUrl);
+    if (!['www.youtube.com', 'youtube.com', 'music.youtube.com', 'm.youtube.com'].includes(url.hostname)) return sourceUrl;
+    if (!/^\/(?:channel\/[^/]+|user\/[^/]+|c\/[^/]+|@[^/]+)\/?$/i.test(url.pathname)) return sourceUrl;
+    url.hostname = 'www.youtube.com';
+    url.pathname = `${url.pathname.replace(/\/$/, '')}/videos`;
+    url.search = '';
+    return url.toString();
+  } catch { return sourceUrl; }
+}
+
 const PROGRESS_LINE = /\[download\]\s+(\d+(?:\.\d+)?)%/;
 
 function runYtDlp(
@@ -37,7 +49,7 @@ function runYtDlp(
 }
 
 export async function listChannelVideos(sourceUrl: string): Promise<YoutubeVideoListing[]> {
-  const { stdout, stderr, code } = await runYtDlp(['--flat-playlist', '--dump-json', sourceUrl]);
+  const { stdout, stderr, code } = await runYtDlp(['--flat-playlist', '--dump-json', channelVideosUrl(sourceUrl)]);
   if (code !== 0) {
     throw new Error(`yt-dlp listing failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
   }

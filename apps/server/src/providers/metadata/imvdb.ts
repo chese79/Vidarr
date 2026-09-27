@@ -118,6 +118,75 @@ export async function searchArtists(apiKey: string, query: string): Promise<Imvd
 
 const MAX_VIDEO_SEARCH_PAGES = 4; // up to 200 results — IMVDb has no "videos by artist" endpoint
 
+function decodeHtml(value: string): string {
+  return value.replace(/&(#(?:x[0-9a-f]+|\d+)|amp|quot|apos|lt|gt|nbsp|#039);/gi, (_match, entity: string) => {
+    if (entity.startsWith('#')) {
+      const code = entity[1]?.toLowerCase() === 'x' ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _match;
+    }
+    return ({ amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ' } as Record<string, string>)[entity.toLowerCase()] ?? _match;
+  });
+}
+
+export function parsePublicArtistVideos(html: string, _artistSlug: string): Array<ImvdbVideoCandidate & { pagePath: string }> {
+  const start = html.indexOf('id="artist-credits"');
+  if (start < 0) {
+    if (/Videography/i.test(html)) return [];
+    throw new Error('IMVDb public artist page has no recognizable videography.');
+  }
+  const next = html.indexOf('class="anchorOffset"', start);
+  const section = html.slice(start, next < 0 ? undefined : next);
+  const videos: Array<ImvdbVideoCandidate & { pagePath: string }> = [];
+  const titleCounts = new Map<string, number>();
+  for (const match of section.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const row = match[1];
+    const heading = /<strong>\s*<a href="https?:\/\/(?:www\.)?imvdb\.com\/video\/([^"?#]+)">([^<]+)<\/a>\s*<\/strong>/i.exec(row);
+    if (!heading) continue;
+    const rawTitle = decodeHtml(heading[2]).trim();
+    const count = (titleCounts.get(rawTitle.toLowerCase()) ?? 0) + 1;
+    titleCounts.set(rawTitle.toLowerCase(), count);
+    const version = /\/(\d+)$/.exec(heading[1])?.[1];
+    const title = count > 1 ? `${rawTitle} (Version ${version ?? count})` : rawTitle;
+    const year = /\((\d{4})\)/.exec(row)?.[1];
+    const thumbnailUrl = /<img[^>]+data-src="([^"]+)"/i.exec(row)?.[1] ?? null;
+    const director = /<em>Director<\/em>:\s*<strong><a[^>]*>([^<]+)<\/a>/i.exec(row)?.[1] ?? null;
+    videos.push({
+      imvdbVideoId: `web:${heading[1]}`, title, year: year ? Number(year) : null,
+      thumbnailUrl: thumbnailUrl ? decodeHtml(thumbnailUrl) : null,
+      director: director ? decodeHtml(director) : null,
+      youtubeVideoId: null, durationSeconds: null, sources: [], pagePath: heading[1],
+    });
+  }
+  return videos;
+}
+
+async function getPublicArtistVideos(artistSlug: string): Promise<ImvdbVideoCandidate[]> {
+  const headers = { 'User-Agent': USER_AGENT };
+  const response = await fetch(`https://imvdb.com/n/${encodeURIComponent(artistSlug)}`, { headers, signal: AbortSignal.timeout(15_000) });
+  if (!response.ok) throw new Error(`IMVDb public artist page failed: ${response.status} ${response.statusText}`);
+  const videos = parsePublicArtistVideos(await response.text(), artistSlug);
+  const CONCURRENCY = 4;
+  for (let i = 0; i < videos.length; i += CONCURRENCY) {
+    await Promise.all(videos.slice(i, i + CONCURRENCY).map(async (video) => {
+      try {
+        const detail = await fetch(`https://imvdb.com/video/${video.pagePath}`, { headers, signal: AbortSignal.timeout(15_000) });
+        if (!detail.ok) return;
+        const html = await detail.text();
+        const id = /FI\.video_id\s*=\s*["'](\d+)["']/i.exec(html)?.[1];
+        if (id) video.imvdbVideoId = id;
+        const youtubeId = /property="og:video(?::secure_url)?"\s+content="https?:\/\/(?:www\.)?youtube\.com\/(?:v\/|embed\/)([a-zA-Z0-9_-]{11})/i.exec(html)?.[1];
+        if (youtubeId) {
+          video.youtubeVideoId = youtubeId;
+          video.sources.push({ provider: 'youtube', externalId: youtubeId, url: `https://www.youtube.com/watch?v=${youtubeId}` });
+        }
+      } catch {
+        // The artist list still establishes the video even when one detail page fails.
+      }
+    }));
+  }
+  return videos.map(({ pagePath: _pagePath, ...video }) => video);
+}
+
 // IMVDb's GET /entity/{slug}?method=slug — the documented way to resolve an
 // artist's numeric id from a slug — returns a bare 500 on IMVDb's own server
 // (confirmed independently: https://github.com/Cosmitar/imvdb-client source
@@ -128,10 +197,15 @@ const MAX_VIDEO_SEARCH_PAGES = 4; // up to 200 results — IMVDb has no "videos 
 // catalog by paginating video search filtered to matching artist slug, rather
 // than via a (broken) "videos for this artist id" call.
 export async function getArtistVideos(
-  apiKey: string,
+  apiKey: string | null,
   artistSlug: string,
   artistName: string,
 ): Promise<ImvdbVideoCandidate[]> {
+  // The public videography enumerates the artist's full credited list. The
+  // search API may be unavailable (currently 403 on some installations) and
+  // name search can omit videos even while the artist page lists them.
+  try { return await getPublicArtistVideos(artistSlug); }
+  catch (error) { if (!apiKey) throw error; }
   const videos: ImvdbVideoCandidate[] = [];
   const seen = new Set<string>();
 

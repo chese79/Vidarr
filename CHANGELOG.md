@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — complete per-artist video source record
+
+- Collect a confirmed artist's IMVDb videography, MusicBrainz-linked YouTube channel uploads,
+  and matching local files into a per-artist source record. Refresh all three sources together.
+- Read IMVDb's direct artist link from MusicBrainz and use the public artist videography when
+  the configured IMVDb API cannot serve the catalog. Preserve distinct same-title video versions.
+- Scan the YouTube Videos tab rather than channel releases and playlists; exclude clear podcast,
+  lyric, and live uploads from music-video review. Recognize local files named `Song - Artist`.
+
 ### Changed — confirmed artist and music-video catalog
 
 - Keep unmatched artist observations in Match Review until MusicBrainz identity is confirmed;

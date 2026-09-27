@@ -27,13 +27,27 @@ export function localVideoName(filePath: string, rootPath: string): { artistName
   return { artistName, title: split?.[2]?.trim() || stem };
 }
 
-export async function scanLocalVideoCandidates(): Promise<{ scanned: number; pending: number; roots: number }> {
+function knownArtistVideoName(filePath: string, rootPath: string, artistByName: Map<string, number>) {
+  const parsed = localVideoName(filePath, rootPath);
+  if (artistByName.has(normalizeTitle(parsed.artistName))) return parsed;
+  const stem = path.parse(filePath).name.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\s*\(\d{4}\)\s*$/, '').trim();
+  const split = /^(.+?)\s+[-–—]\s+(.{1,80})$/.exec(stem);
+  if (split && artistByName.has(normalizeTitle(artistNameHint(split[2])))) {
+    return { artistName: artistNameHint(split[2]), title: split[1].trim() };
+  }
+  return parsed;
+}
+
+export async function scanLocalVideoCandidates(artistId?: number): Promise<{ scanned: number; pending: number; roots: number }> {
   const roots = await prisma.rootFolder.findMany({ orderBy: { id: 'asc' } });
   const confirmedArtists = await prisma.artist.findMany({
     where: { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null } },
     select: { id: true, name: true },
   });
   const artistByName = new Map(confirmedArtists.map((artist) => [normalizeTitle(artist.name), artist.id]));
+  if (artistId != null && !confirmedArtists.some((artist) => artist.id === artistId)) {
+    throw new Error('Artist must be confirmed in MusicBrainz before local video discovery.');
+  }
   let scanned = 0;
   let pending = 0;
   for (const root of roots) {
@@ -48,15 +62,16 @@ export async function scanLocalVideoCandidates(): Promise<{ scanned: number; pen
         if (entry.isDirectory()) { queue.push(filePath); continue; }
         if (!entry.isFile() || !VIDEO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
         if (++scanned > MAX_FILES) throw new Error(`Local scan exceeded ${MAX_FILES} video files; narrow the root folder.`);
-        const { artistName, title } = localVideoName(filePath, rootPath);
+        const { artistName, title } = knownArtistVideoName(filePath, rootPath, artistByName);
         if (!isUsableArtistHint(artistName) || !normalizeTitle(title)) continue;
-        const artistId = artistByName.get(normalizeTitle(artistName)) ?? null;
+        const matchedArtistId = artistByName.get(normalizeTitle(artistName)) ?? null;
+        if (artistId != null && matchedArtistId !== artistId) continue;
         const candidate = await prisma.videoReviewCandidate.upsert({
           where: { source_externalId: { source: 'local', externalId: filePath } },
-          update: { artistName, title, artistId },
+          update: { artistName, title, artistId: matchedArtistId },
           create: {
             source: 'local', externalId: filePath, filePath, artistName, title,
-            artistId,
+            artistId: matchedArtistId,
             reason: 'Existing file needs song music-video and artist confirmation.',
           },
         });

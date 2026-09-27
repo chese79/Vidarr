@@ -10,6 +10,7 @@ import {
 import { searchArtists as searchImvdbArtists } from '../providers/metadata/imvdb.js';
 import { refreshArtistMetadata } from './metadataRefresh.js';
 import { normalizeTitle } from './normalize.js';
+import { collectArtistVideoInventory } from './artistVideoInventory.js';
 
 function evidenceJson(value: unknown) {
   return JSON.stringify(value);
@@ -37,6 +38,7 @@ async function enrichConfirmedArtist(artistId: number, mbid: string, observedGen
       genre,
       genreSource,
       musicbrainzArtistId: mbid,
+      imvdbArtistId: current.imvdbArtistId ?? metadata.imvdbSlug ?? null,
       musicbrainzMatchStatus: 'confirmed',
       musicbrainzMatchConfidence: 1,
       musicbrainzMatchEvidence: evidenceJson({ source: 'embedded-or-connector-mbid' }),
@@ -206,5 +208,9 @@ export async function confirmArtistIdentity(artistId: number, musicbrainzArtistI
     genre: artist.genre,
     musicbrainzArtistId,
   });
+  const confirmed = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+  if (confirmed.musicbrainzMatchStatus === 'confirmed' && confirmed.musicbrainzArtistId) {
+    await collectArtistVideoInventory(artistId, { refreshImvdb: false });
+  }
   return prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
 }

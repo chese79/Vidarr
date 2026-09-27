@@ -42,10 +42,10 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
       : `Title credits ${parsed.artist}; confirm the artist before adding this video.`);
     const candidate = await prisma.videoReviewCandidate.upsert({
       where: { source_externalId: { source: 'youtube', externalId: video.youtubeVideoId } },
-      update: { title, artistName: parsed.artist, artistId: artistMatches ? source.artistId : null, reason },
+      update: { title, artistName: parsed.artist, artistId: source.artistId, reason },
       create: {
         source: 'youtube', externalId: video.youtubeVideoId, title,
-        artistName: parsed.artist, artistId: artistMatches ? source.artistId : null,
+        artistName: parsed.artist, artistId: source.artistId,
         url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
         decision: excluded ? 'rejected' : 'pending', reason,
       },

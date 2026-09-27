@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
@@ -197,12 +197,9 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
     setStatus((s) => ({ ...s, [id]: 'Syncing…' }));
     try {
       const result = await api.youtubeSources.sync(id);
-      const suffix = result.isInitialSync
-        ? ' (added as baseline, not auto-downloaded — grab manually if wanted)'
-        : ' (new uploads, will be auto-grabbed)';
       setStatus((s) => ({
         ...s,
-        [id]: `${result.matched} matched, ${result.created} new${result.created ? suffix : ''}`,
+        [id]: `${result.matched} matched, ${result.pending} pending video review`,
       }));
     } catch (err) {
       setStatus((s) => ({ ...s, [id]: `Failed: ${(err as Error).message}` }));
@@ -295,6 +292,21 @@ export default function ArtistDetailPage() {
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
   });
+  const videoInventory = useQuery({
+    queryKey: ['artist-video-inventory', artistId],
+    queryFn: () => api.artists.videoInventory(artistId),
+    enabled: artist.data?.musicbrainzMatchStatus === 'confirmed',
+  });
+  const collectVideoInventory = useMutation({
+    mutationFn: () => api.artists.collectVideoInventory(artistId),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+      queryClient.invalidateQueries({ queryKey: ['artist-video-inventory', artistId] });
+      queryClient.invalidateQueries({ queryKey: ['video-review'] });
+      setArtistActionMessage(`Collected ${result.official} IMVDb videos, ${result.pendingYoutube} YouTube and ${result.pendingLocal} local candidates.${result.errors.length ? ` Source errors: ${result.errors.join('; ')}` : ''}`);
+    },
+    onError: (error: Error) => setArtistActionMessage(error.message),
+  });
   const musicbrainzCandidates = useQuery({
     queryKey: ['musicbrainzCandidates', artistId],
     queryFn: () => api.artists.musicbrainzCandidates(artistId),
@@ -310,6 +322,8 @@ export default function ArtistDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
       queryClient.invalidateQueries({ queryKey: ['musicbrainzCandidates', artistId] });
+      queryClient.invalidateQueries({ queryKey: ['artist-video-inventory', artistId] });
+      queryClient.invalidateQueries({ queryKey: ['video-review'] });
     },
     onError: (error) => setArtistActionMessage(`MusicBrainz confirmation failed: ${(error as Error).message}`),
   });
@@ -501,6 +515,17 @@ export default function ArtistDetailPage() {
         <button onClick={() => searchMissing.mutate()} disabled={searchMissing.isPending || !artist.data.monitored}>Search missing monitored</button>
       </div>
       {artistActionMessage && <p role="status" className="empty-state">{artistActionMessage}</p>}
+
+      {artist.data.musicbrainzMatchStatus === 'confirmed' && <section className="card">
+        <div className="page-header"><div><h3>Video source record</h3><p className="empty-state">IMVDb catalog, linked YouTube channels, and local files for this artist.</p></div><button className="secondary" onClick={() => collectVideoInventory.mutate()} disabled={collectVideoInventory.isPending}>{collectVideoInventory.isPending ? 'Collecting…' : 'Refresh all sources'}</button></div>
+        {videoInventory.isPending && <p>Loading source record…</p>}
+        {videoInventory.isError && <p role="alert">Could not load the source record.</p>}
+        {videoInventory.data && <>
+          <p>{videoInventory.data.catalog.filter((video) => video.catalogKind === 'official').length} IMVDb videos · {videoInventory.data.catalog.filter((video) => video.catalogKind !== 'official').length} approved from other sources · {videoInventory.data.candidates.filter((video) => video.source === 'youtube' && video.decision === 'pending').length} YouTube candidates · {videoInventory.data.candidates.filter((video) => video.source === 'local' && video.decision === 'pending').length} local candidates</p>
+          {videoInventory.data.channels.map((channel) => <p key={channel.id} className="empty-state">YouTube: <a href={channel.url} target="_blank" rel="noopener noreferrer">{channel.url}</a> · {channel.lastPolledAt ? 'scanned' : 'not scanned'}</p>)}
+          {videoInventory.data.candidates.some((video) => video.decision === 'pending') && <p><Link to="/video-review">Review candidate videos</Link></p>}
+        </>}
+      </section>}
 
       {!artist.data.musicbrainzArtistId && <section className="card">
         <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr builds the IMVDb catalog.</p></div><button className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</button></div>
