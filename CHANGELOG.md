@@ -13,6 +13,7 @@ under **Unreleased** in the same commit as the change.
   the configured IMVDb API cannot serve the catalog. Preserve distinct same-title video versions.
 - Scan the YouTube Videos tab rather than channel releases and playlists; exclude clear podcast,
   lyric, and live uploads from music-video review. Recognize local files named `Song - Artist`.
+- Reject uploads explicitly labeled `Live Music Video` from song music-video review.
 
 ### Changed — confirmed artist and music-video catalog
 

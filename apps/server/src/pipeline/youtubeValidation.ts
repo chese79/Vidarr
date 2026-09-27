@@ -28,7 +28,7 @@ const REJECT_TITLE_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /\breaction\b/, label: 'reaction video' },
   { pattern: /\blive at\b|\bconcert\b/, label: 'live/concert footage' },
   { pattern: /\bfrom\b.{0,60}\blive\b|\blive\b.{0,30}\b(?:tour|album|dvd)\b/, label: 'live performance' },
-  { pattern: /\blive\s+(?:performance|session|version|song)\b|\bperformance\s+live\b/, label: 'live performance' },
+  { pattern: /\blive\s+(?:performance|session|version|song|(?:music\s+)?video)\b|\bperformance\s+live\b/, label: 'live performance' },
   { pattern: /\binterview\b|\bpress conference\b|\bq\s+a\b/, label: 'interview' },
   { pattern: /\bpodcast\b|\bepisode\s+\d+\b/, label: 'podcast episode' },
   { pattern: /\bmaking of\b|\bstory of\b|\bidea behind\b/, label: 'behind-the-song feature' },

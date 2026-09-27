@@ -31,6 +31,7 @@ describe('Amy Grant full-scope source boundaries', () => {
     expect(excludedMusicVideoTitleReason('The Me That Remains - Album Podcast - Episode 8')).toMatch(/podcast/);
     expect(excludedMusicVideoTitleReason('Amy Grant - The Saint (Official Lyric Video)')).toMatch(/lyric/);
     expect(excludedMusicVideoTitleReason('Amy Grant - Baby Baby (From Time Again…Live)')).toMatch(/live/);
+    expect(excludedMusicVideoTitleReason('Lead Me On (Live Music Video)')).toMatch(/live/);
     expect(excludedMusicVideoTitleReason('Amy Grant - The Me That Remains (Official Music Video)')).toBeNull();
   });
 });
