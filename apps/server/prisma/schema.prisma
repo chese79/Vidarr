@@ -37,6 +37,8 @@ model Artist {
   genre            String? // user-editable; auto-fillable from a matched LibraryArtist (Jellyfin) or a "standard" external source (Spotify's controlled-vocabulary genres) — see pipeline/genreMatch.ts
   genreSource      String? // user | embedded | musicbrainz | connector | folksonomy
   metadataRefreshedAt DateTime?
+  videoInventoryCheckedAt DateTime?
+  videoInventoryError String?
   reconciledAt     DateTime?
   addedAt          DateTime     @default(now())
 

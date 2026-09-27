@@ -521,6 +521,8 @@ export default function ArtistDetailPage() {
         {videoInventory.isPending && <p>Loading source record…</p>}
         {videoInventory.isError && <p role="alert">Could not load the source record.</p>}
         {videoInventory.data && <>
+          <p className="empty-state">{videoInventory.data.checkedAt ? `Sources checked ${new Date(videoInventory.data.checkedAt).toLocaleString()}` : 'Source check queued'}</p>
+          {videoInventory.data.error && <p role="alert">Source check issue: {videoInventory.data.error}</p>}
           <p>{videoInventory.data.catalog.filter((video) => video.catalogKind === 'official').length} IMVDb videos · {videoInventory.data.catalog.filter((video) => video.catalogKind !== 'official').length} approved from other sources · {videoInventory.data.candidates.filter((video) => video.source === 'youtube' && video.decision === 'pending').length} YouTube candidates · {videoInventory.data.candidates.filter((video) => video.source === 'local' && video.decision === 'pending').length} local candidates</p>
           {videoInventory.data.channels.map((channel) => <p key={channel.id} className="empty-state">YouTube: <a href={channel.url} target="_blank" rel="noopener noreferrer">{channel.url}</a> · {channel.lastPolledAt ? 'scanned' : 'not scanned'}</p>)}
           {videoInventory.data.candidates.some((video) => video.decision === 'pending') && <p><Link to="/video-review">Review candidate videos</Link></p>}

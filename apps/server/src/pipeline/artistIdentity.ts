@@ -16,7 +16,7 @@ function evidenceJson(value: unknown) {
   return JSON.stringify(value);
 }
 
-async function enrichConfirmedArtist(artistId: number, mbid: string, observedGenre?: string | null) {
+export async function enrichConfirmedArtist(artistId: number, mbid: string, observedGenre?: string | null) {
   const metadata = await lookupMusicBrainzArtist(mbid);
   const current = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
   const genre = current.genre ?? observedGenre ?? metadata.genres[0] ?? null;

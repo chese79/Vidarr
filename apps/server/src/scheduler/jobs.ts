@@ -8,6 +8,7 @@ import { refreshImvdbMetadata } from '../pipeline/metadataRefresh.js';
 import { regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
 import { republishChangedSmartPlaylist } from '../pipeline/playlistPush.js';
 import { reconcilePendingImports } from '../pipeline/pendingImportReconciliation.js';
+import { backfillArtistVideoInventories } from '../pipeline/artistVideoBackfill.js';
 
 export interface ScheduledJob {
   name: string;
@@ -31,6 +32,14 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  {
+    name: 'Artist Video Inventory Backfill',
+    defaultIntervalMs: 2 * 60_000,
+    run: async () => {
+      const result = await backfillArtistVideoInventories();
+      return `${result.checked} checked, ${result.attempted} attempted, ${result.remaining} remaining`;
+    },
+  },
   {
     name: 'Pending Import Reconciliation',
     defaultIntervalMs: 5 * 60_000,

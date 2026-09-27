@@ -21,6 +21,12 @@ async function runJob(job: (typeof JOBS)[number]): Promise<void> {
     await logActivity('error', `job:${job.name}`, err);
   } finally {
     running.delete(job.name);
+    if (job.name === 'Artist Video Inventory Backfill' && process.env.NODE_ENV === 'production') {
+      const remaining = await prisma.artist.count({ where: {
+        musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null }, videoInventoryCheckedAt: null,
+      } });
+      if (remaining > 0) setTimeout(() => void runJob(job), 1_000);
+    }
   }
 }
 
@@ -38,5 +44,8 @@ export async function startScheduler(): Promise<void> {
       create: { name: job.name, intervalMs: job.defaultIntervalMs },
     });
     setInterval(() => void runJob(job), task.intervalMs);
+    if (job.name === 'Artist Video Inventory Backfill' && process.env.NODE_ENV === 'production') {
+      void runJob(job);
+    }
   }
 }

@@ -84,6 +84,11 @@ roots whose filename or folder identifies the artist. The artist page can refres
 and show source counts, scan state, and pending review items. A direct IMVDb URL in MusicBrainz
 resolves the artist slug; the public IMVDb videography is used when the API is unavailable.
 Repeated song titles may be distinct official video versions and must remain separate.
+Connector-confirmed artists enter a persistent source-check queue as soon as the connector sync
+finishes. The scheduler checks new artists first in bounded batches, continuing while work remains, and also backfills confirmed
+artists from older catalogs. One local-file scan when the queue drains covers all confirmed artists; each
+artist records the latest check time and any provider error so an empty catalog can be
+distinguished from a scan that has not run.
 
 Source records should be provider-neutral and retain the provider, external identifier, URL,
 authority/confidence, and discovery origin. `yt-dlp` can perform the actual transfer for supported

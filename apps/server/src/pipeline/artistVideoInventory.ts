@@ -15,7 +15,7 @@ export interface ArtistVideoCollectionResult {
 // does not erase records from another source or revoke artist confirmation.
 export async function collectArtistVideoInventory(
   artistId: number,
-  options: { refreshImvdb?: boolean } = {},
+  options: { refreshImvdb?: boolean; scanLocal?: boolean } = {},
 ): Promise<ArtistVideoCollectionResult> {
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
   if (artist.musicbrainzMatchStatus !== 'confirmed' || !artist.musicbrainzArtistId) {
@@ -37,11 +37,16 @@ export async function collectArtistVideoInventory(
       await logActivity('warn', 'artist-video-inventory:youtube', error);
     }
   }
-  try { await scanLocalVideoCandidates(artistId); }
-  catch (error) {
-    errors.push(`Local files: ${(error as Error).message}`);
-    await logActivity('warn', 'artist-video-inventory:local', error);
+  if (options.scanLocal !== false) {
+    try { await scanLocalVideoCandidates(artistId); }
+    catch (error) {
+      errors.push(`Local files: ${(error as Error).message}`);
+      await logActivity('warn', 'artist-video-inventory:local', error);
+    }
   }
+  await prisma.artist.update({ where: { id: artistId }, data: {
+    videoInventoryCheckedAt: new Date(), videoInventoryError: errors.join('; ') || null,
+  } });
   const [official, approvedOther, pendingYoutube, pendingLocal] = await Promise.all([
     prisma.musicVideo.count({ where: { artistId, catalogKind: 'official' } }),
     prisma.musicVideo.count({ where: { artistId, catalogKind: { not: 'official' } } }),

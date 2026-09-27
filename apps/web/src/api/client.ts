@@ -192,6 +192,8 @@ export const api = {
       catalog: Array<{ id: number; title: string; releaseYear: number | null; catalogKind: string; imvdbVideoId: string | null; youtubeVideoId: string | null; hasFile: boolean; file: { path: string } | null }>;
       candidates: Array<{ id: number; source: string; title: string; url: string | null; filePath: string | null; decision: string; reason: string | null }>;
       channels: Array<{ id: number; url: string; lastPolledAt: string | null }>;
+      checkedAt: string | null;
+      error: string | null;
     }>(`/artist/${id}/video-inventory`),
     collectVideoInventory: (id: number) => request<{
       official: number; approvedOther: number; pendingYoutube: number; pendingLocal: number; errors: string[];

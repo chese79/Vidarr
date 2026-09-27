@@ -94,7 +94,9 @@ export async function artistRoutes(app: FastifyInstance) {
 
   app.get('/api/v1/artist/:id/video-inventory', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
-    const artist = await prisma.artist.findUnique({ where: { id }, select: { id: true, musicbrainzMatchStatus: true } });
+    const artist = await prisma.artist.findUnique({ where: { id }, select: {
+      id: true, musicbrainzMatchStatus: true, videoInventoryCheckedAt: true, videoInventoryError: true,
+    } });
     if (!artist) return reply.code(404).send({ error: 'Artist not found' });
     if (artist.musicbrainzMatchStatus !== 'confirmed') return reply.code(409).send({ error: 'Artist needs MusicBrainz confirmation' });
     const [catalog, candidates, channels] = await Promise.all([
@@ -107,7 +109,7 @@ export async function artistRoutes(app: FastifyInstance) {
       }, orderBy: [{ source: 'asc' }, { title: 'asc' }] }),
       prisma.youtubeSource.findMany({ where: { artistId: id }, select: { id: true, url: true, lastPolledAt: true } }),
     ]);
-    return { catalog, candidates, channels };
+    return { catalog, candidates, channels, checkedAt: artist.videoInventoryCheckedAt, error: artist.videoInventoryError };
   });
 
   app.post('/api/v1/artist/:id/video-inventory/collect', async (req, reply) => {
