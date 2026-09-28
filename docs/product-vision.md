@@ -62,6 +62,8 @@ inventory alongside the official catalog and is not silently discarded or counte
 
 For a canonical artist, the user can discover the artist's music-video catalog, select wanted
 videos, search for sources, and download a chosen or automatically selected result.
+The artist page's Download Selected action grabs only checked videos with an accepted direct
+source, leaves active or already owned videos alone, and reports individual failures for retry.
 
 Preferred source order:
 

@@ -7,6 +7,8 @@ under **Unreleased** in the same commit as the change.
 
 ### Improved — complete per-artist video source record
 
+- Add Download Selected to artist pages for videos with accepted direct sources. Two selected
+  downloads run at a time, show progress per video, and keep failures selected for retry.
 - Paginate and filter Video Review on the server so a large queue no longer sends and renders
   every pending upload at once. Artist links open review filtered to that artist.
 - Use SQLite write-ahead logging during live service operation so background catalog checks

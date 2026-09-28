@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
+import { downloadableSelectedIds } from './downloadSelection';
 import type {
   YoutubeSourceType,
   IndexerSearchResult,
@@ -285,6 +286,7 @@ export default function ArtistDetailPage() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [monitorMessage, setMonitorMessage] = useState<string | null>(null);
   const [bulkSearching, setBulkSearching] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [artistActionMessage, setArtistActionMessage] = useState<string | null>(null);
 
@@ -438,20 +440,25 @@ export default function ArtistDetailPage() {
     });
   }
 
-  async function handleGrab(videoId: number) {
+  async function handleGrab(videoId: number): Promise<boolean> {
     setGrabStatus((s) => ({ ...s, [videoId]: 'Downloading…' }));
-    const result = await api.musicVideos.grab(videoId);
-    setGrabStatus((s) => ({
-      ...s,
-      [videoId]: result.ok ? 'Done' : `Failed: ${result.error}`,
-    }));
-    queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    try {
+      const result = await api.musicVideos.grab(videoId);
+      setGrabStatus((s) => ({ ...s, [videoId]: result.ok ? 'Done' : `Failed: ${result.error}` }));
+      if (result.ok) queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+      return result.ok;
+    } catch (error) {
+      setGrabStatus((s) => ({ ...s, [videoId]: `Failed: ${(error as Error).message}` }));
+      return false;
+    }
   }
 
   if (artist.isLoading) return <p>Loading…</p>;
   if (!artist.data) return <p>Artist not found.</p>;
 
+  const currentArtist = artist.data;
   const wantedVideos = artist.data.musicVideos.filter((mv) => !mv.hasFile);
+  const downloadableIds = downloadableSelectedIds(artist.data.musicVideos, selected);
   const allSelected = wantedVideos.length > 0 && wantedVideos.every((mv) => selected.has(mv.id));
 
   function toggleSelectAll() {
@@ -475,6 +482,31 @@ export default function ArtistDetailPage() {
     setSelected(new Set());
     setBulkSearching(false);
     queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    queryClient.invalidateQueries({ queryKey: ['queue'] });
+  }
+
+  async function handleBulkDownload() {
+    const ids = downloadableSelectedIds(currentArtist.musicVideos, selected);
+    if (!ids.length) return;
+    setBulkDownloading(true);
+    let completed = 0;
+    let downloaded = 0;
+    let next = 0;
+    setBulkMessage(`Downloading 0 of ${ids.length} selected videos…`);
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++];
+        if (await handleGrab(id)) {
+          downloaded++;
+          setSelected((current) => { const updated = new Set(current); updated.delete(id); return updated; });
+        }
+        completed++;
+        setBulkMessage(`Downloading ${completed} of ${ids.length} selected videos…`);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(2, ids.length) }, worker));
+    setBulkMessage(`${downloaded} downloaded, ${ids.length - downloaded} failed. Failed videos remain selected.`);
+    setBulkDownloading(false);
     queryClient.invalidateQueries({ queryKey: ['queue'] });
   }
 
@@ -596,8 +628,11 @@ export default function ArtistDetailPage() {
           <button className="secondary" onClick={toggleSelectAll}>
             {allSelected ? 'Deselect All' : 'Select All'}
           </button>
-          <button disabled={!selected.size || bulkSearching} onClick={handleBulkSearch}>
+          <button disabled={!selected.size || bulkSearching || bulkDownloading} onClick={handleBulkSearch}>
             {bulkSearching ? 'Searching…' : `Search Selected (${selected.size})`}
+          </button>
+          <button disabled={!downloadableIds.length || bulkSearching || bulkDownloading} onClick={handleBulkDownload}>
+            {bulkDownloading ? 'Downloading…' : `Download Selected (${downloadableIds.length})`}
           </button>
           {bulkMessage && (
             <span className="empty-state" role="status">
@@ -616,7 +651,7 @@ export default function ArtistDetailPage() {
                   type="checkbox"
                   checked={selected.has(mv.id)}
                   onChange={() => toggleOne(mv.id)}
-                  aria-label={`Select ${mv.title} for bulk search`}
+                  aria-label={`Select ${mv.title} for bulk actions`}
                 />
               )}
               <VideoThumb url={mv.thumbnailUrl} />
