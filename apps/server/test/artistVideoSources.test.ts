@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mapArtist } from '../src/providers/metadata/musicbrainz.js';
 import { findPublicArtistSlug, parsePublicArtistVideos } from '../src/providers/metadata/imvdb.js';
-import { channelVideosUrl } from '../src/providers/youtube/ytdlp.js';
+import { channelHasNoVideosTab, channelVideosUrl } from '../src/providers/youtube/ytdlp.js';
 import { excludedMusicVideoTitleReason } from '../src/pipeline/youtubeValidation.js';
 
 describe('Amy Grant full-scope source boundaries', () => {
@@ -43,6 +43,8 @@ describe('Amy Grant full-scope source boundaries', () => {
   });
 
   it('scans the channel video tab and filters Amy Grant podcast, lyric, and live uploads', () => {
+    expect(channelHasNoVideosTab('ERROR: This channel does not have a videos tab')).toBe(true);
+    expect(channelHasNoVideosTab('ERROR: Sign in to confirm you are not a bot')).toBe(false);
     expect(channelVideosUrl('https://www.youtube.com/channel/UCZSki0usQ84d5cVkiWxy2UQ'))
       .toBe('https://www.youtube.com/channel/UCZSki0usQ84d5cVkiWxy2UQ/videos');
     expect(excludedMusicVideoTitleReason('The Me That Remains - Album Podcast - Episode 8')).toMatch(/podcast/);

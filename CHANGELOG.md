@@ -17,6 +17,8 @@ under **Unreleased** in the same commit as the change.
 - Recognize punctuation in MusicBrainz-linked IMVDb artist slugs such as R.E.M.'s `r.e.m.`.
 - Reject more clearly labeled live uploads during channel discovery while preserving song titles
   such as AC/DC's "Live Wire" for review.
+- Scan identical YouTube and YouTube Music channel links once per artist check, and treat a
+  channel with no Videos tab as an empty source instead of a failed scan.
 - Automatically collect video sources after MusicBrainz confirmation and backfill confirmed
   artists that were already in the library. Record each artist's last source check and error.
 - Find IMVDb artist pages by the confirmed MusicBrainz name when MusicBrainz has no direct IMVDb

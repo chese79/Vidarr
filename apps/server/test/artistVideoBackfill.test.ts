@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../src/db/client.js';
 import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist } from './support/db.js';
+import { listChannelVideos } from '../src/providers/youtube/ytdlp.js';
 
 vi.mock('../src/providers/metadata/musicbrainz.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/providers/metadata/musicbrainz.js')>()),
@@ -45,5 +46,23 @@ describe('automatic video inventory backfill', () => {
     expect(await prisma.videoReviewCandidate.findFirst({ where: { artistId: artist.id, source: 'youtube' } }))
       .toMatchObject({ externalId: 'test-song', decision: 'pending' });
     expect(await backfillArtistVideoInventories()).toMatchObject({ checked: 0, attempted: 0, remaining: 0 });
+  });
+
+  it('scans a linked YouTube and YouTube Music channel only once', async () => {
+    const root = await createRootFolder({ path: rootPath });
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const artist = await createArtist(root.id, profile.id);
+    await prisma.artist.update({ where: { id: artist.id }, data: {
+      musicbrainzArtistId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', musicbrainzMatchStatus: 'confirmed',
+    } });
+    const first = await prisma.youtubeSource.create({ data: { artistId: artist.id, url: 'https://www.youtube.com/channel/UCtest', type: 'channel' } });
+    const second = await prisma.youtubeSource.create({ data: { artistId: artist.id, url: 'https://music.youtube.com/channel/UCtest', type: 'channel' } });
+    vi.mocked(listChannelVideos).mockClear();
+    const { collectArtistVideoInventory } = await import('../src/pipeline/artistVideoInventory.js');
+    await collectArtistVideoInventory(artist.id, { refreshImvdb: false, scanLocal: false });
+    expect(listChannelVideos).toHaveBeenCalledTimes(1);
+    expect((await prisma.youtubeSource.findUnique({ where: { id: first.id } }))?.lastPolledAt).not.toBeNull();
+    expect((await prisma.youtubeSource.findUnique({ where: { id: second.id } }))?.lastPolledAt).not.toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { prisma, logActivity } from '../db/client.js';
 import { refreshArtistMetadata } from './metadataRefresh.js';
 import { scanLocalVideoCandidates } from './localVideoReview.js';
 import { syncYoutubeSource } from './youtubeSync.js';
+import { channelVideosUrl } from '../providers/youtube/ytdlp.js';
 
 export interface ArtistVideoCollectionResult {
   official: number;
@@ -30,9 +31,20 @@ export async function collectArtistVideoInventory(
     }
   }
   const channels = await prisma.youtubeSource.findMany({ where: { artistId }, orderBy: { id: 'asc' } });
+  const scannedChannels = new Map<string, Date | null>();
   for (const channel of channels) {
-    try { await syncYoutubeSource(channel.id); }
+    const canonicalUrl = channelVideosUrl(channel.url);
+    if (scannedChannels.has(canonicalUrl)) {
+      const checkedAt = scannedChannels.get(canonicalUrl);
+      if (checkedAt) await prisma.youtubeSource.update({ where: { id: channel.id }, data: { lastPolledAt: checkedAt } });
+      continue;
+    }
+    try {
+      await syncYoutubeSource(channel.id);
+      scannedChannels.set(canonicalUrl, new Date());
+    }
     catch (error) {
+      scannedChannels.set(canonicalUrl, null);
       errors.push(`YouTube ${channel.url}: ${(error as Error).message}`);
       await logActivity('warn', 'artist-video-inventory:youtube', error);
     }

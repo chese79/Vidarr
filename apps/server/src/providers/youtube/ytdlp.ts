@@ -51,6 +51,7 @@ function runYtDlp(
 export async function listChannelVideos(sourceUrl: string): Promise<YoutubeVideoListing[]> {
   const { stdout, stderr, code } = await runYtDlp(['--flat-playlist', '--dump-json', channelVideosUrl(sourceUrl)]);
   if (code !== 0) {
+    if (channelHasNoVideosTab(stderr)) return [];
     throw new Error(`yt-dlp listing failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
   }
   return stdout
@@ -58,6 +59,10 @@ export async function listChannelVideos(sourceUrl: string): Promise<YoutubeVideo
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line))
     .map((entry) => ({ youtubeVideoId: String(entry.id), title: entry.title as string }));
+}
+
+export function channelHasNoVideosTab(stderr: string): boolean {
+  return /this channel does not have a videos tab/i.test(stderr);
 }
 
 export interface YoutubeSearchCandidate {
