@@ -94,6 +94,7 @@ Video Review fetches bounded pages and applies artist and title search on the se
 unpaginated API remains available for existing clients.
 When YouTube and YouTube Music links point to the same channel, a collection checks the channel
 once. A channel with no Videos tab contributes no candidates and is not an inventory error.
+Repeat channel checks leave unchanged review records untouched and preserve manual approvals.
 Repeated song titles may be distinct official video versions and must remain separate.
 Connector-confirmed artists enter a persistent source-check queue as soon as the connector sync
 finishes. The scheduler checks new artists first in bounded batches, continuing while work remains, and also backfills confirmed

@@ -35,12 +35,21 @@ describe('YouTube channel discovery', () => {
         expect.objectContaining({ externalId: 'interview', decision: 'rejected' }),
       ]));
 
+    const songBefore = await prisma.videoReviewCandidate.findUniqueOrThrow({ where: {
+      source_externalId: { source: 'youtube', externalId: 'song-video' },
+    } });
+    await pollAndGrabYoutubeSource(source.id);
+    const songAfter = await prisma.videoReviewCandidate.findUniqueOrThrow({ where: {
+      source_externalId: { source: 'youtube', externalId: 'song-video' },
+    } });
+    expect(songAfter.updatedAt).toEqual(songBefore.updatedAt);
+
     await prisma.videoReviewCandidate.update({ where: { source_externalId: { source: 'youtube', externalId: 'interview' } }, data: { decision: 'pending' } });
-    await prisma.videoReviewCandidate.update({ where: { source_externalId: { source: 'youtube', externalId: 'song-video' } }, data: { decision: 'approved' } });
+    await prisma.videoReviewCandidate.update({ where: { source_externalId: { source: 'youtube', externalId: 'song-video' } }, data: { decision: 'approved', title: 'Manually confirmed song' } });
     await pollAndGrabYoutubeSource(source.id);
     expect(await prisma.videoReviewCandidate.findUnique({ where: { source_externalId: { source: 'youtube', externalId: 'interview' } } }))
       .toMatchObject({ decision: 'rejected' });
     expect(await prisma.videoReviewCandidate.findUnique({ where: { source_externalId: { source: 'youtube', externalId: 'song-video' } } }))
-      .toMatchObject({ decision: 'approved' });
+      .toMatchObject({ decision: 'approved', title: 'Manually confirmed song' });
   });
 });

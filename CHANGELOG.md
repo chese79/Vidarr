@@ -21,6 +21,8 @@ under **Unreleased** in the same commit as the change.
   such as AC/DC's "Live Wire" for review.
 - Scan identical YouTube and YouTube Music channel links once per artist check, and treat a
   channel with no Videos tab as an empty source instead of a failed scan.
+- Skip database writes for unchanged YouTube review candidates on repeat scans, while preserving
+  manually approved titles and decisions.
 - Automatically collect video sources after MusicBrainz confirmation and backfill confirmed
   artists that were already in the library. Record each artist's last source check and error.
 - Find IMVDb artist pages by the confirmed MusicBrainz name when MusicBrainz has no direct IMVDb

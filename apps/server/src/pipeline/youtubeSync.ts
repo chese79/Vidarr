@@ -28,6 +28,11 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
     where: { artistId: source.artistId }, select: { youtubeVideoId: true, normalizedTitle: true },
   });
   const byYoutubeId = new Set(existing.map((video) => video.youtubeVideoId).filter(Boolean));
+  const reviewRows = await prisma.videoReviewCandidate.findMany({
+    where: { source: 'youtube', externalId: { in: videos.map((video) => video.youtubeVideoId) } },
+    select: { id: true, externalId: true, title: true, artistName: true, artistId: true, reason: true, decision: true },
+  });
+  const reviewByYoutubeId = new Map(reviewRows.map((row) => [row.externalId, row]));
   let matched = 0;
   let pending = 0;
 
@@ -40,23 +45,30 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
     const reason = excluded ?? (artistMatches
       ? 'Channel upload needs confirmation as an official song music video.'
       : `Title credits ${parsed.artist}; confirm the artist before adding this video.`);
-    const candidate = await prisma.videoReviewCandidate.upsert({
-      where: { source_externalId: { source: 'youtube', externalId: video.youtubeVideoId } },
-      update: { title, artistName: parsed.artist, artistId: source.artistId, reason },
-      create: {
+    const existingReview = reviewByYoutubeId.get(video.youtubeVideoId);
+    if (existingReview?.decision === 'approved') { matched++; continue; }
+    if (existingReview?.decision === 'rejected') continue;
+    if (existingReview) {
+      const changed = existingReview.title !== title || existingReview.artistName !== parsed.artist
+        || existingReview.artistId !== source.artistId || existingReview.reason !== reason || Boolean(excluded);
+      if (changed) await prisma.videoReviewCandidate.update({
+        where: { id: existingReview.id },
+        data: { title, artistName: parsed.artist, artistId: source.artistId, reason,
+          ...(excluded ? { decision: 'rejected' } : {}) },
+      });
+      if (!excluded) pending++;
+      continue;
+    }
+    const candidate = await prisma.videoReviewCandidate.create({
+      data: {
         source: 'youtube', externalId: video.youtubeVideoId, title,
         artistName: parsed.artist, artistId: source.artistId,
         url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
         decision: excluded ? 'rejected' : 'pending', reason,
       },
     });
-    if (excluded && candidate.decision === 'pending') {
-      await prisma.videoReviewCandidate.updateMany({
-        where: { id: candidate.id, decision: 'pending' },
-        data: { decision: 'rejected', reason },
-      });
-    } else if (candidate.decision === 'pending') pending++;
-    else if (candidate.decision === 'approved') matched++;
+    reviewByYoutubeId.set(video.youtubeVideoId, candidate);
+    if (candidate.decision === 'pending') pending++;
   }
 
   await prisma.youtubeSource.update({ where: { id: sourceId }, data: { lastPolledAt: new Date() } });
