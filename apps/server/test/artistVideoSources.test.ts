@@ -17,6 +17,12 @@ describe('Amy Grant full-scope source boundaries', () => {
     expect(artist.youtubeChannels).toEqual(['https://www.youtube.com/channel/UCIneJfQU5QYRexcOckYiDpA']);
   });
 
+  it('retains punctuation in R.E.M.\'s linked IMVDb slug', () => {
+    expect(mapArtist({ id: 'ea4dfa26-f633-4da6-a52a-f49ea4897b58', name: 'R.E.M.', relations: [
+      { url: { resource: 'https://imvdb.com/n/r.e.m.' } },
+    ] }).imvdbSlug).toBe('r.e.m.');
+  });
+
   it('keeps same-title official video versions separate and excludes guest appearances', () => {
     const row = (slug: string, title: string, year: number) => `<tr><td><img data-src="https://example.com/${slug}.jpg"></td><td><strong><a href="https://imvdb.com/video/amy-grant/${slug}">${title}</a></strong> (${year})</td></tr>`;
     const html = `<h1>Videography</h1><div id="artist-credits"><table>${row('house-of-love', 'House of Love', 1994)}${row('house-of-love/2', 'House of Love', 1991)}${row('baby-baby', 'Baby, Baby', 1991)}</table></div><div class="anchorOffset" id="appearance"></div><table><tr><td><strong><a href="https://imvdb.com/video/amy-grant/guest">Guest Video</a></strong></td></tr></table>`;
@@ -43,6 +49,9 @@ describe('Amy Grant full-scope source boundaries', () => {
     expect(excludedMusicVideoTitleReason('Amy Grant - The Saint (Official Lyric Video)')).toMatch(/lyric/);
     expect(excludedMusicVideoTitleReason('Amy Grant - Baby Baby (From Time Again…Live)')).toMatch(/live/);
     expect(excludedMusicVideoTitleReason('Lead Me On (Live Music Video)')).toMatch(/live/);
+    expect(excludedMusicVideoTitleReason('AC/DC - Highway to Hell (Official Video - AC/DC Live)')).toMatch(/live/);
+    expect(excludedMusicVideoTitleReason('AC/DC - Let There Be Rock (Live Stuttgart 2000)')).toMatch(/live/);
+    expect(excludedMusicVideoTitleReason('AC/DC - Live Wire (Official Video)')).toBeNull();
     expect(excludedMusicVideoTitleReason('Amy Grant - The Me That Remains (Official Music Video)')).toBeNull();
   });
 });

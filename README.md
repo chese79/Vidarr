@@ -210,6 +210,10 @@ Running without Docker (a persistent native service on Linux via systemd, or on 
 service wrapper) is also documented — see [`docs/deployment.md`](docs/deployment.md) for every
 deployment path, including this one, in full step-by-step detail.
 
+Vidarr enables SQLite write-ahead logging at startup so artist pages remain responsive during
+background catalog checks. Back up a running database with SQLite's online backup facility, or
+stop Vidarr before copying its database file, so recent writes are included.
+
 ## Security
 
 - Every `/api/v1/*` route requires an API key (see "First run" above) — there is no unauthenticated

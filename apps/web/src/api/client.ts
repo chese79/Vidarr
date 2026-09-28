@@ -189,12 +189,11 @@ export const api = {
       method: 'POST', body: JSON.stringify({ musicbrainzArtistId }),
     }),
     videoInventory: (id: number) => request<{
-      catalog: Array<{ id: number; title: string; releaseYear: number | null; catalogKind: string; imvdbVideoId: string | null; youtubeVideoId: string | null; hasFile: boolean; file: { path: string } | null }>;
-      candidates: Array<{ id: number; source: string; title: string; url: string | null; filePath: string | null; decision: string; reason: string | null }>;
+      official: number; approvedOther: number; pendingYoutube: number; pendingLocal: number;
       channels: Array<{ id: number; url: string; lastPolledAt: string | null }>;
       checkedAt: string | null;
       error: string | null;
-    }>(`/artist/${id}/video-inventory`),
+    }>(`/artist/${id}/video-inventory/summary`),
     collectVideoInventory: (id: number) => request<{
       official: number; approvedOther: number; pendingYoutube: number; pendingLocal: number; errors: string[];
     }>(`/artist/${id}/video-inventory/collect`, { method: 'POST' }),
@@ -237,6 +236,15 @@ export const api = {
     searchMissing: (id: number) => request<BulkSearchResult>(`/artist/${id}/search-missing`, { method: 'POST' }),
   },
   videoReview: {
+    page: (opts: { offset: number; limit: number; search?: string; artistId?: number }) => {
+      const params = new URLSearchParams({ offset: String(opts.offset), limit: String(opts.limit) });
+      if (opts.search) params.set('search', opts.search);
+      if (opts.artistId) params.set('artistId', String(opts.artistId));
+      return request<{ total: number; offset: number; limit: number; items: Array<{
+        id: number; source: string; externalId: string; artistId: number | null;
+        artistName: string; title: string; url: string | null; filePath: string | null; reason: string | null;
+      }> }>(`/video-review/page?${params}`);
+    },
     list: () => request<Array<{
       id: number; source: string; externalId: string; artistId: number | null;
       artistName: string; title: string; url: string | null; filePath: string | null; reason: string | null;

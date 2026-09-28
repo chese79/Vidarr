@@ -53,7 +53,7 @@ export function mapArtist(value: any): MusicBrainzArtist {
     .filter((url: string) => /^https:\/\/(?:www\.|music\.)?youtube\.com\/(?:channel\/|user\/|c\/|@)/i.test(url));
   const imvdbSlug = (value.relations ?? [])
     .map((relation: any) => String(relation.url?.resource ?? ''))
-    .map((url: string) => /^https?:\/\/(?:www\.)?imvdb\.com\/n\/([a-z0-9-]+)\/?(?:[?#].*)?$/i.exec(url)?.[1] ?? null)
+    .map((url: string) => /^https?:\/\/(?:www\.)?imvdb\.com\/n\/([a-z0-9._-]+)\/?(?:[?#].*)?$/i.exec(url)?.[1] ?? null)
     .find((slug: string | null) => slug !== null) ?? null;
   return {
     id: String(value.id),

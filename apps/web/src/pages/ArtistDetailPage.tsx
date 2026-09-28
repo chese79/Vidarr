@@ -523,9 +523,9 @@ export default function ArtistDetailPage() {
         {videoInventory.data && <>
           <p className="empty-state">{videoInventory.data.checkedAt ? `Sources checked ${new Date(videoInventory.data.checkedAt).toLocaleString()}` : 'Source check queued'}</p>
           {videoInventory.data.error && <p role="alert">Source check issue: {videoInventory.data.error}</p>}
-          <p>{videoInventory.data.catalog.filter((video) => video.catalogKind === 'official').length} IMVDb videos · {videoInventory.data.catalog.filter((video) => video.catalogKind !== 'official').length} approved from other sources · {videoInventory.data.candidates.filter((video) => video.source === 'youtube' && video.decision === 'pending').length} YouTube candidates · {videoInventory.data.candidates.filter((video) => video.source === 'local' && video.decision === 'pending').length} local candidates</p>
+          <p>{videoInventory.data.official} official videos · {videoInventory.data.approvedOther} approved from other sources · {videoInventory.data.pendingYoutube} YouTube candidates · {videoInventory.data.pendingLocal} local candidates</p>
           {videoInventory.data.channels.map((channel) => <p key={channel.id} className="empty-state">YouTube: <a href={channel.url} target="_blank" rel="noopener noreferrer">{channel.url}</a> · {channel.lastPolledAt ? 'scanned' : 'not scanned'}</p>)}
-          {videoInventory.data.candidates.some((video) => video.decision === 'pending') && <p><Link to="/video-review">Review candidate videos</Link></p>}
+          {(videoInventory.data.pendingYoutube + videoInventory.data.pendingLocal > 0) && <p><Link to={`/video-review?artistId=${artistId}`}>Review candidate videos</Link></p>}
         </>}
       </section>}
 

@@ -76,6 +76,19 @@ describe('artist routes', () => {
     qualityProfileId = (await createQualityProfile(quality.id)).id;
   });
 
+  it('returns source counts without loading every review candidate for the artist page', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Large Artist' });
+    await createMusicVideo(artist.id, { title: 'Song Video' });
+    await prisma.videoReviewCandidate.create({ data: {
+      source: 'youtube', externalId: 'large-artist-video', artistId: artist.id,
+      artistName: artist.name, title: 'Another Song', decision: 'pending',
+    } });
+    const response = await app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/video-inventory/summary`, headers: authHeaders() });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ official: 1, pendingYoutube: 1, pendingLocal: 0 });
+    expect(response.json()).not.toHaveProperty('candidates');
+  });
+
   it('GET /api/v1/artist lists artists sorted by sortName', async () => {
     await createArtist(rootFolderId, qualityProfileId, { name: 'Zebra', sortName: 'Zebra' });
     await createArtist(rootFolderId, qualityProfileId, { name: 'Apple', sortName: 'Apple' });

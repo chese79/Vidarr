@@ -112,6 +112,24 @@ export async function artistRoutes(app: FastifyInstance) {
     return { catalog, candidates, channels, checkedAt: artist.videoInventoryCheckedAt, error: artist.videoInventoryError };
   });
 
+  app.get('/api/v1/artist/:id/video-inventory/summary', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const artist = await prisma.artist.findUnique({ where: { id }, select: {
+      musicbrainzMatchStatus: true, videoInventoryCheckedAt: true, videoInventoryError: true,
+    } });
+    if (!artist) return reply.code(404).send({ error: 'Artist not found' });
+    if (artist.musicbrainzMatchStatus !== 'confirmed') return reply.code(409).send({ error: 'Artist needs MusicBrainz confirmation' });
+    const [official, approvedOther, pendingYoutube, pendingLocal, channels] = await Promise.all([
+      prisma.musicVideo.count({ where: { artistId: id, catalogKind: 'official' } }),
+      prisma.musicVideo.count({ where: { artistId: id, catalogKind: { not: 'official' } } }),
+      prisma.videoReviewCandidate.count({ where: { artistId: id, source: 'youtube', decision: 'pending' } }),
+      prisma.videoReviewCandidate.count({ where: { artistId: id, source: 'local', decision: 'pending' } }),
+      prisma.youtubeSource.findMany({ where: { artistId: id }, select: { id: true, url: true, lastPolledAt: true } }),
+    ]);
+    return { official, approvedOther, pendingYoutube, pendingLocal, channels,
+      checkedAt: artist.videoInventoryCheckedAt, error: artist.videoInventoryError };
+  });
+
   app.post('/api/v1/artist/:id/video-inventory/collect', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     if (!await prisma.artist.findUnique({ where: { id }, select: { id: true } })) {

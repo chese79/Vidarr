@@ -51,4 +51,16 @@ describe('artist and video review boundaries', () => {
     expect(result.statusCode).toBe(409);
     expect(await prisma.musicVideo.count()).toBe(0);
   });
+
+  it('pages and filters a large review queue on the server', async () => {
+    await prisma.videoReviewCandidate.createMany({ data: [
+      { source: 'youtube', externalId: 'one', artistId, artistName: 'AC/DC', title: 'Back in Black' },
+      { source: 'youtube', externalId: 'two', artistId, artistName: 'AC/DC', title: 'Hells Bells' },
+      { source: 'youtube', externalId: 'three', artistName: 'Other', title: 'Other Song' },
+    ] });
+    const first = await app.inject({ method: 'GET', url: `/api/v1/video-review/page?artistId=${artistId}&limit=1`, headers: authHeaders() });
+    expect(first.json()).toMatchObject({ total: 2, limit: 1, items: [expect.objectContaining({ title: 'Back in Black' })] });
+    const second = await app.inject({ method: 'GET', url: `/api/v1/video-review/page?artistId=${artistId}&limit=1&search=hells`, headers: authHeaders() });
+    expect(second.json()).toMatchObject({ total: 1, items: [expect.objectContaining({ title: 'Hells Bells' })] });
+  });
 });

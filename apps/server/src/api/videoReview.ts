@@ -11,6 +11,27 @@ export async function videoReviewRoutes(app: FastifyInstance) {
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   }));
 
+  app.get('/api/v1/video-review/page', async (req) => {
+    const query = req.query as { offset?: string; limit?: string; search?: string; artistId?: string };
+    const offset = Math.max(0, Number.parseInt(query.offset ?? '0', 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit ?? '50', 10) || 50));
+    const artistId = Number(query.artistId);
+    const search = query.search?.trim().slice(0, 100);
+    const where = {
+      decision: 'pending',
+      ...(Number.isInteger(artistId) && artistId > 0 ? { artistId } : {}),
+      ...(search ? { OR: [{ artistName: { contains: search } }, { title: { contains: search } }] } : {}),
+    };
+    const [total, items] = await Promise.all([
+      prisma.videoReviewCandidate.count({ where }),
+      prisma.videoReviewCandidate.findMany({ where,
+        include: { artist: { select: { id: true, name: true, musicbrainzMatchStatus: true } } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: offset, take: limit,
+      }),
+    ]);
+    return { total, offset, limit, items };
+  });
+
   app.post('/api/v1/video-review/scan-local', async (_req, reply) => {
     try { return await scanLocalVideoCandidates(); }
     catch (error) { return reply.code(400).send({ error: (error as Error).message }); }

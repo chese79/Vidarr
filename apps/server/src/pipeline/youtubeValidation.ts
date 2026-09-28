@@ -27,6 +27,7 @@ const REJECT_TITLE_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /\bvisualizer\b/, label: 'visualizer' },
   { pattern: /\breaction\b/, label: 'reaction video' },
   { pattern: /\blive at\b|\bconcert\b/, label: 'live/concert footage' },
+  { pattern: /\bofficial\s+video\s+ac\s*dc\s+live\b|\blive\s+(?:stuttgart|19\d\d|20\d\d)\b|\bplaza de toros\b/, label: 'live performance' },
   { pattern: /\bfrom\b.{0,60}\blive\b|\blive\b.{0,30}\b(?:tour|album|dvd)\b/, label: 'live performance' },
   { pattern: /\blive\s+(?:performance|session|version|song|(?:music\s+)?video)\b|\bperformance\s+live\b/, label: 'live performance' },
   { pattern: /\binterview\b|\bpress conference\b|\bq\s+a\b/, label: 'interview' },

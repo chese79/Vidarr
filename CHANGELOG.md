@@ -7,6 +7,16 @@ under **Unreleased** in the same commit as the change.
 
 ### Improved — complete per-artist video source record
 
+- Paginate and filter Video Review on the server so a large queue no longer sends and renders
+  every pending upload at once. Artist links open review filtered to that artist.
+- Use SQLite write-ahead logging during live service operation so background catalog checks
+  do not block artist pages and reconciliation under normal concurrent use.
+- Load artist-page source counts through a compact summary endpoint, keeping the full source
+  record API available for detailed inspection. This avoids sending thousands of candidates
+  merely to display four counts.
+- Recognize punctuation in MusicBrainz-linked IMVDb artist slugs such as R.E.M.'s `r.e.m.`.
+- Reject more clearly labeled live uploads during channel discovery while preserving song titles
+  such as AC/DC's "Live Wire" for review.
 - Automatically collect video sources after MusicBrainz confirmation and backfill confirmed
   artists that were already in the library. Record each artist's last source check and error.
 - Find IMVDb artist pages by the confirmed MusicBrainz name when MusicBrainz has no direct IMVDb

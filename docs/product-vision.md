@@ -85,6 +85,11 @@ and show source counts, scan state, and pending review items. A direct IMVDb URL
 resolves the artist slug; the public IMVDb videography is used when the API is unavailable.
 When MusicBrainz has no IMVDb link, Vidarr checks the public artist page derived from the
 confirmed name and uses it only if the page displays that same artist name.
+MusicBrainz-linked IMVDb slugs may contain punctuation, so links such as R.E.M.'s are kept
+verbatim. The artist page requests aggregate source counts separately from the complete
+source-record endpoint to remain responsive with large channel inventories.
+Video Review fetches bounded pages and applies artist and title search on the server; the
+unpaginated API remains available for existing clients.
 Repeated song titles may be distinct official video versions and must remain separate.
 Connector-confirmed artists enter a persistent source-check queue as soon as the connector sync
 finishes. The scheduler checks new artists first in bounded batches, continuing while work remains, and also backfills confirmed
