@@ -244,13 +244,13 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         prisma.rootFolder.findFirst({ orderBy: { id: 'asc' } }),
         prisma.qualityProfile.findFirst({ orderBy: { id: 'asc' } }),
       ]);
-      const canonicalByName = new Map<string, { id: number; name: string }>();
+      const canonicalByName = new Map<string, { id: number; name: string; musicbrainzMatchStatus: string }>();
       if (defaults[0] && defaults[1]) {
-        const canonicalArtists = await prisma.artist.findMany({ select: { id: true, name: true } });
+        const canonicalArtists = await prisma.artist.findMany({ select: { id: true, name: true, musicbrainzMatchStatus: true } });
         canonicalArtists.forEach((artist) => canonicalByName.set(normalizeTitle(artist.name), artist));
         const existingSources = await prisma.artistSource.findMany({
           where: { provider: connector.type, origin: `connector:${id}`, externalId: { not: null } },
-          select: { externalId: true, artist: { select: { id: true, name: true } } },
+          select: { externalId: true, artist: { select: { id: true, name: true, musicbrainzMatchStatus: true } } },
         });
         const canonicalByExternalId = new Map(existingSources.map((source) => [source.externalId!, source.artist]));
         for (const observation of artists) {
@@ -271,7 +271,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
                 rootFolderId: defaults[0].id,
                 qualityProfileId: defaults[1].id,
               },
-              select: { id: true, name: true },
+              select: { id: true, name: true, musicbrainzMatchStatus: true },
             });
             canonicalByName.set(key, canonical);
           }
@@ -284,7 +284,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           // Only stable provider/embedded MBIDs auto-confirm during a library
           // sync. Name-only observations stay unmatched until candidate
           // discovery can present them for review.
-          if (observation.musicbrainzArtistId) {
+          if (observation.musicbrainzArtistId && canonical.musicbrainzMatchStatus !== 'linked') {
             await resolveArtistIdentityAndCatalog(canonical.id, { ...observation, name: nameHint });
           }
         }
@@ -310,7 +310,7 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
                 rootFolderId: defaults[0].id,
                 qualityProfileId: defaults[1].id,
               },
-              select: { id: true, name: true },
+              select: { id: true, name: true, musicbrainzMatchStatus: true },
             });
             canonicalByName.set(key, canonical);
           }

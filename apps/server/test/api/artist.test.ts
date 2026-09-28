@@ -62,6 +62,8 @@ describe('artist routes', () => {
   it('paginates and searches unmatched artist observations', async () => {
     const first = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Alpha' });
     await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Beta' });
+    const linked = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Linked' });
+    await prisma.artist.update({ where: { id: linked.id }, data: { musicbrainzMatchStatus: 'linked' } });
     const page = await app.inject({ method: 'GET', url: '/api/v1/artist/match-review/page?search=Review&limit=1', headers: authHeaders() });
     expect(page.statusCode).toBe(200);
     expect(page.json().total).toBe(2);

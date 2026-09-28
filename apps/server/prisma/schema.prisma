@@ -17,7 +17,7 @@ model Artist {
   sortName         String
   imvdbArtistId    String?      @unique
   musicbrainzArtistId String?   @unique
-  musicbrainzMatchStatus String @default("unmatched") // unmatched | suggested | ambiguous | confirmed | notFound | failed
+  musicbrainzMatchStatus String @default("unmatched") // unmatched | suggested | ambiguous | confirmed | linked | notFound | failed
   musicbrainzMatchConfidence Float?
   musicbrainzMatchEvidence String? // JSON describing the observations used for the match
   musicbrainzRefreshedAt DateTime?

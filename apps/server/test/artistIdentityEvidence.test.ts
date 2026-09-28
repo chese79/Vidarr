@@ -58,7 +58,7 @@ describe('observed artist-credit match evidence', () => {
     expect(await prisma.musicBrainzArtistCandidate.count({ where: { artistId: artist.id, status: 'suggested' } })).toBe(2);
   });
 
-  it('does not claim an identity already owned by a Library artist', async () => {
+  it('links a duplicate observation to an existing Library artist without deleting its source evidence', async () => {
     const root = await createRootFolder();
     const quality = await createQuality();
     const profile = await createQualityProfile(quality.id);
@@ -66,8 +66,15 @@ describe('observed artist-credit match evidence', () => {
     const observation = await createArtist(root.id, profile.id, { name: 'AmyWinehouse' });
     const mbid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     await prisma.artist.update({ where: { id: owner.id }, data: { musicbrainzArtistId: mbid, musicbrainzMatchStatus: 'confirmed' } });
-    await expect(confirmArtistIdentity(observation.id, mbid)).rejects.toThrow('already in Library as Amy Winehouse');
-    expect((await prisma.artist.findUniqueOrThrow({ where: { id: observation.id } })).musicbrainzMatchStatus).toBe('unmatched');
+    await prisma.artistSource.create({ data: { artistId: observation.id, provider: 'jellyfin', origin: 'connector:4', externalId: 'source-amy' } });
+    await prisma.videoReviewCandidate.create({ data: { source: 'youtube', externalId: 'amy-video', artistId: observation.id, artistName: 'AmyWinehouse', title: 'Song' } });
+    const result = await confirmArtistIdentity(observation.id, mbid);
+    expect(result.id).toBe(owner.id);
+    const linked = await prisma.artist.findUniqueOrThrow({ where: { id: observation.id } });
+    expect(linked.musicbrainzMatchStatus).toBe('linked');
+    expect(JSON.parse(linked.musicbrainzMatchEvidence!)).toMatchObject({ canonicalArtistId: owner.id });
+    expect(await prisma.artistSource.count({ where: { artistId: observation.id, externalId: 'source-amy' } })).toBe(1);
+    expect((await prisma.videoReviewCandidate.findUniqueOrThrow({ where: { source_externalId: { source: 'youtube', externalId: 'amy-video' } } })).artistId).toBe(owner.id);
   });
 
   it('ranks the artist credited on observed recordings and releases ahead of an equal-name result', async () => {

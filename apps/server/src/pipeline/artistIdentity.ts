@@ -218,7 +218,21 @@ export async function discoverArtistIdentityCandidates(artistId: number, searchN
 export async function confirmArtistIdentity(artistId: number, musicbrainzArtistId: string) {
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
   const owner = await prisma.artist.findUnique({ where: { musicbrainzArtistId }, select: { id: true, name: true } });
-  if (owner && owner.id !== artistId) throw new Error(`This MusicBrainz artist is already in Library as ${owner.name} (artist ${owner.id}).`);
+  if (owner && owner.id !== artistId) {
+    if (await prisma.musicVideo.count({ where: { artistId } })) {
+      throw new Error(`This MusicBrainz artist is already in Library as ${owner.name} (artist ${owner.id}). Review this observation's catalog videos before linking it.`);
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.youtubeSource.updateMany({ where: { artistId }, data: { artistId: owner.id } });
+      await tx.videoReviewCandidate.updateMany({ where: { artistId }, data: { artistId: owner.id } });
+      await tx.artist.update({ where: { id: artistId }, data: {
+        musicbrainzMatchStatus: 'linked',
+        musicbrainzMatchConfidence: 1,
+        musicbrainzMatchEvidence: evidenceJson({ source: 'existing-library-artist', canonicalArtistId: owner.id, musicbrainzArtistId }),
+      } });
+    });
+    return prisma.artist.findUniqueOrThrow({ where: { id: owner.id } });
+  }
   await resolveArtistIdentityAndCatalog(artistId, {
     name: artist.name,
     genre: artist.genre,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -12,6 +13,7 @@ export default function MatchReviewPage() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [linkedArtistId, setLinkedArtistId] = useState<number | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setPage(0); setExpanded(null); }, 250);
     return () => clearTimeout(timer);
@@ -27,11 +29,12 @@ export default function MatchReviewPage() {
   });
   const confirm = useMutation({
     mutationFn: ({ id, mbid }: { id: number; mbid: string }) => api.artists.confirmMusicbrainz(id, mbid),
-    onSuccess: () => {
+    onSuccess: (result, { id }) => {
       client.invalidateQueries({ queryKey: ['artist-match-review'] });
       client.invalidateQueries({ queryKey: ['artists'] });
       client.invalidateQueries({ queryKey: ['artistSummary'] });
-      setMessage('Artist moved to Library.');
+      setLinkedArtistId(result.id);
+      setMessage(result.id === id ? 'Artist moved to Library.' : `Observation linked to existing Library artist ${result.name}.`);
     },
     onError: (error: Error) => setMessage(error.message),
   });
@@ -39,7 +42,7 @@ export default function MatchReviewPage() {
   return <div>
     <div className="page-header"><h2>Match Review</h2></div>
     <p className="empty-state">Audio and video observations stay here until you confirm their MusicBrainz artist. Channel names are hints, not artist identities.</p>
-    {message && <p role="status" className="empty-state">{message}</p>}
+    {message && <p role="status" className="empty-state">{message} {linkedArtistId && <Link to={`/artist/${linkedArtistId}`}>Open artist</Link>}</p>}
     <div className="library-filter-bar">
       <input aria-label="Search artist observations" placeholder="Search artists" value={search} onChange={(event) => setSearch(event.target.value)} />
       {review.data && <span className="library-result-count">{review.data.total} artists awaiting review</span>}

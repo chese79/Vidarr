@@ -58,7 +58,8 @@ export async function artistRoutes(app: FastifyInstance) {
 
   app.get('/api/v1/artist/match-review', async () => {
     return prisma.artist.findMany({
-      where: { OR: [{ musicbrainzMatchStatus: { not: 'confirmed' } }, { musicbrainzArtistId: null }] },
+      where: { musicbrainzMatchStatus: { notIn: ['confirmed', 'linked'] },
+        OR: [{ musicbrainzMatchStatus: { not: 'confirmed' } }, { musicbrainzArtistId: null }] },
       include: { musicbrainzCandidates: { where: { status: 'suggested' }, orderBy: { score: 'desc' }, take: 3 } },
       orderBy: { sortName: 'asc' },
     });
@@ -70,6 +71,7 @@ export async function artistRoutes(app: FastifyInstance) {
     const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit ?? '25', 10) || 25));
     const search = query.search?.trim().slice(0, 100);
     const where: Prisma.ArtistWhereInput = {
+      musicbrainzMatchStatus: { notIn: ['confirmed', 'linked'] },
       OR: [{ musicbrainzMatchStatus: { not: 'confirmed' } }, { musicbrainzArtistId: null }],
       ...(search ? { name: { contains: search } } : {}),
     };

@@ -10,7 +10,7 @@ under **Unreleased** in the same commit as the change.
 - Add the Vidarr play-mark logo to the sidebar and browser icon.
 - Match joined artist names such as `AmyWinehouse` and primary artists in `featuring` or `feat.` credits while retaining the original observation for review.
 - Allow a reviewer to edit the MusicBrainz search name. Rediscovery restores suggestions that were previously rejected by a failed confirmation.
-- Return a clear confirmation error when the provider fails or the MusicBrainz artist already exists in Library. Successful confirmation returns promptly while video source collection continues.
+- Return a clear confirmation error when the provider fails. When the MusicBrainz artist already exists in Library, link the duplicate observation to that artist while retaining connector evidence and moving review candidates. Successful new confirmations return promptly while video source collection continues.
 
 ### Improved — complete per-artist video source record
 

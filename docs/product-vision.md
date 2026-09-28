@@ -35,7 +35,10 @@ Match Review can search MusicBrainz with an edited name while preserving the ori
 Joined words such as `AmyWinehouse` and credits with `featuring`, `feat.`, or `ft.` use the primary
 artist as a search hint. These conventions only improve suggestions; they never confirm an identity
 without the normal MusicBrainz check. Confirmation reports provider failures and an existing
-canonical owner plainly. Once identity is confirmed, the slower source collection continues in the
+canonical owner plainly. If the selected MusicBrainz identity already belongs to a Library artist,
+the observation is marked linked, its connector evidence is retained, and its pending video candidates
+move to that artist. Linked observations stay out of Match Review and Library while their connector
+identities remain stable for later scans. Once a new identity is confirmed, the slower source collection continues in the
 background so the artist can appear in Library promptly.
 
 Artist observations are formed from the normalized union of:
