@@ -5,6 +5,10 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Documentation
+
+- Add a user guide for setup, artist and video review, acquisition, playlists, and troubleshooting.
+
 ### Improved — artist identity review and branding
 
 - Add the Vidarr play-mark logo to the sidebar and browser icon.

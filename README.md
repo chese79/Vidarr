@@ -15,6 +15,8 @@ domain model and some logic are adapted from the GPL-3.0-licensed Sonarr/Radarr/
 
 ## Status
 
+See the [user guide](docs/user-guide.md) for the everyday workflow: configure libraries, confirm artists, review videos, and acquire missing music videos.
+
 Core pipeline (M1–M4) and the Plex/Jellyfin integration below are built and working. See
 [`docs/plan.md`](docs/plan.md) for the full build log, design rationale, and the backlog of
 not-yet-started ideas (concert videos, web-series content types, curated list import).
