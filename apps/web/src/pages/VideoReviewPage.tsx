@@ -11,6 +11,7 @@ export default function VideoReviewPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [reassigning, setReassigning] = useState<Set<number>>(new Set());
+  const [expanded, setExpanded] = useState<number | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 250);
     return () => clearTimeout(timer);
@@ -43,17 +44,25 @@ export default function VideoReviewPage() {
     <div className="page-header"><h2>Video Review</h2><button onClick={() => scan.mutate()} disabled={scan.isPending}>{scan.isPending ? 'Scanning…' : 'Scan local videos'}</button></div>
     <p className="empty-state">Only official song music videos belong in Library. Reject interviews, live footage, lyric videos, visualizers, and audio uploads. Resolve the artist in <Link to="/match-review">Match Review</Link> first.</p>
     {message && <p role="status" className="empty-state">{message}</p>}
-    <input aria-label="Search video candidates" placeholder="Search candidates" value={search} onChange={(event) => setSearch(event.target.value)} />
+    <div className="library-filter-bar"><input aria-label="Search video candidates" placeholder="Search candidates" value={search} onChange={(event) => setSearch(event.target.value)} />
+      {candidates.data && <span className="library-result-count">{candidates.data.total} pending videos</span>}
+    </div>
     {artistId && <p className="empty-state">Showing candidates for {artists.data?.find((artist) => artist.id === artistId)?.name ?? 'this artist'} · <Link to="/video-review">Show all artists</Link></p>}
     {candidates.isPending && <p role="status">Loading video candidates…</p>}
     {candidates.isError && <p role="alert">Could not load video candidates.</p>}
-    {candidates.isSuccess && <p className="empty-state">{candidates.data.total} pending videos · page {page + 1} of {Math.max(1, Math.ceil(candidates.data.total / 50))}</p>}
     {candidates.isSuccess && visible.length === 0 && <p className="empty-state">No pending videos match this search.</p>}
-    {visible.map((candidate) => {
+    <div className="artist-list" role="list">{visible.map((candidate) => {
       const edit = edits[candidate.id] ?? { artistId: candidate.artistId ?? 0, title: candidate.title };
-      return <section className="card" key={candidate.id}>
-        <h3>{candidate.title}</h3>
-        <p className="empty-state">{candidate.source} · observed artist: {candidate.artistName} · {candidate.reason}</p>
+      return <div className="artist-row" role="listitem" key={candidate.id}>
+        <div className="artist-row-header">
+          <div className="artist-image" aria-hidden="true">{candidate.source === 'local' ? '⌂' : '▶'}</div>
+          <div className="artist-row-main"><span className="artist-name">{candidate.title}</span><span className="artist-meta">{candidate.artistName} · {candidate.source} · {candidate.reason}</span></div>
+          <div className="artist-row-actions"><button className="secondary" aria-expanded={expanded === candidate.id} onClick={() => setExpanded(expanded === candidate.id ? null : candidate.id)}>{expanded === candidate.id ? 'Hide details' : 'Review video'}</button></div>
+        </div>
+        {expanded === candidate.id && <div className="artist-accordion" role="region" aria-label={`Review ${candidate.title}`}>
+        <p className="empty-state">First seen {new Date(candidate.firstSeenAt).toLocaleDateString()}
+          {candidate.lastSeenAt && ` · Last seen ${new Date(candidate.lastSeenAt).toLocaleDateString()}`}
+          {candidate.sourcePublishedAt && ` · YouTube published ${new Date(candidate.sourcePublishedAt).toLocaleDateString()}`}</p>
         {candidate.url && <p><a href={candidate.url} target="_blank" rel="noopener noreferrer">Inspect source video</a></p>}
         {candidate.filePath && <p className="empty-state">{candidate.filePath}</p>}
         <div className="form-row">
@@ -65,11 +74,13 @@ export default function VideoReviewPage() {
           <button disabled={!edit.artistId || !edit.title.trim() || approve.isPending} onClick={() => approve.mutate({ id: candidate.id, ...edit })}>Approve song video</button>
           <button className="secondary" disabled={reject.isPending} onClick={() => reject.mutate(candidate.id)}>Reject</button>
         </div>
-      </section>;
-    })}
-    {candidates.isSuccess && candidates.data.total > 50 && <div className="form-row">
-      <button className="secondary" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>Previous</button>
-      <button className="secondary" disabled={(page + 1) * 50 >= candidates.data.total} onClick={() => setPage((value) => value + 1)}>Next</button>
+        </div>}
+      </div>;
+    })}</div>
+    {candidates.isSuccess && candidates.data.total > 50 && <div className="review-pagination">
+      <button className="secondary" disabled={page === 0} onClick={() => { setPage((value) => value - 1); setExpanded(null); }}>Previous</button>
+      <span className="artist-meta">Page {page + 1} of {Math.ceil(candidates.data.total / 50)}</span>
+      <button className="secondary" disabled={(page + 1) * 50 >= candidates.data.total} onClick={() => { setPage((value) => value + 1); setExpanded(null); }}>Next</button>
     </div>}
   </div>;
 }

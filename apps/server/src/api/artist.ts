@@ -64,6 +64,25 @@ export async function artistRoutes(app: FastifyInstance) {
     });
   });
 
+  app.get('/api/v1/artist/match-review/page', async (req) => {
+    const query = req.query as { offset?: string; limit?: string; search?: string };
+    const offset = Math.max(0, Number.parseInt(query.offset ?? '0', 10) || 0);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit ?? '25', 10) || 25));
+    const search = query.search?.trim().slice(0, 100);
+    const where: Prisma.ArtistWhereInput = {
+      OR: [{ musicbrainzMatchStatus: { not: 'confirmed' } }, { musicbrainzArtistId: null }],
+      ...(search ? { name: { contains: search } } : {}),
+    };
+    const [total, items] = await Promise.all([
+      prisma.artist.count({ where }),
+      prisma.artist.findMany({ where,
+        include: { musicbrainzCandidates: { where: { status: 'suggested' }, orderBy: { score: 'desc' }, take: 3 } },
+        orderBy: [{ sortName: 'asc' }, { id: 'asc' }], skip: offset, take: limit,
+      }),
+    ]);
+    return { total, offset, limit, items };
+  });
+
   app.get('/api/v1/artist/:id/musicbrainz/candidates', async (req) => {
     const id = Number((req.params as { id: string }).id);
     return prisma.musicBrainzArtistCandidate.findMany({

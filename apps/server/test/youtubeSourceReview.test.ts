@@ -4,8 +4,8 @@ import { resetDb, createRootFolder, createQuality, createQualityProfile, createA
 
 vi.mock('../src/providers/youtube/ytdlp.js', () => ({
   listChannelVideos: vi.fn().mockResolvedValue([
-    { youtubeVideoId: 'song-video', title: '311 - Down (Official Music Video)' },
-    { youtubeVideoId: 'interview', title: '311 Official Interview' },
+    { youtubeVideoId: 'song-video', title: '311 - Down (Official Music Video)', sourcePublishedAt: new Date('1995-01-01T00:00:00Z') },
+    { youtubeVideoId: 'interview', title: '311 Official Interview', sourcePublishedAt: null },
   ]),
 }));
 
@@ -38,11 +38,16 @@ describe('YouTube channel discovery', () => {
     const songBefore = await prisma.videoReviewCandidate.findUniqueOrThrow({ where: {
       source_externalId: { source: 'youtube', externalId: 'song-video' },
     } });
+    expect(songBefore.sourcePublishedAt?.toISOString()).toBe('1995-01-01T00:00:00.000Z');
+    expect(songBefore.firstSeenAt).toBeInstanceOf(Date);
+    expect(songBefore.lastSeenAt).toBeInstanceOf(Date);
     await pollAndGrabYoutubeSource(source.id);
     const songAfter = await prisma.videoReviewCandidate.findUniqueOrThrow({ where: {
       source_externalId: { source: 'youtube', externalId: 'song-video' },
     } });
-    expect(songAfter.updatedAt).toEqual(songBefore.updatedAt);
+    expect(songAfter.title).toBe(songBefore.title);
+    expect(songAfter.firstSeenAt).toEqual(songBefore.firstSeenAt);
+    expect(songAfter.lastSeenAt!.getTime()).toBeGreaterThanOrEqual(songBefore.lastSeenAt!.getTime());
 
     await prisma.videoReviewCandidate.update({ where: { source_externalId: { source: 'youtube', externalId: 'interview' } }, data: { decision: 'pending' } });
     await prisma.videoReviewCandidate.update({ where: { source_externalId: { source: 'youtube', externalId: 'song-video' } }, data: { decision: 'approved', title: 'Manually confirmed song' } });

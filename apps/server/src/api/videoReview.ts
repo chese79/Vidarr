@@ -82,8 +82,9 @@ export async function videoReviewRoutes(app: FastifyInstance) {
     return prisma.$transaction(async (tx) => {
       const video = await tx.musicVideo.upsert({
         where: { artistId_normalizedTitle: { artistId, normalizedTitle: normalizeTitle(title) } },
-        update: {},
-        create: { artistId, title, normalizedTitle: normalizeTitle(title), catalogKind: 'supplementary', monitored: false },
+        update: candidate.sourcePublishedAt ? { sourcePublishedAt: candidate.sourcePublishedAt } : {},
+        create: { artistId, title, normalizedTitle: normalizeTitle(title), catalogKind: 'supplementary', monitored: false,
+          sourcePublishedAt: candidate.sourcePublishedAt },
       });
       if (candidate.source === 'local' && candidate.filePath) {
         const owned = await tx.musicVideoFile.findUnique({ where: { musicVideoId: video.id } });

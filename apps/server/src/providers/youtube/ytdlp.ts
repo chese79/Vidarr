@@ -10,6 +10,29 @@ const FFMPEG_PATH = process.env.FFMPEG_PATH ?? 'ffmpeg';
 export interface YoutubeVideoListing {
   youtubeVideoId: string;
   title: string;
+  sourcePublishedAt: Date | null;
+}
+
+export function parseYoutubePublishedFeed(xml: string): Map<string, Date> {
+  const dates = new Map<string, Date>();
+  for (const match of xml.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/gi)) {
+    const id = /<yt:videoId>([^<]+)<\/yt:videoId>/i.exec(match[1])?.[1];
+    const published = /<published>([^<]+)<\/published>/i.exec(match[1])?.[1];
+    if (!id || !published) continue;
+    const date = new Date(published);
+    if (!Number.isNaN(date.getTime())) dates.set(id, date);
+  }
+  return dates;
+}
+
+async function recentChannelPublishedDates(sourceUrl: string): Promise<Map<string, Date>> {
+  try {
+    const channelId = /^\/channel\/([^/]+)\/?$/i.exec(new URL(sourceUrl).pathname)?.[1];
+    if (!channelId) return new Map();
+    const response = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
+      { signal: AbortSignal.timeout(5_000) });
+    return response.ok ? parseYoutubePublishedFeed(await response.text()) : new Map();
+  } catch { return new Map(); }
 }
 
 export function channelVideosUrl(sourceUrl: string): string {
@@ -54,11 +77,13 @@ export async function listChannelVideos(sourceUrl: string): Promise<YoutubeVideo
     if (channelHasNoVideosTab(stderr)) return [];
     throw new Error(`yt-dlp listing failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
   }
+  const publishedDates = await recentChannelPublishedDates(sourceUrl);
   return stdout
     .split('\n')
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line))
-    .map((entry) => ({ youtubeVideoId: String(entry.id), title: entry.title as string }));
+    .map((entry) => ({ youtubeVideoId: String(entry.id), title: entry.title as string,
+      sourcePublishedAt: publishedDates.get(String(entry.id)) ?? null }));
 }
 
 export function channelHasNoVideosTab(stderr: string): boolean {

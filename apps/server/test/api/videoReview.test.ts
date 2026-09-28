@@ -34,10 +34,12 @@ describe('artist and video review boundaries', () => {
     const candidate = await prisma.videoReviewCandidate.create({ data: {
       source: 'youtube', externalId: 'song-id', artistId, artistName: 'AC/DC', title: 'Thunderstruck',
       url: 'https://www.youtube.com/watch?v=song-id', reason: 'Needs review',
+      sourcePublishedAt: new Date('1990-01-01T00:00:00Z'),
     } });
     const result = await app.inject({ method: 'POST', url: `/api/v1/video-review/${candidate.id}/approve`, headers: authHeaders(), payload: { artistId, title: 'Thunderstruck' } });
     expect(result.statusCode).toBe(200);
-    expect(await prisma.musicVideo.findMany()).toEqual([expect.objectContaining({ title: 'Thunderstruck', catalogKind: 'supplementary' })]);
+    expect(await prisma.musicVideo.findMany()).toEqual([expect.objectContaining({ title: 'Thunderstruck', catalogKind: 'supplementary',
+      sourcePublishedAt: new Date('1990-01-01T00:00:00Z') })]);
     expect((await app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() })).json().items)
       .toEqual([expect.objectContaining({ id: artistId, name: 'AC/DC' })]);
   });

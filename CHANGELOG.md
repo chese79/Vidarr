@@ -7,6 +7,14 @@ under **Unreleased** in the same commit as the change.
 
 ### Improved — complete per-artist video source record
 
+- Match Review and Video Review now use compact, expandable Library-style rows with search and paging. Match Review loads one page at a time.
+- Artist detail collapses the source record into a one-line summary so video listings appear sooner.
+- Group Quality Profiles, Root Folders, Library Connectors, Indexers, Download Clients, and
+  System / Tasks beneath an expandable Settings entry in the sidebar.
+- Record when Vidarr first and last sees each review candidate, plus YouTube publication time
+  when the artist channel's recent-upload feed provides it. Show these dates in Video Review and
+  carry a known YouTube publication time into approved catalog videos. IMVDb's release year stays
+  separate from Vidarr discovery dates. Repeat channel checks update last-seen dates in one batch.
 - Add Download Selected to artist pages for videos with accepted direct sources. Two selected
   downloads run at a time, show progress per video, and keep failures selected for retry.
 - Paginate and filter Video Review on the server so a large queue no longer sends and renders

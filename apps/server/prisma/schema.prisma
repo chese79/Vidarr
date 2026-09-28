@@ -61,6 +61,7 @@ model MusicVideo {
   catalogKind    String   @default("official") // official | supplementary | inventory
   youtubeVideoId String?  @unique
   releaseYear    Int?
+  sourcePublishedAt DateTime? // YouTube publication time, when known; distinct from the song video's release year
   director       String?
   durationSeconds Int?
   genre          String? // user-editable "song tag" — see Artist.genre
@@ -467,6 +468,9 @@ model VideoReviewCandidate {
   filePath    String?
   decision    String   @default("pending") // pending | approved | rejected
   reason      String?
+  sourcePublishedAt DateTime? // YouTube public publication time, when available
+  firstSeenAt DateTime @default(now()) // first observed by Vidarr, independent of provider dates
+  lastSeenAt  DateTime? // latest successful source scan containing this item
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

@@ -548,8 +548,9 @@ export default function ArtistDetailPage() {
       </div>
       {artistActionMessage && <p role="status" className="empty-state">{artistActionMessage}</p>}
 
-      {artist.data.musicbrainzMatchStatus === 'confirmed' && <section className="card">
-        <div className="page-header"><div><h3>Video source record</h3><p className="empty-state">IMVDb catalog, linked YouTube channels, and local files for this artist.</p></div><button className="secondary" onClick={() => collectVideoInventory.mutate()} disabled={collectVideoInventory.isPending}>{collectVideoInventory.isPending ? 'Collecting…' : 'Refresh all sources'}</button></div>
+      {artist.data.musicbrainzMatchStatus === 'confirmed' && <details className="artist-source-details">
+        <summary>Video sources · {videoInventory.data ? `${videoInventory.data.official} IMVDb · ${videoInventory.data.approvedOther} approved · ${videoInventory.data.pendingYoutube + videoInventory.data.pendingLocal} to review` : 'loading'}</summary>
+        <div className="artist-source-content"><div className="form-row"><button className="secondary" onClick={() => collectVideoInventory.mutate()} disabled={collectVideoInventory.isPending}>{collectVideoInventory.isPending ? 'Collecting…' : 'Refresh all sources'}</button></div>
         {videoInventory.isPending && <p>Loading source record…</p>}
         {videoInventory.isError && <p role="alert">Could not load the source record.</p>}
         {videoInventory.data && <>
@@ -558,8 +559,8 @@ export default function ArtistDetailPage() {
           <p>{videoInventory.data.official} official videos · {videoInventory.data.approvedOther} approved from other sources · {videoInventory.data.pendingYoutube} YouTube candidates · {videoInventory.data.pendingLocal} local candidates</p>
           {videoInventory.data.channels.map((channel) => <p key={channel.id} className="empty-state">YouTube: <a href={channel.url} target="_blank" rel="noopener noreferrer">{channel.url}</a> · {channel.lastPolledAt ? 'scanned' : 'not scanned'}</p>)}
           {(videoInventory.data.pendingYoutube + videoInventory.data.pendingLocal > 0) && <p><Link to={`/video-review?artistId=${artistId}`}>Review candidate videos</Link></p>}
-        </>}
-      </section>}
+        </>}</div>
+      </details>}
 
       {!artist.data.musicbrainzArtistId && <section className="card">
         <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr builds the IMVDb catalog.</p></div><button className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</button></div>
@@ -673,6 +674,9 @@ export default function ArtistDetailPage() {
                     : 'Duration unknown'}
                   {' · '}{mv.catalogStatus === 'removedReview' ? 'Removed from latest IMVDb catalog — review' : 'In current catalog'}
                 </div>
+                {mv.sourcePublishedAt && <div className="empty-state" style={{ padding: 0 }}>
+                  YouTube published {new Date(mv.sourcePublishedAt).toLocaleDateString()}
+                </div>}
                 <div className="empty-state" style={{ padding: 0, display: 'flex', gap: 6, alignItems: 'center' }}>
                   <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     <input

@@ -173,6 +173,7 @@ export const MusicVideoSchema = z.object({
   imvdbVideoId: z.string().nullable(),
   youtubeVideoId: z.string().nullable(),
   releaseYear: z.number().int().nullable(),
+  sourcePublishedAt: z.string().nullable().optional(),
   durationSeconds: z.number().int().nullable(),
   director: z.string().nullable(),
   genre: z.string().nullable(),

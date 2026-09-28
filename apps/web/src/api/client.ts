@@ -143,6 +143,13 @@ export const api = {
     matchReview: () => request<Array<Artist & { musicbrainzCandidates: Array<{
       id: number; musicbrainzArtistId: string; name: string; score: number; disambiguation: string | null;
     }> }>>('/artist/match-review'),
+    matchReviewPage: (opts: { offset: number; limit: number; search?: string }) => {
+      const params = new URLSearchParams({ offset: String(opts.offset), limit: String(opts.limit) });
+      if (opts.search) params.set('search', opts.search);
+      return request<{ total: number; offset: number; limit: number; items: Array<Artist & { musicbrainzCandidates: Array<{
+        id: number; musicbrainzArtistId: string; name: string; score: number; disambiguation: string | null;
+      }> }> }>(`/artist/match-review/page?${params}`);
+    },
     get: (id: number) =>
       request<
         Artist & {
@@ -243,11 +250,13 @@ export const api = {
       return request<{ total: number; offset: number; limit: number; items: Array<{
         id: number; source: string; externalId: string; artistId: number | null;
         artistName: string; title: string; url: string | null; filePath: string | null; reason: string | null;
+        sourcePublishedAt: string | null; firstSeenAt: string; lastSeenAt: string | null;
       }> }>(`/video-review/page?${params}`);
     },
     list: () => request<Array<{
       id: number; source: string; externalId: string; artistId: number | null;
       artistName: string; title: string; url: string | null; filePath: string | null; reason: string | null;
+      sourcePublishedAt: string | null; firstSeenAt: string; lastSeenAt: string | null;
     }>>('/video-review'),
     scanLocal: () => request<{ scanned: number; pending: number; roots: number }>('/video-review/scan-local', { method: 'POST' }),
     approve: (id: number, artistId: number, title: string) => request<MusicVideo>(`/video-review/${id}/approve`, {

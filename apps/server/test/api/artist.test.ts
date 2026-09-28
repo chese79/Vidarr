@@ -59,6 +59,18 @@ describe('artist routes', () => {
   let rootFolderId: number;
   let qualityProfileId: number;
 
+  it('paginates and searches unmatched artist observations', async () => {
+    const first = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Alpha' });
+    await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Beta' });
+    const page = await app.inject({ method: 'GET', url: '/api/v1/artist/match-review/page?search=Review&limit=1', headers: authHeaders() });
+    expect(page.statusCode).toBe(200);
+    expect(page.json().total).toBe(2);
+    expect(page.json().items).toHaveLength(1);
+    expect(page.json().items[0].id).toBe(first.id);
+    const next = await app.inject({ method: 'GET', url: '/api/v1/artist/match-review/page?search=Review&limit=1&offset=1', headers: authHeaders() });
+    expect(next.json().items[0].name).toBe('Review Beta');
+  });
+
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();

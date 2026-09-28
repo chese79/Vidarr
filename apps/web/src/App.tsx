@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import LibraryPage from './pages/LibraryPage';
 import ArtistDetailPage from './pages/ArtistDetailPage';
 import QualityProfilesPage from './pages/QualityProfilesPage';
@@ -27,16 +27,20 @@ const NAV_ITEMS = [
   { to: '/playlists', label: 'Playlists' },
   { to: '/queue', label: 'Queue' },
   { to: '/history', label: 'History' },
+];
+
+const SETTINGS_NAV_ITEMS = [
+  { to: '/settings', label: 'General' },
   { to: '/quality-profiles', label: 'Quality Profiles' },
   { to: '/root-folders', label: 'Root Folders' },
   { to: '/connectors', label: 'Library Connectors' },
   { to: '/indexers', label: 'Indexers' },
   { to: '/download-clients', label: 'Download Clients' },
   { to: '/system', label: 'System / Tasks' },
-  { to: '/settings', label: 'Settings' },
 ];
 
 export default function App() {
+  const location = useLocation();
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -50,6 +54,16 @@ export default function App() {
                 </NavLink>
               </li>
             ))}
+            <li>
+              <details className="settings-nav" key={location.pathname} open={SETTINGS_NAV_ITEMS.some((item) => location.pathname === item.to)}>
+                <summary>Settings</summary>
+                <ul>
+                  {SETTINGS_NAV_ITEMS.map((item) => <li key={item.to}>
+                    <NavLink to={item.to}>{item.label}</NavLink>
+                  </li>)}
+                </ul>
+              </details>
+            </li>
           </ul>
         </nav>
       </aside>

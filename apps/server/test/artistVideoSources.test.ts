@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mapArtist } from '../src/providers/metadata/musicbrainz.js';
 import { findPublicArtistSlug, parsePublicArtistVideos } from '../src/providers/metadata/imvdb.js';
-import { channelHasNoVideosTab, channelVideosUrl } from '../src/providers/youtube/ytdlp.js';
+import { channelHasNoVideosTab, channelVideosUrl, parseYoutubePublishedFeed } from '../src/providers/youtube/ytdlp.js';
 import { excludedMusicVideoTitleReason } from '../src/pipeline/youtubeValidation.js';
 
 describe('Amy Grant full-scope source boundaries', () => {
+  it('reads public publication dates from the recent YouTube channel feed', () => {
+    const dates = parseYoutubePublishedFeed('<feed><entry><yt:videoId>song-1</yt:videoId><published>2026-09-27T12:30:00+00:00</published></entry>'
+      + '<entry><yt:videoId>song-2</yt:videoId><published>invalid</published></entry></feed>');
+    expect(dates.get('song-1')?.toISOString()).toBe('2026-09-27T12:30:00.000Z');
+    expect(dates.has('song-2')).toBe(false);
+  });
   it('reads the direct IMVDb artist slug and YouTube channel from MusicBrainz URL relationships', () => {
     const artist = mapArtist({
       id: '3cd18a93-1797-4bbb-9b8a-c096d5e7864c', name: 'Amy Grant',
