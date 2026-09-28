@@ -5,6 +5,13 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Improved — artist identity review and branding
+
+- Add the Vidarr play-mark logo to the sidebar and browser icon.
+- Match joined artist names such as `AmyWinehouse` and primary artists in `featuring` or `feat.` credits while retaining the original observation for review.
+- Allow a reviewer to edit the MusicBrainz search name. Rediscovery restores suggestions that were previously rejected by a failed confirmation.
+- Return a clear confirmation error when the provider fails or the MusicBrainz artist already exists in Library. Successful confirmation returns promptly while video source collection continues.
+
 ### Improved — complete per-artist video source record
 
 - Match Review and Video Review now use compact, expandable Library-style rows with search and paging. Match Review loads one page at a time.

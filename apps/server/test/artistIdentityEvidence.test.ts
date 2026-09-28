@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../src/db/client.js';
-import { discoverArtistIdentityCandidates } from '../src/pipeline/artistIdentity.js';
+import { artistNameSearchVariants, confirmArtistIdentity, discoverArtistIdentityCandidates } from '../src/pipeline/artistIdentity.js';
+import { lookupMusicBrainzArtist, searchMusicBrainzArtists } from '../src/providers/metadata/musicbrainz.js';
 import { createArtist, createLibraryConnector, createQuality, createQualityProfile, createRootFolder, resetDb } from './support/db.js';
 
 const lookups = vi.hoisted(() => ({
@@ -18,14 +19,55 @@ vi.mock('../src/providers/metadata/musicbrainz.js', async (importOriginal) => {
     ]),
     lookupRecordingArtistIds: lookups.recording,
     lookupReleaseArtistIds: lookups.release,
+    lookupMusicBrainzArtist: vi.fn(),
   };
 });
+
+vi.mock('../src/pipeline/metadataRefresh.js', () => ({ refreshArtistMetadata: vi.fn() }));
+vi.mock('../src/pipeline/artistVideoInventory.js', () => ({ collectArtistVideoInventory: vi.fn().mockResolvedValue({ official: 0, approvedOther: 0, pendingYoutube: 0, pendingLocal: 0, errors: [] }) }));
 
 describe('observed artist-credit match evidence', () => {
   beforeEach(async () => {
     await resetDb();
     lookups.recording.mockReset();
     lookups.release.mockReset();
+  });
+
+  it('searches joined names and featuring credits by the primary artist', async () => {
+    expect(artistNameSearchVariants('AmyWinehouse')).toEqual(['Amy Winehouse', 'AmyWinehouse']);
+    expect(artistNameSearchVariants('Amy Winehouse featuring Tony Bennett')).toEqual(['Amy Winehouse']);
+    const root = await createRootFolder();
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const artist = await createArtist(root.id, profile.id, { name: 'AmyWinehouse' });
+    vi.mocked(searchMusicBrainzArtists).mockClear();
+    await discoverArtistIdentityCandidates(artist.id);
+    expect(searchMusicBrainzArtists).toHaveBeenCalledWith('Amy Winehouse');
+  });
+
+  it('restores suggestions on rediscovery and reports a failed confirmation', async () => {
+    const root = await createRootFolder();
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const artist = await createArtist(root.id, profile.id, { name: 'Shared Name' });
+    await discoverArtistIdentityCandidates(artist.id);
+    await prisma.musicBrainzArtistCandidate.updateMany({ where: { artistId: artist.id }, data: { status: 'rejected' } });
+    expect(await discoverArtistIdentityCandidates(artist.id)).toHaveLength(2);
+    vi.mocked(lookupMusicBrainzArtist).mockRejectedValueOnce(new Error('MusicBrainz unavailable'));
+    await expect(confirmArtistIdentity(artist.id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).rejects.toThrow('confirmation failed');
+    expect(await prisma.musicBrainzArtistCandidate.count({ where: { artistId: artist.id, status: 'suggested' } })).toBe(2);
+  });
+
+  it('does not claim an identity already owned by a Library artist', async () => {
+    const root = await createRootFolder();
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const owner = await createArtist(root.id, profile.id, { name: 'Amy Winehouse' });
+    const observation = await createArtist(root.id, profile.id, { name: 'AmyWinehouse' });
+    const mbid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await prisma.artist.update({ where: { id: owner.id }, data: { musicbrainzArtistId: mbid, musicbrainzMatchStatus: 'confirmed' } });
+    await expect(confirmArtistIdentity(observation.id, mbid)).rejects.toThrow('already in Library as Amy Winehouse');
+    expect((await prisma.artist.findUniqueOrThrow({ where: { id: observation.id } })).musicbrainzMatchStatus).toBe('unmatched');
   });
 
   it('ranks the artist credited on observed recordings and releases ahead of an equal-name result', async () => {

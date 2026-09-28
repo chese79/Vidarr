@@ -31,6 +31,13 @@ During artist match review, Vidarr may look up a bounded sample of those observe
 release IDs to compare MusicBrainz artist credits with proposed candidates. Credited evidence
 helps rank candidates but never confirms a name-only match without user review.
 
+Match Review can search MusicBrainz with an edited name while preserving the original source credit.
+Joined words such as `AmyWinehouse` and credits with `featuring`, `feat.`, or `ft.` use the primary
+artist as a search hint. These conventions only improve suggestions; they never confirm an identity
+without the normal MusicBrainz check. Confirmation reports provider failures and an existing
+canonical owner plainly. Once identity is confirmed, the slower source collection continues in the
+background so the artist can appear in Library promptly.
+
 Artist observations are formed from the normalized union of:
 
 1. artists in every selected music library;

@@ -57,6 +57,9 @@ a {
   margin: 0;
 }
 
+.sidebar .brand { display: flex; align-items: center; gap: 9px; letter-spacing: 0.08em; }
+.sidebar .brand img { width: 30px; height: 30px; object-fit: contain; }
+
 .sidebar nav a {
   display: block;
   padding: 10px 16px;

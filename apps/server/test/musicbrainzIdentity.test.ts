@@ -39,6 +39,13 @@ describe('MusicBrainz artist candidate assessment', () => {
     expect(result.confidence).toBeLessThan(0.8);
   });
 
+  it('scores joined and featuring artist credits against the primary artist', () => {
+    const amy = { ...candidate, name: 'Amy Winehouse', aliases: [] };
+    expect(assessArtistCandidate('AmyWinehouse', amy).exactName).toBe(true);
+    expect(assessArtistCandidate('Amy Winehouse featuring Tony Bennett', amy).exactName).toBe(true);
+    expect(assessArtistCandidate('Tony Bennett featuring Amy Winehouse', amy).exactName).toBe(false);
+  });
+
   it('uses observed recording and release credits to distinguish otherwise identical candidates', () => {
     const supported = assessArtistCandidate('Depeche Mode', candidate, {
       recordingMatchCount: 1,

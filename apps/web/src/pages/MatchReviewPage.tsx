@@ -10,6 +10,7 @@ export default function MatchReviewPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [searchTerms, setSearchTerms] = useState<Record<number, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); setPage(0); setExpanded(null); }, 250);
@@ -20,7 +21,7 @@ export default function MatchReviewPage() {
     queryFn: () => api.artists.matchReviewPage({ search: debouncedSearch, offset: page * PAGE_SIZE, limit: PAGE_SIZE }),
   });
   const discover = useMutation({
-    mutationFn: (id: number) => api.artists.discoverMusicbrainzCandidates(id),
+    mutationFn: (id: number) => api.artists.discoverMusicbrainzCandidates(id, searchTerms[id]),
     onSuccess: () => client.invalidateQueries({ queryKey: ['artist-match-review'] }),
     onError: (error: Error) => setMessage(error.message),
   });
@@ -54,7 +55,10 @@ export default function MatchReviewPage() {
           <div className="artist-row-actions"><button className="secondary" aria-expanded={expanded === artist.id} onClick={() => setExpanded(expanded === artist.id ? null : artist.id)}>{expanded === artist.id ? 'Hide matches' : 'Review matches'}</button></div>
         </div>
         {expanded === artist.id && <div className="artist-accordion" role="region" aria-label={`MusicBrainz matches for ${artist.name}`}>
-          <button className="secondary" onClick={() => discover.mutate(artist.id)} disabled={discover.isPending}>Find MusicBrainz matches</button>
+          <form className="review-detail-row" onSubmit={(event) => { event.preventDefault(); discover.mutate(artist.id); }}>
+            <input aria-label={`MusicBrainz search name for ${artist.name}`} placeholder="Search name (e.g. Amy Winehouse)" value={searchTerms[artist.id] ?? artist.name} onChange={(event) => setSearchTerms({ ...searchTerms, [artist.id]: event.target.value })} />
+            <button className="secondary" type="submit" disabled={discover.isPending}>Find MusicBrainz matches</button>
+          </form>
           {artist.musicbrainzCandidates.length === 0 && <span className="artist-meta">No suggested matches yet.</span>}
           {artist.musicbrainzCandidates.map((candidate) => <div className="review-detail-row" key={candidate.id}>
             <strong>{candidate.name}</strong><span className="artist-meta">{candidate.disambiguation || 'No disambiguation'} · {Math.round(candidate.score * 100)}%</span>

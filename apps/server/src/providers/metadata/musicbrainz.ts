@@ -1,4 +1,4 @@
-import { normalizeTitle } from '../../pipeline/normalize.js';
+import { normalizeTitle, squash } from '../../pipeline/normalize.js';
 
 const API_BASE = 'https://musicbrainz.org/ws/2';
 const MIN_REQUEST_INTERVAL_MS = 1_100;
@@ -157,8 +157,9 @@ export function assessArtistCandidate(
   candidate: MusicBrainzArtist,
   evidence: { country?: string | null; artistType?: string | null; genre?: string | null; recordingMatchCount?: number; releaseMatchCount?: number } = {},
 ): ArtistMatchAssessment {
-  const observed = normalizeTitle(observedName);
-  const exactName = [candidate.name, ...candidate.aliases].some((name) => normalizeTitle(name) === observed);
+  const observed = observedName.split(/\s+(?:feat(?:uring)?\.?|ft\.?)\s+/i, 1)[0].trim();
+  const exactName = [candidate.name, ...candidate.aliases].some((name) =>
+    normalizeTitle(name) === normalizeTitle(observed) || squash(name) === squash(observed));
   const supportingEvidence: string[] = [];
   if (evidence.country && candidate.country && evidence.country.toLowerCase() === candidate.country.toLowerCase()) supportingEvidence.push('country');
   if (evidence.artistType && candidate.type && evidence.artistType.toLowerCase() === candidate.type.toLowerCase()) supportingEvidence.push('artistType');

@@ -93,10 +93,12 @@ export async function artistRoutes(app: FastifyInstance) {
 
   app.post('/api/v1/artist/:id/musicbrainz/discover', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
+    const searchName = (req.body as { searchName?: string } | null)?.searchName?.trim();
+    if (searchName && searchName.length > 120) return reply.code(400).send({ error: 'Search name is too long' });
     if (!await prisma.artist.findUnique({ where: { id }, select: { id: true } })) {
       return reply.code(404).send({ error: 'Artist not found' });
     }
-    return discoverArtistIdentityCandidates(id);
+    return discoverArtistIdentityCandidates(id, searchName);
   });
 
   app.post('/api/v1/artist/:id/musicbrainz/confirm', async (req, reply) => {
@@ -108,7 +110,11 @@ export async function artistRoutes(app: FastifyInstance) {
     if (!await prisma.artist.findUnique({ where: { id }, select: { id: true } })) {
       return reply.code(404).send({ error: 'Artist not found' });
     }
-    return confirmArtistIdentity(id, musicbrainzArtistId.toLowerCase());
+    try { return await confirmArtistIdentity(id, musicbrainzArtistId.toLowerCase()); }
+    catch (error) {
+      const message = (error as Error).message;
+      return reply.code(message.includes('already in Library') ? 409 : 502).send({ error: message });
+    }
   });
 
   app.get('/api/v1/artist/:id/video-inventory', async (req, reply) => {

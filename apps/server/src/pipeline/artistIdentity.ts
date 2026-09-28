@@ -16,6 +16,21 @@ function evidenceJson(value: unknown) {
   return JSON.stringify(value);
 }
 
+export function artistNameSearchVariants(observedName: string): string[] {
+  const primary = observedName.split(/\s+(?:feat(?:uring)?\.?|ft\.?)\s+/i, 1)[0].trim();
+  const spaced = primary.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return [...new Set([spaced, primary].filter(Boolean))];
+}
+
+async function searchObservedArtist(name: string): Promise<MusicBrainzArtist[]> {
+  const results = new Map<string, MusicBrainzArtist>();
+  for (const variant of artistNameSearchVariants(name)) {
+    for (const candidate of await searchMusicBrainzArtists(variant)) results.set(candidate.id, candidate);
+    if (results.size && variant !== name) break;
+  }
+  return [...results.values()];
+}
+
 export async function enrichConfirmedArtist(artistId: number, mbid: string, observedGenre?: string | null) {
   const metadata = await lookupMusicBrainzArtist(mbid);
   const current = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
@@ -112,6 +127,7 @@ async function storeCandidates(artistId: number, observedName: string, candidate
     await prisma.musicBrainzArtistCandidate.upsert({
       where: { artistId_musicbrainzArtistId: { artistId, musicbrainzArtistId: candidate.id } },
       update: {
+        status: 'suggested',
         name: candidate.name,
         sortName: candidate.sortName,
         artistType: candidate.type,
@@ -159,7 +175,7 @@ export async function resolveArtistIdentityAndCatalog(
       const existing = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
       if (existing.musicbrainzArtistId) metadata = await enrichConfirmedArtist(artistId, existing.musicbrainzArtistId, observation.genre);
       else {
-        await storeCandidates(artistId, observation.name, await searchMusicBrainzArtists(observation.name), observation.genre);
+        await storeCandidates(artistId, observation.name, await searchObservedArtist(observation.name), observation.genre);
         return;
       }
     }
@@ -189,9 +205,9 @@ export async function resolveArtistIdentityAndCatalog(
   }
 }
 
-export async function discoverArtistIdentityCandidates(artistId: number) {
+export async function discoverArtistIdentityCandidates(artistId: number, searchName?: string) {
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
-  const candidates = await searchMusicBrainzArtists(artist.name);
+  const candidates = await searchObservedArtist(searchName?.trim() || artist.name);
   await storeCandidates(artistId, artist.name, candidates, artist.genre);
   return prisma.musicBrainzArtistCandidate.findMany({
     where: { artistId, status: 'suggested' },
@@ -200,19 +216,21 @@ export async function discoverArtistIdentityCandidates(artistId: number) {
 }
 
 export async function confirmArtistIdentity(artistId: number, musicbrainzArtistId: string) {
-  await prisma.musicBrainzArtistCandidate.updateMany({
-    where: { artistId, musicbrainzArtistId: { not: musicbrainzArtistId } },
-    data: { status: 'rejected' },
-  });
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+  const owner = await prisma.artist.findUnique({ where: { musicbrainzArtistId }, select: { id: true, name: true } });
+  if (owner && owner.id !== artistId) throw new Error(`This MusicBrainz artist is already in Library as ${owner.name} (artist ${owner.id}).`);
   await resolveArtistIdentityAndCatalog(artistId, {
     name: artist.name,
     genre: artist.genre,
     musicbrainzArtistId,
   });
   const confirmed = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
-  if (confirmed.musicbrainzMatchStatus === 'confirmed' && confirmed.musicbrainzArtistId) {
-    await collectArtistVideoInventory(artistId, { refreshImvdb: false });
+  if (confirmed.musicbrainzMatchStatus !== 'confirmed' || confirmed.musicbrainzArtistId !== musicbrainzArtistId) {
+    throw new Error('MusicBrainz artist confirmation failed. Try again after checking the provider connection.');
   }
-  return prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+  await prisma.musicBrainzArtistCandidate.updateMany({
+    where: { artistId, musicbrainzArtistId: { not: musicbrainzArtistId } }, data: { status: 'rejected' },
+  });
+  void collectArtistVideoInventory(artistId, { refreshImvdb: false }).catch((error) => logActivity('warn', 'artist-identity:inventory', error));
+  return confirmed;
 }
