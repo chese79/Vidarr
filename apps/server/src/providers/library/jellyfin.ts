@@ -1,5 +1,6 @@
+import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { createAuthedFetcher } from './util.js';
+import { createAuthedFetcher, isNotFound } from './util.js';
 import type {
   FetchedLibraryArtist,
   FetchedLibraryVideo,
@@ -7,6 +8,7 @@ import type {
   LibraryConnectorTestResult,
   LibraryItemMatch,
   LibrarySection,
+  PlaylistPushItem,
   PlaylistPushResult,
 } from './types.js';
 
@@ -46,6 +48,23 @@ const findLibraryItem: LibraryConnectorProvider['findLibraryItem'] = async (conf
   const result: LibraryItemMatch = { id: match.Id as string, playCount: match.UserData?.PlayCount ?? null };
   return result;
 };
+
+// Prefers the item id the library sync already reconciled (see the Plex
+// provider's twin of this helper for why): it pins one specific video, and is
+// still verified live so a rescan that re-keyed or removed the item between
+// syncs is caught. Only a definite 404 falls back to the title+artist search;
+// any other failure propagates rather than silently degrading the push.
+async function resolvePlaylistItemId(config: LibraryConnector, item: PlaylistPushItem): Promise<string | null> {
+  if (item.externalId) {
+    try {
+      const found = await jellyfinGet(config, `/Users/${config.userId}/Items/${encodeURIComponent(item.externalId)}`);
+      if (found?.Id) return found.Id as string;
+    } catch (err) {
+      if (!isNotFound(err)) throw err;
+    }
+  }
+  return (await findLibraryItem!(config, item))?.id ?? null;
+}
 
 export const jellyfinProvider: LibraryConnectorProvider = {
   async testConnection(config): Promise<LibraryConnectorTestResult> {
@@ -155,12 +174,15 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     const matchedIds: string[] = [];
     const unmatchedTitles: string[] = [];
     for (const item of items) {
-      const match = await findLibraryItem(config, item);
-      if (match) matchedIds.push(match.id);
+      const id = await resolvePlaylistItemId(config, item);
+      if (id) matchedIds.push(id);
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
     if (existingRemoteId && unmatchedTitles.length) {
       throw new Error(`Keeping the existing Jellyfin playlist: ${unmatchedTitles.length} item(s) are not in the selected video library`);
+    }
+    if (!matchedIds.length) {
+      throw new Error('None of this playlist’s videos were found in the selected Jellyfin video library');
     }
 
     // Create first so a transient Jellyfin failure never destroys the last
@@ -184,6 +206,15 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     }
 
     return { remotePlaylistId, matchedCount: matchedIds.length, unmatchedTitles };
+  },
+
+  async deletePlaylist(config, remotePlaylistId) {
+    try {
+      await jellyfinSend(config, 'DELETE', `/Items/${encodeURIComponent(remotePlaylistId)}`);
+    } catch (err) {
+      // Already gone (deleted in Jellyfin by hand) is the state we wanted.
+      if (!isNotFound(err)) throw err;
+    }
   },
 
   findLibraryItem,

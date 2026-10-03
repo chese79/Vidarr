@@ -105,6 +105,9 @@ describe('playlist routes', () => {
     let nextId = 1;
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string }) => {
       requests.push(`${options.method ?? 'GET'} ${url}`);
+      // Push verifies each reconciled item id directly instead of searching.
+      const itemLookup = url.match(/\/Users\/[^/]+\/Items\/([^/?]+)$/);
+      if (itemLookup) return { ok: true, json: async () => ({ Id: itemLookup[1] }) };
       if (url.includes('/Users/') && url.includes('/Items?')) return { ok: true,
         json: async () => ({ Items: [
           { Id: 'video-1', Name: 'First', Artists: ['Test Artist'] },
@@ -287,6 +290,8 @@ describe('playlist routes', () => {
       await prisma.playlistItem.create({ data: { playlistId: playlist.id, musicVideoId: video.id, sortOrder: 0 } });
       const sentBodies: unknown[] = [];
       vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string; body?: string }) => {
+        const itemLookup = url.match(/\/Users\/[^/]+\/Items\/([^/?]+)$/);
+        if (itemLookup) return { ok: true, json: async () => ({ Id: itemLookup[1] }) };
         if (url.includes('/Users/') && url.includes('/Items?')) return {
           ok: true, json: async () => ({ Items: [{ Id: 'video-1', Name: 'Server Only', Artists: ['Test Artist'] }] }),
         };
@@ -366,6 +371,7 @@ describe('playlist routes', () => {
       url: `/api/v1/playlist/${created.json().id}`,
       headers: authHeaders(),
     });
-    expect(del.statusCode).toBe(204);
+    expect(del.statusCode).toBe(200);
+    expect(del.json()).toEqual({ removedRemote: 0, failedRemote: [] });
   });
 });

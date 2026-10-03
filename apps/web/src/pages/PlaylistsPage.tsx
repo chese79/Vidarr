@@ -2,51 +2,68 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
-import type { MatchMode, PlaylistFilters } from '@vidarr/shared-types';
+import type { DeletePlaylistResult, LibraryConnector, Playlist, UpdatePlaylist } from '@vidarr/shared-types';
+import {
+  PlaylistRuleFields,
+  draftToFilters,
+  emptyRuleDraft,
+  hasActiveFilter,
+  parseStoredRules,
+  type RuleDraft,
+} from './playlistRules';
+
+interface Notice {
+  kind: 'status' | 'alert';
+  text: string;
+}
+
+// Connectors a playlist can be bound to / pushed to: enabled Plex or Jellyfin
+// with a video library chosen (Subsonic has no video playlists).
+function playbackConnectors(connectors: LibraryConnector[] | undefined) {
+  return (connectors ?? []).filter((c) => c.enabled && c.type !== 'subsonic' && c.videoLibraryId);
+}
+
+function ScheduleSelect({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
+  // A schedule set through the API can be any interval; keep it selectable
+  // instead of silently showing "Manual" and overwriting it on save.
+  const custom = value !== null && value !== 1440 && value !== 10080;
+  return (
+    <select
+      aria-label="Regeneration schedule"
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+    >
+      <option value="">Manual regeneration</option>
+      <option value="1440">Daily</option>
+      <option value="10080">Weekly</option>
+      {custom && <option value={value}>Every {value} minutes</option>}
+    </select>
+  );
+}
 
 function GeneratePlaylistPanel() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [matchMode, setMatchMode] = useState<MatchMode>('all');
   const [smart, setSmart] = useState(false);
   const [regenerateIntervalMinutes, setRegenerateIntervalMinutes] = useState<number | null>(null);
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
   const [sortMode, setSortMode] = useState<'artist_title' | 'shuffle'>('artist_title');
-
-  const [enableYear, setEnableYear] = useState(false);
-  const [yearMin, setYearMin] = useState('');
-  const [yearMax, setYearMax] = useState('');
-
-  const [enableGenre, setEnableGenre] = useState(false);
-  const [genre, setGenre] = useState('');
-  const [director, setDirector] = useState('');
-  const [ownership, setOwnership] = useState<'' | 'local' | 'server' | 'both'>('');
-  const [qualityIds, setQualityIds] = useState<number[]>([]);
-  const [addedAfter, setAddedAfter] = useState('');
-
-  const [enablePlayCount, setEnablePlayCount] = useState(false);
-  const [minPlayCount, setMinPlayCount] = useState('');
-
-  const [enableArtists, setEnableArtists] = useState(false);
-  const [artistIds, setArtistIds] = useState<number[]>([]);
-
-  const [enableVideos, setEnableVideos] = useState(false);
-  const [videoIds, setVideoIds] = useState<number[]>([]);
-
+  const [draft, setDraft] = useState<RuleDraft>(emptyRuleDraft());
   const [result, setResult] = useState<string | null>(null);
 
-  const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list, enabled: open });
-  const qualities = useQuery({ queryKey: ['qualities'], queryFn: api.qualities.list, enabled: open });
   const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list, enabled: open });
-  const downloaded = useQuery({
-    queryKey: ['musicVideos', 'playable', targetConnectorId],
-    queryFn: () => api.musicVideos.list(targetConnectorId ? { playableConnectorId: targetConnectorId } : { playable: true }),
-    enabled: open,
-  });
 
   const generate = useMutation({
-    mutationFn: (filters: PlaylistFilters) => api.playlists.generate({ name, filters, matchMode, smart, regenerateIntervalMinutes, targetConnectorId: targetConnectorId || null, sortMode }),
+    mutationFn: () => api.playlists.generate({
+      name,
+      filters: draftToFilters(draft),
+      matchMode: draft.matchMode,
+      smart,
+      regenerateIntervalMinutes,
+      targetConnectorId: targetConnectorId || null,
+      sortMode,
+    }),
     onSuccess: (r) => {
       setResult(`Created "${name}" with ${r.matchedCount} video(s).`);
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
@@ -55,26 +72,12 @@ function GeneratePlaylistPanel() {
     onError: (err) => setResult(`Failed: ${(err as Error).message}`),
   });
 
-  const anyEnabled = enableYear || enableGenre || enablePlayCount || enableArtists || enableVideos
-    || Boolean(director.trim() || ownership || qualityIds.length || addedAfter);
+  const anyEnabled = hasActiveFilter(draft);
 
   function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !anyEnabled) return;
-    const filters: PlaylistFilters = {};
-    if (enableYear) {
-      if (yearMin) filters.yearMin = Number(yearMin);
-      if (yearMax) filters.yearMax = Number(yearMax);
-    }
-    if (enableGenre && genre.trim()) filters.genre = genre.trim();
-    if (director.trim()) filters.director = director.trim();
-    if (ownership) filters.ownership = ownership;
-    if (qualityIds.length) filters.qualityIds = qualityIds;
-    if (addedAfter) filters.addedAfter = new Date(addedAfter).toISOString();
-    if (enablePlayCount && minPlayCount) filters.minPlayCount = Number(minPlayCount);
-    if (enableArtists && artistIds.length) filters.artistIds = artistIds;
-    if (enableVideos && videoIds.length) filters.musicVideoIds = videoIds;
-    generate.mutate(filters);
+    generate.mutate();
   }
 
   if (!open) {
@@ -105,26 +108,8 @@ function GeneratePlaylistPanel() {
         />
         <select aria-label="Playback library" value={targetConnectorId} onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}>
           <option value="">Any playback library</option>
-          {connectors.data?.filter((c) => c.enabled && c.type !== 'subsonic' && c.videoLibraryId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {playbackConnectors(connectors.data).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input
-            type="radio"
-            name="matchMode"
-            checked={matchMode === 'all'}
-            onChange={() => setMatchMode('all')}
-          />
-          Match ALL enabled filters (AND)
-        </label>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <input
-            type="radio"
-            name="matchMode"
-            checked={matchMode === 'any'}
-            onChange={() => setMatchMode('any')}
-          />
-          Match ANY enabled filter (OR)
-        </label>
       </div>
 
       <div className="form-row" style={{ alignItems: 'center' }}>
@@ -133,144 +118,11 @@ function GeneratePlaylistPanel() {
           <option value="shuffle">Shuffle once</option>
         </select></label>
         <label><input type="checkbox" checked={smart} onChange={(e) => setSmart(e.target.checked)} /> Save as smart playlist</label>
-        {smart && <select aria-label="Regeneration schedule" value={regenerateIntervalMinutes ?? ''} onChange={(e) => setRegenerateIntervalMinutes(e.target.value ? Number(e.target.value) : null)}>
-          <option value="">Manual regeneration</option>
-          <option value="1440">Daily</option>
-          <option value="10080">Weekly</option>
-        </select>}
+        {smart && <ScheduleSelect value={regenerateIntervalMinutes} onChange={setRegenerateIntervalMinutes} />}
       </div>
       {smart && <p className="empty-state">Push this playlist once to publish it. Later membership changes republish to that library automatically.</p>}
 
-      <div className="form-row" style={{ alignItems: 'center' }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>
-          <input type="checkbox" checked={enableYear} onChange={(e) => setEnableYear(e.target.checked)} />
-          Year range
-        </label>
-        <input
-          type="number"
-          placeholder="Min year"
-          aria-label="Minimum year"
-          value={yearMin}
-          onChange={(e) => setYearMin(e.target.value)}
-          disabled={!enableYear}
-          style={{ width: 110 }}
-        />
-        <input
-          type="number"
-          placeholder="Max year"
-          aria-label="Maximum year"
-          value={yearMax}
-          onChange={(e) => setYearMax(e.target.value)}
-          disabled={!enableYear}
-          style={{ width: 110 }}
-        />
-      </div>
-
-      <div className="form-row" style={{ alignItems: 'center' }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>
-          <input type="checkbox" checked={enableGenre} onChange={(e) => setEnableGenre(e.target.checked)} />
-          Genre
-        </label>
-        <input
-          placeholder="e.g. Rock"
-          aria-label="Genre"
-          value={genre}
-          onChange={(e) => setGenre(e.target.value)}
-          disabled={!enableGenre}
-          style={{ minWidth: 180 }}
-        />
-        <span className="empty-state" style={{ padding: 0 }}>
-          matches artist or video genre, partial match
-        </span>
-      </div>
-
-      <div className="form-row" style={{ alignItems: 'center' }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140 }}>
-          <input
-            type="checkbox"
-            checked={enablePlayCount}
-            onChange={(e) => setEnablePlayCount(e.target.checked)}
-          />
-          Min play count
-        </label>
-        <input
-          type="number"
-          min={0}
-          placeholder="e.g. 5"
-          aria-label="Minimum play count"
-          value={minPlayCount}
-          onChange={(e) => setMinPlayCount(e.target.value)}
-          disabled={!enablePlayCount}
-          style={{ width: 110 }}
-        />
-        <span className="empty-state" style={{ padding: 0 }}>
-          requires a library connector's "Sync Play Counts" to have run
-        </span>
-      </div>
-
-      <div className="form-row" style={{ alignItems: 'center' }}>
-        <input aria-label="Director" placeholder="Director" value={director} onChange={(e) => setDirector(e.target.value)} />
-        <select aria-label="Ownership" value={ownership} onChange={(e) => setOwnership(e.target.value as typeof ownership)}>
-          <option value="">Any ownership</option>
-          <option value="local">Local only</option>
-          <option value="server">Media server only</option>
-          <option value="both">Local and media server</option>
-        </select>
-        <select multiple aria-label="Quality" value={qualityIds.map(String)} onChange={(e) => setQualityIds([...e.target.selectedOptions].map((option) => Number(option.value)))} style={{ minWidth: 150, height: 72 }}>
-          {qualities.data?.map((quality) => <option key={quality.id} value={quality.id}>{quality.name}</option>)}
-        </select>
-        <label>Added after <input type="date" aria-label="Added after" value={addedAfter} onChange={(e) => setAddedAfter(e.target.value)} /></label>
-      </div>
-
-      <div className="form-row" style={{ alignItems: 'flex-start' }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140, marginTop: 6 }}>
-          <input
-            type="checkbox"
-            checked={enableArtists}
-            onChange={(e) => setEnableArtists(e.target.checked)}
-          />
-          Artist
-        </label>
-        <select
-          multiple
-          aria-label="Filter by artist"
-          disabled={!enableArtists}
-          value={artistIds.map(String)}
-          onChange={(e) => setArtistIds([...e.target.selectedOptions].map((o) => Number(o.value)))}
-          style={{ minWidth: 220, height: 90 }}
-        >
-          {artists.data?.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="form-row" style={{ alignItems: 'flex-start' }}>
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', width: 140, marginTop: 6 }}>
-          <input
-            type="checkbox"
-            checked={enableVideos}
-            onChange={(e) => setEnableVideos(e.target.checked)}
-          />
-          Specific video
-        </label>
-        <select
-          multiple
-          aria-label="Filter by specific video"
-          disabled={!enableVideos}
-          value={videoIds.map(String)}
-          onChange={(e) => setVideoIds([...e.target.selectedOptions].map((o) => Number(o.value)))}
-          style={{ minWidth: 280, height: 90 }}
-        >
-          {downloaded.data?.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.artist.name} - {v.title}
-            </option>
-          ))}
-        </select>
-      </div>
+      <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix="generate" />
 
       <button type="submit" disabled={!anyEnabled || generate.isPending}>
         {generate.isPending ? 'Generating…' : 'Generate Playlist'}
@@ -289,9 +141,119 @@ function GeneratePlaylistPanel() {
   );
 }
 
-function PlaylistCard({ playlistId }: { playlistId: number }) {
+function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
+  playlist: Playlist;
+  connectors: LibraryConnector[] | undefined;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const isSmart = playlist.kind === 'smart';
+  const original = parseStoredRules(playlist.ruleFilters, playlist.ruleMatchMode);
+
+  const [name, setName] = useState(playlist.name);
+  const [targetConnectorId, setTargetConnectorId] = useState<number | ''>(playlist.targetConnectorId ?? '');
+  const [sortMode, setSortMode] = useState(playlist.sortMode);
+  const [interval, setInterval] = useState(playlist.regenerateIntervalMinutes);
+  const [draft, setDraft] = useState<RuleDraft>(original);
+
+  // Send only what changed: a rename shouldn't re-run (and possibly republish)
+  // the rules, and the server treats each field it receives as an edit.
+  function buildPatch(): UpdatePlaylist {
+    const patch: UpdatePlaylist = {};
+    if (name.trim() !== playlist.name) patch.name = name.trim();
+    const target = targetConnectorId === '' ? null : targetConnectorId;
+    if (target !== playlist.targetConnectorId) patch.targetConnectorId = target;
+    if (isSmart) {
+      const filters = draftToFilters(draft);
+      if (JSON.stringify(filters) !== JSON.stringify(draftToFilters(original))) patch.filters = filters;
+      if (draft.matchMode !== original.matchMode) patch.matchMode = draft.matchMode;
+      if (sortMode !== playlist.sortMode) patch.sortMode = sortMode;
+      if (interval !== playlist.regenerateIntervalMinutes) patch.regenerateIntervalMinutes = interval;
+    }
+    return patch;
+  }
+
+  const save = useMutation({
+    mutationFn: (patch: UpdatePlaylist) => api.playlists.update(playlist.id, patch),
+    onSuccess: (_updated, patch) => {
+      queryClient.invalidateQueries({ queryKey: ['playlists'] });
+      const published = playlist.syncs.filter((s) => s.remotePlaylistId).map((s) => s.connectorName);
+      onSaved(patch.name && published.length
+        ? `Saved. Push again to rename it on ${published.join(', ')}.`
+        : 'Saved.');
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const patch = buildPatch();
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
+    save.mutate(patch);
+  }
+
+  const options = playbackConnectors(connectors);
+  const current = connectors?.find((c) => c.id === playlist.targetConnectorId);
+
+  return (
+    <form className="card" aria-label={`Edit playlist ${playlist.name}`} onSubmit={handleSubmit}>
+      <div className="form-row">
+        <input
+          aria-label="Playlist name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ minWidth: 220 }}
+          required
+        />
+        <select
+          aria-label="Playback library"
+          value={targetConnectorId}
+          onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}
+        >
+          <option value="">Any playback library</option>
+          {current && !options.some((c) => c.id === current.id) && <option value={current.id}>{current.name} (unavailable)</option>}
+          {options.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      {isSmart && (
+        <>
+          <div className="form-row" style={{ alignItems: 'center' }}>
+            <label>Order <select aria-label="Playlist order" value={sortMode} onChange={(e) => setSortMode(e.target.value as typeof sortMode)}>
+              <option value="artist_title">Artist and title</option>
+              <option value="shuffle">Shuffle once</option>
+            </select></label>
+            <ScheduleSelect value={interval} onChange={setInterval} />
+          </div>
+          <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix={`edit-${playlist.id}`} />
+          <p className="empty-state">Saving re-runs these rules now{playlist.syncs.some((s) => s.remotePlaylistId) ? ' and republishes the playlist if its videos changed' : ''}.</p>
+        </>
+      )}
+
+      <div className="form-row">
+        <button type="submit" disabled={save.isPending || !name.trim()}>
+          {save.isPending ? 'Saving…' : 'Save changes'}
+        </button>
+        <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+      </div>
+      {save.isError && <p className="empty-state" role="alert">Could not save: {(save.error as Error).message}</p>}
+    </form>
+  );
+}
+
+function PlaylistCard({ playlistId, onDeleted }: {
+  playlistId: number;
+  onDeleted: (name: string, result: DeletePlaylistResult, keptRemote: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [pushStatus, setPushStatus] = useState<Record<number, string>>({});
 
   const playlists = useQuery({ queryKey: ['playlists'], queryFn: api.playlists.list });
@@ -317,9 +279,19 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
     mutationFn: (musicVideoId: number) => api.playlists.removeItem(playlistId, musicVideoId),
     onSuccess: invalidate,
   });
+  const reorder = useMutation({
+    mutationFn: (musicVideoIds: number[]) => api.playlists.reorder(playlistId, musicVideoIds),
+    onError: (err) => setNotice({ kind: 'alert', text: `Could not reorder: ${(err as Error).message}` }),
+    // Refetch on failure too: a 409 means the server's list differs from ours.
+    onSettled: invalidate,
+  });
   const removePlaylist = useMutation({
-    mutationFn: () => api.playlists.remove(playlistId),
-    onSuccess: invalidate,
+    mutationFn: (keepRemote: boolean) => api.playlists.remove(playlistId, { keepRemote }),
+    onSuccess: (result, keepRemote) => {
+      invalidate();
+      onDeleted(playlist?.name ?? 'Playlist', result, keepRemote);
+    },
+    onError: (err) => setNotice({ kind: 'alert', text: `Could not delete: ${(err as Error).message}` }),
   });
   const regenerate = useMutation({
     mutationFn: () => api.playlists.regenerate(playlistId),
@@ -327,6 +299,9 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
   });
 
   async function handlePush(connectorId: number) {
+    // Clears a lingering "Push again to rename it" notice: pushing is exactly
+    // what it asked for, so leaving it up would be stale the moment this runs.
+    setNotice(null);
     setPushStatus((s) => ({ ...s, [connectorId]: 'Pushing…' }));
     try {
       const result = await api.playlists.push(playlistId, connectorId);
@@ -342,10 +317,45 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
     invalidate();
   }
 
+  async function handleUnpublish(connectorId: number) {
+    setNotice(null);
+    setPushStatus((s) => ({ ...s, [connectorId]: 'Removing…' }));
+    try {
+      await api.playlists.unpublish(playlistId, connectorId);
+      setPushStatus((s) => ({ ...s, [connectorId]: 'Removed from this library.' }));
+    } catch (err) {
+      setPushStatus((s) => ({ ...s, [connectorId]: `Failed: ${(err as Error).message}` }));
+    }
+    invalidate();
+  }
+
   if (!playlist) return null;
   const inPlaylist = new Set(playlist.items.map((i) => i.musicVideoId));
-  const pushableConnectors = (connectors.data ?? []).filter((c) => c.enabled && c.type !== 'subsonic'
+  const isStatic = playlist.kind === 'static';
+  const orderedIds = playlist.items.map((i) => i.musicVideoId);
+  const published = playlist.syncs.filter((s) => s.remotePlaylistId);
+  const publishedNames = published.map((s) => s.connectorName).join(', ');
+
+  // Every library this playlist can be pushed to, plus any it is already
+  // published to even if it can no longer be pushed there (connector disabled
+  // since) — the user must still be able to take that copy down.
+  const pushable = (connectors.data ?? []).filter((c) => c.enabled && c.type !== 'subsonic'
     && (!playlist.targetConnectorId || c.id === playlist.targetConnectorId));
+  const rows = [
+    ...pushable.map((c) => ({ id: c.id, name: c.name, canPush: true, hasLibrary: Boolean(c.videoLibraryId) })),
+    ...playlist.syncs
+      .filter((s) => !pushable.some((c) => c.id === s.connectorId))
+      .map((s) => ({ id: s.connectorId, name: s.connectorName, canPush: false, hasLibrary: false })),
+  ];
+
+  function move(index: number, delta: -1 | 1) {
+    const target = index + delta;
+    if (target < 0 || target >= orderedIds.length) return;
+    const next = [...orderedIds];
+    [next[index], next[target]] = [next[target], next[index]];
+    setNotice(null);
+    reorder.mutate(next);
+  }
 
   return (
     <div className="card">
@@ -355,7 +365,15 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
           {playlist.kind === 'smart' && <button className="secondary" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
             {regenerate.isPending ? 'Regenerating…' : 'Regenerate'}
           </button>}
-          {playlist.kind === 'static' && <button
+          <button
+            className="secondary"
+            aria-expanded={editing}
+            aria-label={`Edit playlist ${playlist.name}`}
+            onClick={() => { setEditing((v) => !v); setNotice(null); }}
+          >
+            {editing ? 'Close editor' : 'Edit'}
+          </button>
+          {isStatic && <button
             className="secondary"
             aria-expanded={adding}
             aria-controls={`playlist-${playlistId}-add-videos`}
@@ -366,14 +384,50 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
           <button
             className="secondary"
             aria-label={`Delete playlist ${playlist.name}`}
-            onClick={() => removePlaylist.mutate()}
+            aria-expanded={confirmingDelete}
+            onClick={() => setConfirmingDelete((v) => !v)}
           >
             Delete playlist
           </button>
         </div>
       </div>
+
+      {notice && <p className="empty-state" role={notice.kind === 'alert' ? 'alert' : 'status'}>{notice.text}</p>}
+
+      {confirmingDelete && (
+        <div className="card" role="group" aria-label={`Confirm deleting ${playlist.name}`}>
+          <p style={{ margin: '0 0 8px' }}>
+            Delete “{playlist.name}”?
+            {published.length > 0 && ` It is published to ${publishedNames}; deleting also removes it there.`}
+          </p>
+          <div className="form-row">
+            <button onClick={() => removePlaylist.mutate(false)} disabled={removePlaylist.isPending}>
+              {removePlaylist.isPending ? 'Deleting…' : 'Delete playlist'}
+            </button>
+            {published.length > 0 && (
+              <button className="secondary" onClick={() => removePlaylist.mutate(true)} disabled={removePlaylist.isPending}>
+                Delete, keep it on {publishedNames}
+              </button>
+            )}
+            <button className="secondary" onClick={() => setConfirmingDelete(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <PlaylistEditPanel
+          playlist={playlist}
+          connectors={connectors.data}
+          onClose={() => setEditing(false)}
+          onSaved={(text) => { setEditing(false); setNotice({ kind: 'status', text }); }}
+        />
+      )}
+
       {playlist.kind === 'smart' && <p className="empty-state" style={{ padding: '0 0 8px' }}>
-        {playlist.regenerateIntervalMinutes === 1440 ? 'Regenerates daily' : playlist.regenerateIntervalMinutes === 10080 ? 'Regenerates weekly' : 'Regenerates manually'}
+        {playlist.regenerateIntervalMinutes === 1440 ? 'Regenerates daily'
+          : playlist.regenerateIntervalMinutes === 10080 ? 'Regenerates weekly'
+          : playlist.regenerateIntervalMinutes ? `Regenerates every ${playlist.regenerateIntervalMinutes} minutes`
+          : 'Regenerates manually'}
       </p>}
       {playlist.targetConnectorId && <p className="empty-state" style={{ padding: '0 0 8px' }}>
         Playback library: {connectors.data?.find((c) => c.id === playlist.targetConnectorId)?.name ?? `Connector ${playlist.targetConnectorId}`}
@@ -382,8 +436,9 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
 
       {playlist.items.length ? (
         <div className="video-list">
-          {playlist.items.map((item) => (
+          {playlist.items.map((item, index) => (
             <div className="video-row" key={item.id}>
+              <span aria-hidden="true" className="empty-state" style={{ padding: 0, minWidth: 24, textAlign: 'right' }}>{index + 1}</span>
               <VideoThumb url={item.musicVideo.thumbnailUrl} />
               <div className="video-info">
                 <strong>{item.musicVideo.title}</strong>
@@ -392,13 +447,31 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
                 </span>
               </div>
               <div className="video-actions">
-                {playlist.kind === 'static' && <button
-                  className="secondary"
-                  aria-label={`Remove ${item.musicVideo.title} from playlist`}
-                  onClick={() => removeItem.mutate(item.musicVideoId)}
-                >
-                  Remove
-                </button>}
+                {isStatic && <>
+                  <button
+                    className="secondary"
+                    aria-label={`Move ${item.musicVideo.title} up`}
+                    disabled={index === 0 || reorder.isPending}
+                    onClick={() => move(index, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="secondary"
+                    aria-label={`Move ${item.musicVideo.title} down`}
+                    disabled={index === playlist.items.length - 1 || reorder.isPending}
+                    onClick={() => move(index, 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    className="secondary"
+                    aria-label={`Remove ${item.musicVideo.title} from playlist`}
+                    onClick={() => removeItem.mutate(item.musicVideoId)}
+                  >
+                    Remove
+                  </button>
+                </>}
               </div>
             </div>
           ))}
@@ -430,25 +503,35 @@ function PlaylistCard({ playlistId }: { playlistId: number }) {
         </div>
       )}
 
-      {pushableConnectors.length > 0 && (
+      {rows.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <p className="empty-state" style={{ padding: '0 0 6px' }}>
             Push to library:
           </p>
-          {pushableConnectors.map((c) => {
-            const sync = playlist.syncs.find((s) => s.connectorId === c.id);
+          {rows.map((row) => {
+            const sync = playlist.syncs.find((s) => s.connectorId === row.id);
+            const isPublished = Boolean(sync?.remotePlaylistId);
             return (
-              <div className="form-row" key={c.id} style={{ alignItems: 'center' }}>
-                <button className="secondary" onClick={() => handlePush(c.id)} disabled={!c.videoLibraryId}>
-                  Push to {c.name}
-                </button>
-                {!c.videoLibraryId && (
+              <div className="form-row" key={row.id} style={{ alignItems: 'center' }}>
+                {row.canPush
+                  ? <button className="secondary" onClick={() => handlePush(row.id)} disabled={!row.hasLibrary}>
+                    {isPublished ? `Update on ${row.name}` : `Push to ${row.name}`}
+                  </button>
+                  : <span>{row.name}</span>}
+                {isPublished && (
+                  <button className="secondary" aria-label={`Remove playlist from ${row.name}`} onClick={() => handleUnpublish(row.id)}>
+                    Remove from {row.name}
+                  </button>
+                )}
+                {row.canPush && !row.hasLibrary && (
                   <span className="empty-state" style={{ padding: 0, fontSize: 12 }}>
                     Pick a video library for this connector first.
                   </span>
                 )}
                 <span className="empty-state" style={{ padding: 0 }} role="status">
-                  {pushStatus[c.id] ?? (sync ? `Last: ${sync.lastPushStatus} (${sync.lastPushedAt})` : '—')}
+                  {pushStatus[row.id] ?? (sync
+                    ? `Last: ${sync.lastPushStatus} (${sync.lastPushedAt})${sync.lastPushStatus === 'failed' && sync.lastPushError ? ` — ${sync.lastPushError}` : ''}`
+                    : '—')}
                 </span>
               </div>
             );
@@ -463,6 +546,7 @@ export default function PlaylistsPage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const playlists = useQuery({ queryKey: ['playlists'], queryFn: api.playlists.list });
   const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list });
@@ -481,11 +565,26 @@ export default function PlaylistsPage() {
     createPlaylist.mutate({ name, targetConnectorId: targetConnectorId || null });
   }
 
+  // Lives here, not on the card: the card is gone once its playlist is deleted,
+  // but a copy that couldn't be removed from a media server still needs saying.
+  function handleDeleted(deletedName: string, result: DeletePlaylistResult, keptRemote: boolean) {
+    if (result.failedRemote.length) {
+      const failures = result.failedRemote.map((f) => `${f.connectorName} (${f.error})`).join('; ');
+      setNotice({ kind: 'alert', text: `Deleted “${deletedName}”, but it could not be removed from ${failures}. Remove it there manually.` });
+    } else if (result.removedRemote) {
+      setNotice({ kind: 'status', text: `Deleted “${deletedName}” and removed it from ${result.removedRemote} media server(s).` });
+    } else {
+      setNotice({ kind: 'status', text: keptRemote ? `Deleted “${deletedName}”. Its published copies were left in place.` : `Deleted “${deletedName}”.` });
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
         <h2>Playlists</h2>
       </div>
+
+      {notice && <p className="empty-state" role={notice.kind === 'alert' ? 'alert' : 'status'}>{notice.text}</p>}
 
       <form className="form-row" onSubmit={handleSubmit}>
         <input
@@ -498,7 +597,7 @@ export default function PlaylistsPage() {
         />
         <select aria-label="Playlist playback library" value={targetConnectorId} onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}>
           <option value="">Any playback library</option>
-          {connectors.data?.filter((c) => c.enabled && c.type !== 'subsonic' && c.videoLibraryId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {playbackConnectors(connectors.data).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <button type="submit">Create Playlist</button>
       </form>
@@ -508,7 +607,7 @@ export default function PlaylistsPage() {
       </div>
 
       {playlists.data?.length ? (
-        playlists.data.map((p) => <PlaylistCard key={p.id} playlistId={p.id} />)
+        playlists.data.map((p) => <PlaylistCard key={p.id} playlistId={p.id} onDeleted={handleDeleted} />)
       ) : (
         <p className="empty-state">No playlists yet.</p>
       )}

@@ -48,6 +48,8 @@ import type {
   UpdateMusicVideo,
   GeneratePlaylistBody,
   GeneratePlaylistResult,
+  UpdatePlaylist,
+  DeletePlaylistResult,
   StandardGenreMatch,
   PlayCountSyncResult,
   GoogleAuthStatus,
@@ -353,13 +355,22 @@ export const api = {
     regenerate: (id: number) => request<{ matchedCount: number; changed: boolean }>(`/playlist/${id}/regenerate`, { method: 'POST' }),
     create: (data: CreatePlaylist) =>
       request<Playlist>('/playlist', { method: 'POST', body: JSON.stringify(data) }),
-    remove: (id: number) => request<void>(`/playlist/${id}`, { method: 'DELETE' }),
+    update: (id: number, data: UpdatePlaylist) =>
+      request<Playlist>(`/playlist/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    // Also removes the Plex/Jellyfin copies unless keepRemote is set; the
+    // result reports any copy that couldn't be removed.
+    remove: (id: number, options: { keepRemote?: boolean } = {}) =>
+      request<DeletePlaylistResult>(`/playlist/${id}${options.keepRemote ? '?keepRemote=true' : ''}`, { method: 'DELETE' }),
     addItem: (id: number, musicVideoId: number) =>
       request<void>(`/playlist/${id}/items`, { method: 'POST', body: JSON.stringify({ musicVideoId }) }),
     removeItem: (id: number, musicVideoId: number) =>
       request<void>(`/playlist/${id}/items/${musicVideoId}`, { method: 'DELETE' }),
+    reorder: (id: number, musicVideoIds: number[]) =>
+      request<void>(`/playlist/${id}/items/order`, { method: 'PUT', body: JSON.stringify({ musicVideoIds }) }),
     push: (id: number, connectorId: number) =>
       request<PlaylistPushResult>(`/playlist/${id}/push/${connectorId}`, { method: 'POST' }),
+    unpublish: (id: number, connectorId: number) =>
+      request<void>(`/playlist/${id}/push/${connectorId}`, { method: 'DELETE' }),
   },
   bulkImport: {
     previewYoutubePlaylist: (url: string) =>

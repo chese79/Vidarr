@@ -11,6 +11,20 @@ export function providerRequestSignal(): AbortSignal {
   return AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
 }
 
+// Carries the HTTP status so callers can tell "that item/playlist doesn't
+// exist" (404 — often an acceptable answer) from a real outage, instead of
+// parsing it back out of the message text.
+export class ProviderHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ProviderHttpError';
+  }
+}
+
+export function isNotFound(err: unknown): boolean {
+  return err instanceof ProviderHttpError && err.status === 404;
+}
+
 // Plex and Jellyfin's HTTP APIs differ only in header name and error-message
 // label — this factory captures that one difference so both providers share
 // the actual fetch/error/204-handling logic instead of duplicating it.
@@ -29,7 +43,7 @@ export function createAuthedFetcher(
       signal: providerRequestSignal(),
     });
     if (!res.ok) {
-      throw new Error(`${providerLabel} request failed: ${res.status} ${res.statusText}`);
+      throw new ProviderHttpError(`${providerLabel} request failed: ${res.status} ${res.statusText}`, res.status);
     }
     return res.json();
   }
@@ -42,7 +56,7 @@ export function createAuthedFetcher(
       signal: providerRequestSignal(),
     });
     if (!res.ok) {
-      throw new Error(`${providerLabel} request failed: ${res.status} ${res.statusText}`);
+      throw new ProviderHttpError(`${providerLabel} request failed: ${res.status} ${res.statusText}`, res.status);
     }
     if (res.status === 204) return null;
     const text = await res.text();
@@ -66,7 +80,7 @@ export function createAuthedFetcher(
     });
     if (res.status === 404) return null;
     if (!res.ok) {
-      throw new Error(`${providerLabel} request failed: ${res.status} ${res.statusText}`);
+      throw new ProviderHttpError(`${providerLabel} request failed: ${res.status} ${res.statusText}`, res.status);
     }
     return {
       contentType: res.headers.get('content-type') ?? 'image/jpeg',

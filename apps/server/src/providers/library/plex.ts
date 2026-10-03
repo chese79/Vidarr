@@ -1,5 +1,6 @@
+import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { createAuthedFetcher } from './util.js';
+import { createAuthedFetcher, isNotFound } from './util.js';
 import type {
   FetchedLibraryArtist,
   FetchedLibraryVideo,
@@ -7,6 +8,7 @@ import type {
   LibraryConnectorTestResult,
   LibraryItemMatch,
   LibrarySection,
+  PlaylistPushItem,
   PlaylistPushResult,
 } from './types.js';
 
@@ -43,6 +45,27 @@ const findLibraryItem: LibraryConnectorProvider['findLibraryItem'] = async (conf
   const result: LibraryItemMatch = { id: String(match.ratingKey), playCount: match.viewCount ?? null };
   return result;
 };
+
+// Prefers the item id the library sync already reconciled: it identifies one
+// specific video, where findLibraryItem's title-only search gives up (returns
+// null) as soon as two videos in the section share a title. The id is still
+// verified live — a rescan can remove or re-key items between syncs — and only
+// a definite "not found" falls back to the title search; any other failure
+// (server down, auth) propagates so a push never silently degrades.
+async function resolvePlaylistItemId(config: LibraryConnector, item: PlaylistPushItem): Promise<string | null> {
+  if (item.externalId) {
+    try {
+      const body = await plexGet(config, `/library/metadata/${encodeURIComponent(item.externalId)}`);
+      const metadata = body?.MediaContainer?.Metadata?.[0];
+      const inSelectedLibrary = metadata?.librarySectionID == null
+        || String(metadata.librarySectionID) === String(config.videoLibraryId);
+      if (metadata?.ratingKey != null && inSelectedLibrary) return String(metadata.ratingKey);
+    } catch (err) {
+      if (!isNotFound(err)) throw err;
+    }
+  }
+  return (await findLibraryItem!(config, item))?.id ?? null;
+}
 
 export const plexProvider: LibraryConnectorProvider = {
   async testConnection(config): Promise<LibraryConnectorTestResult> {
@@ -119,12 +142,17 @@ export const plexProvider: LibraryConnectorProvider = {
     const matchedKeys: string[] = [];
     const unmatchedTitles: string[] = [];
     for (const item of items) {
-      const match = await findLibraryItem(config, item);
-      if (match) matchedKeys.push(match.id);
+      const id = await resolvePlaylistItemId(config, item);
+      if (id) matchedKeys.push(id);
       else unmatchedTitles.push(`${item.artistName} - ${item.title}`);
     }
     if (existingRemoteId && unmatchedTitles.length) {
       throw new Error(`Keeping the existing Plex playlist: ${unmatchedTitles.length} item(s) are not in the selected video library`);
+    }
+    // Plex builds the playlist from the uri's key list; an empty list produces
+    // a malformed uri and an opaque server error, so say what actually happened.
+    if (!matchedKeys.length) {
+      throw new Error('None of this playlist’s videos were found in the selected Plex video library');
     }
 
     const identity = await plexGet(config, '/identity');
@@ -148,6 +176,15 @@ export const plexProvider: LibraryConnectorProvider = {
     }
 
     return { remotePlaylistId, matchedCount: matchedKeys.length, unmatchedTitles };
+  },
+
+  async deletePlaylist(config, remotePlaylistId) {
+    try {
+      await plexSend(config, 'DELETE', `/playlists/${encodeURIComponent(remotePlaylistId)}`);
+    } catch (err) {
+      // Already gone (deleted in Plex by hand) is the state we wanted.
+      if (!isNotFound(err)) throw err;
+    }
   },
 
   findLibraryItem,

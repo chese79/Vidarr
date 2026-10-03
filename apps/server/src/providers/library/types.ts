@@ -43,6 +43,11 @@ export interface LibrarySection {
 export interface PlaylistPushItem {
   artistName: string;
   title: string;
+  // The item id the library sync already reconciled for this video on this
+  // connector. When present, push verifies that id still exists instead of
+  // re-searching by title — a title search can't tell two same-titled videos
+  // by different artists apart (Plex has no artist field to disambiguate).
+  externalId?: string;
 }
 
 export interface PlaylistPushResult {
@@ -74,6 +79,9 @@ export interface LibraryConnectorProvider {
     config: LibraryConnector,
     params: { name: string; items: PlaylistPushItem[]; existingRemoteId: string | null },
   ): Promise<PlaylistPushResult>;
+  // Removes a playlist this app previously published. Resolves quietly when it
+  // is already gone, so unpublish/delete are safe to retry.
+  deletePlaylist?(config: LibraryConnector, remotePlaylistId: string): Promise<void>;
   // Resolves a video's item in this connector's video library — shared by
   // pushPlaylist (uses .id) and pipeline/playCountSync.ts (uses .playCount),
   // so the actual item lookup/matching logic exists exactly once per provider.

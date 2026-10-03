@@ -5,6 +5,40 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — playlist editing, reordering, and removal from Plex/Jellyfin
+
+- Edit a playlist after creating it. Rename it, change its playback library, and, for a smart
+  playlist, change its rules, match mode, order, and regeneration schedule. Saving a smart playlist
+  re-runs its rules immediately and republishes it to the library it was already published to if its
+  videos changed. Previously the only way to change any of this was to delete and recreate.
+- Reorder a static playlist with the up and down buttons. The order you set is the order pushed to
+  Plex and Jellyfin. Adding a video now appends after the last item; the old count-based position
+  could collide after a removal and leave the order undefined.
+- Remove a playlist from one library without deleting it ("Remove from …"). Deleting a playlist now
+  also removes its published copies, with a "keep it there" option. A server that cannot be reached
+  does not block the delete: the playlist is deleted, and the page names the library that still
+  holds a copy to remove by hand. Previously deleting a playlist left its Plex/Jellyfin copy behind
+  with nothing pointing at it.
+- Changing the playback library of a published playlist is refused until it is removed from the old
+  library, so no copy is orphaned. A static playlist can only move to a library that has all of its
+  videos.
+- Push now uses the item ID that library reconciliation already settled on for each video, checking
+  that it still exists, instead of searching by title every time. Two videos that share a title (for
+  example two artists' "Intro") no longer make a Plex push fail. Only a definite "not found" falls
+  back to the old title search; any other server error stops the push instead of guessing.
+- Pushing a playlist with nothing available now says so, instead of sending Plex a malformed request.
+- The generator's filter form is shared with the new editor, and "has a filter" is now judged on what
+  would actually be saved, so a ticked but blank year range no longer counts.
+
+**Changed API behavior:** `DELETE /api/v1/playlist/:id` now returns `200` with
+`{ removedRemote, failedRemote }` instead of `204`, and `404` for an unknown playlist. New routes:
+`PATCH /api/v1/playlist/:id`, `PUT /api/v1/playlist/:id/items/order`,
+`DELETE /api/v1/playlist/:id/push/:connectorId`.
+
+**Not verified against a real server:** the Plex and Jellyfin request shapes are covered by tests
+and a stand-in server, not a live Plex or Jellyfin instance (the Plex provider already carried an
+"unverified" note for the same reason). Check one push, rename, and removal against your own servers.
+
 ### Documentation
 
 - Add a user guide for setup, artist and video review, acquisition, playlists, and troubleshooting.

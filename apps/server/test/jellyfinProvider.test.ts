@@ -152,18 +152,25 @@ describe('jellyfinProvider', () => {
   });
 
   it('preserves the existing playlist when creating its replacement fails', async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({}, 500));
+    // One real item so the push gets as far as creating the replacement (an
+    // empty playlist is refused before any create is attempted).
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ Id: 'jf-1' }))
+      .mockResolvedValueOnce(jsonResponse({}, 500));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
       jellyfinProvider.pushPlaylist!(connector(), {
         name: 'Favorites',
-        items: [],
+        items: [{ artistName: 'Artist', title: 'Song', externalId: 'jf-1' }],
         existingRemoteId: 'old-playlist',
       }),
     ).rejects.toThrow('Jellyfin request failed');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][1]?.method).toBe('POST');
+    // Item verification, then the failed create — and nothing after it: the old
+    // playlist must never be deleted when its replacement couldn't be created.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('POST');
+    expect(fetchMock.mock.calls.some((call) => call[1]?.method === 'DELETE')).toBe(false);
   });
 });

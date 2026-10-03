@@ -73,17 +73,29 @@ Vidarr prefers an IMVDb curated direct link, then a plausible official VEVO or a
 | --- | --- |
 | **Discover** | Review artist recommendations from connected libraries and recommendation providers. Add an artist or dismiss a recommendation. |
 | **Import** | Preview a YouTube playlist, select artists and videos, then submit them to Match Review and Video Review. Choose a root folder and quality profile before importing. |
-| **Playlists** | Build a static list or generate one from filters such as artist, genre, year, ownership, or play count. Choose a playback library and push a playlist to a supported media-server connector. |
+| **Playlists** | Build a static list or generate one from filters such as artist, genre, year, ownership, or play count. Choose a playback library and push a playlist to a supported media-server connector. Use **Edit** to rename a playlist, change its library, or (for a smart playlist) change its rules and schedule. Reorder a static playlist with the arrows. See [Editing and removing playlists](#editing-and-removing-playlists). |
 | **Calendar** | See recently added monitored videos, newest first. Vidarr generally knows a release year rather than an exact release date. |
 | **Queue** | Watch active acquisitions and imports. |
 | **History** | Inspect completed activity and review or acquisition failures. |
 
 Under **Settings**, **General** contains library naming and integration settings; **Quality Profiles** controls acceptable formats; **Root Folders** sets destinations; **Library Connectors** configures media-server reads and playback libraries; **Indexers** and **Download Clients** configure search and acquisition; **System / Tasks** shows maintenance jobs and manual run actions.
 
+## Editing and removing playlists
+
+Open **Playlists** and choose **Edit** on a playlist.
+
+- **Rename** changes the name in Vidarr only. Choose **Update on …** to push it again; a push replaces the published copy, so the new name appears in Plex or Jellyfin.
+- **Playback library** binds a playlist to one Plex or Jellyfin video library. A playlist that is already published cannot change library until you choose **Remove from …** on the old one, so no copy is left behind. A static playlist can only move to a library that has all of its videos.
+- **Smart playlists** also let you change the filters, match mode, order, and regeneration schedule. Saving re-runs the rules at once, and republishes the playlist if it was already published and its videos changed.
+- **Static playlists** are reordered with the up and down arrows. The order shown is the order pushed to the media server.
+
+**Remove from …** takes the playlist off one media server and keeps it in Vidarr. **Delete playlist** also removes it from every server it was published to, unless you choose **Delete, keep it on …**. If a media server cannot be reached, the playlist is still deleted and the page tells you which server still holds a copy so you can remove it there.
+
 ## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
+| A playlist push fails or keeps the old playlist | The error under the push button says why. A published playlist is never replaced while any of its videos is missing from the library: run **Reconcile inventory** on the connector, or remove the missing videos. A playlist with no videos available in that library cannot be pushed. |
 | An artist is absent from Library | Look in **Match Review** and confirm the correct MusicBrainz identity. A duplicate observation may already be linked to a confirmed artist. |
 | Artist has no known videos | Expand **Video sources** and check the source-check time or error. Try **Refresh all sources**; review pending candidates. An empty IMVDb catalog is valid. |
 | A YouTube upload is missing | Verify the confirmed artist's linked channel or add the correct URL in **YouTube Sources**, then sync. Check **Video Review**; excluded live, interview, lyric, and audio uploads do not become catalog videos. |

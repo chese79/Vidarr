@@ -786,6 +786,22 @@ export const PlaylistPushResultSchema = z.object({
 });
 export type PlaylistPushResult = z.infer<typeof PlaylistPushResultSchema>;
 
+// Order of a static playlist, as the full list of its musicVideoIds. A full
+// list (not a single move) so the server can reject a stale client's view of
+// the playlist instead of silently interleaving two people's edits.
+export const ReorderPlaylistItemsSchema = z.object({
+  musicVideoIds: z.array(z.number().int().positive()).min(1),
+});
+export type ReorderPlaylistItems = z.infer<typeof ReorderPlaylistItemsSchema>;
+
+// What deleting a playlist did to its Plex/Jellyfin copies, so the UI can tell
+// the user when a remote one could not be removed and needs manual cleanup.
+export const DeletePlaylistResultSchema = z.object({
+  removedRemote: z.number().int(),
+  failedRemote: z.array(z.object({ connectorName: z.string(), error: z.string() })),
+});
+export type DeletePlaylistResult = z.infer<typeof DeletePlaylistResultSchema>;
+
 // --- Bulk import: pull many videos in at once from a YouTube playlist URL ---
 
 export const PlaylistImportCandidateSchema = z.object({
@@ -875,6 +891,21 @@ export const GeneratePlaylistResultSchema = z.object({
   matchedCount: z.number().int(),
 });
 export type GeneratePlaylistResult = z.infer<typeof GeneratePlaylistResultSchema>;
+
+// Every field optional (PATCH semantics). Rule fields — filters, matchMode,
+// regenerateIntervalMinutes, sortMode — only apply to a smart playlist; the
+// route rejects them for a static one, whose membership and order are manual.
+export const UpdatePlaylistSchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  targetConnectorId: z.number().int().positive().nullable().optional(),
+  filters: PlaylistFiltersSchema.optional(),
+  matchMode: MatchMode.optional(),
+  regenerateIntervalMinutes: z.number().int().min(60).nullable().optional(),
+  sortMode: z.enum(['artist_title', 'shuffle']).optional(),
+}).refine((body) => Object.values(body).some((value) => value !== undefined), {
+  message: 'Nothing to update',
+});
+export type UpdatePlaylist = z.infer<typeof UpdatePlaylistSchema>;
 
 export const StandardGenreMatchSchema = z.object({
   genre: z.string(),
