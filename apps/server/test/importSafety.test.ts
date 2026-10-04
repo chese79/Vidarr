@@ -60,4 +60,15 @@ describe('quality upgrade import safety', () => {
     await importDownloadedFile(videoId, sourcePath, '1080p');
     await expect(fs.readFile(outsidePath, 'utf-8')).resolves.toBe('old video');
   });
+
+  it('rejects a Windows host root before writing into the Linux working directory', async () => {
+    if (process.platform === 'win32') return;
+    await prisma.rootFolder.updateMany({ data: { path: 'D:\\media\\music-videos' } });
+
+    await expect(importDownloadedFile(videoId, sourcePath, '1080p'))
+      .rejects.toThrow('mounted container path');
+    await expect(fs.readFile(sourcePath, 'utf-8')).resolves.toBe('new video');
+    await expect(fs.readFile(oldPath, 'utf-8')).resolves.toBe('old video');
+    expect((await prisma.musicVideoFile.findUniqueOrThrow({ where: { musicVideoId: videoId } })).path).toBe(oldPath);
+  });
 });

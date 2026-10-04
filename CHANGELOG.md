@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — Docker root-folder safety
+
+- Reject Windows host paths and relative paths when Vidarr runs in Linux or Docker, preventing
+  downloads from being written into an accidental directory in the container layer.
+- Explain container-visible root paths on the Root Folders screen and return the validation error
+  without saving an unsafe path. Root-folder health checks now keep legacy invalid paths marked
+  inaccessible until they are corrected.
+
 ### Added — playlist editing, reordering, and removal from Plex/Jellyfin
 
 - Edit a playlist after creating it. Rename it, change its playback library, and, for a smart
@@ -38,7 +46,6 @@ under **Unreleased** in the same commit as the change.
 **Not verified against a real server:** the Plex and Jellyfin request shapes are covered by tests
 and a stand-in server, not a live Plex or Jellyfin instance (the Plex provider already carried an
 "unverified" note for the same reason). Check one push, rename, and removal against your own servers.
-
 ### Documentation
 
 - Add a user guide for setup, artist and video review, acquisition, playlists, and troubleshooting.

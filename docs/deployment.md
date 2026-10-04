@@ -36,6 +36,9 @@ docker compose up --build
 - `/config` (named volume) holds the SQLite database; `/media` (bind-mounted from
   `./media` by default) is where organized files get written — point Plex/Jellyfin's
   video library at that same host folder.
+- Configure Vidarr Root Folders using the container side of that mount (`/media` by default).
+  Never enter a Windows host path such as `D:\media` into a Docker-hosted Vidarr. For a custom
+  `D:\media:/mnt/d/media` mount, the Root Folder is `/mnt/d/media`.
 - `yt-dlp` and `ffmpeg` are installed into the image at build time — no host setup.
 - The container runs as a fixed non-root user (uid/gid 1000). If you bind-mount a host
   directory for `/media` instead of using a named volume, make sure it's writable by

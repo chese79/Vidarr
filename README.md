@@ -208,6 +208,11 @@ change, the named `/config` volume will still be root-owned from the previous ro
 fix it once with `docker compose run --rm --user root vidarr chown -R 1000:1000 /config /media`
 before starting the updated image.
 
+Root Folders are paths as seen **inside** the container. With the default Compose mount, enter
+`/media` or a folder below it in Vidarr—not a host path such as `D:\media`. For a custom mount such
+as `D:\media:/mnt/d/media`, enter `/mnt/d/media` in Vidarr. Vidarr rejects host-style and relative
+paths in Docker so downloads cannot accidentally land in the disposable container layer.
+
 Running without Docker (a persistent native service on Linux via systemd, or on Windows via a
 service wrapper) is also documented — see [`docs/deployment.md`](docs/deployment.md) for every
 deployment path, including this one, in full step-by-step detail.

@@ -42,9 +42,12 @@ export default function RootFoldersPage() {
           if (path) createFolder.mutate({ path, targetConnectorId: targetConnectorId || null });
         }}
       >
+        <p className="muted">
+          Enter an absolute path visible inside Vidarr. In Docker, use the mounted container path (for example <code>/media</code> or <code>/mnt/d/media</code>), not a Windows host path.
+        </p>
         <div className="form-row">
           <input
-            placeholder="e.g. D:\Media\Music Videos"
+            placeholder="e.g. /media/music-videos"
             aria-label="Root folder path"
             value={path}
             onChange={(e) => setPath(e.target.value)}
@@ -63,6 +66,7 @@ export default function RootFoldersPage() {
           </select>
           <button type="submit">Add</button>
         </div>
+        {createFolder.error ? <p className="error">{createFolder.error.message}</p> : null}
       </form>
 
       {rootFolders.data?.length ? (

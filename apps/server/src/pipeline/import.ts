@@ -6,6 +6,7 @@ import { placeFile, replaceFile, type TransferMode } from './transfer.js';
 import { writeLibraryMetadata } from './libraryConvention.js';
 import { isPathWithinRoot } from './pathContainment.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
+import { normalizeRootFolderPath } from './rootFolderPath.js';
 
 export interface ImportResult {
   path: string;
@@ -30,6 +31,7 @@ export async function importDownloadedFile(
 
   const sourceStat = await fs.stat(sourcePath);
   const rootFolder = musicVideo.artist.rootFolder;
+  const rootPath = normalizeRootFolderPath(rootFolder.path);
   if (rootFolder.freeSpaceBytes !== null) {
     const minFreeBytes = BigInt(settings.minFreeSpaceMb) * 1024n * 1024n;
     const remainingAfter = rootFolder.freeSpaceBytes - BigInt(sourceStat.size);
@@ -46,11 +48,11 @@ export async function importDownloadedFile(
     year: musicVideo.releaseYear,
     quality: qualityName,
   });
-  const destPath = path.join(rootFolder.path, `${relativePath}${path.extname(sourcePath)}`);
+  const destPath = path.join(rootPath, `${relativePath}${path.extname(sourcePath)}`);
 
-  if (!isPathWithinRoot(rootFolder.path, destPath)) {
+  if (!isPathWithinRoot(rootPath, destPath)) {
     throw new Error(
-      `Refusing to import outside the configured root folder (computed path escaped ${rootFolder.path}).`,
+      `Refusing to import outside the configured root folder (computed path escaped ${rootPath}).`,
     );
   }
 
@@ -106,7 +108,7 @@ export async function importDownloadedFile(
   // A quality upgrade can change the filename. Keep the previous file until
   // the replacement is fully recorded, and never delete a path outside the
   // configured root if an older record points elsewhere.
-  if (existingFile && existingFile.path !== destPath && isPathWithinRoot(rootFolder.path, existingFile.path)) {
+  if (existingFile && existingFile.path !== destPath && isPathWithinRoot(rootPath, existingFile.path)) {
     await fs.unlink(existingFile.path).catch(async (err: NodeJS.ErrnoException) => {
       if (err.code !== 'ENOENT') await logActivity('warn', 'old-video-cleanup', err).catch(() => {});
     });

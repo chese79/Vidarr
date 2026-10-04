@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { prisma } from '../db/client.js';
+import { normalizeRootFolderPath } from './rootFolderPath.js';
 
 export async function checkRootFolders(): Promise<{ checked: number; inaccessible: number }> {
   const folders = await prisma.rootFolder.findMany();
@@ -9,11 +10,12 @@ export async function checkRootFolders(): Promise<{ checked: number; inaccessibl
     let accessible = true;
     let freeSpaceBytes: bigint | null = null;
     try {
-      await fs.access(folder.path);
+      const rootPath = normalizeRootFolderPath(folder.path);
+      await fs.access(rootPath);
       // fs.statfs isn't available on every platform/Node build — free space is
       // best-effort; accessibility is the part that actually matters here.
       try {
-        const stats = await fs.statfs(folder.path);
+        const stats = await fs.statfs(rootPath);
         freeSpaceBytes = BigInt(stats.bsize) * BigInt(stats.bavail);
       } catch {
         // leave freeSpaceBytes null

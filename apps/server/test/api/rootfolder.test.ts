@@ -45,6 +45,33 @@ describe('rootfolder routes', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('rejects a Windows host path when Vidarr runs in Linux', async () => {
+    if (process.platform === 'win32') return;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/rootfolder',
+      headers: authHeaders(),
+      payload: { path: 'D:\\media\\music-videos' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('mounted container path');
+    expect(await app.inject({ method: 'GET', url: '/api/v1/rootfolder', headers: authHeaders() }).then((r) => r.json())).toHaveLength(0);
+  });
+
+  it('rejects an invalid path update without changing the saved path', async () => {
+    if (process.platform === 'win32') return;
+    const created = await app.inject({
+      method: 'POST', url: '/api/v1/rootfolder', headers: authHeaders(), payload: { path: '/media/safe' },
+    });
+    const res = await app.inject({
+      method: 'PUT', url: `/api/v1/rootfolder/${created.json().id}`, headers: authHeaders(),
+      payload: { path: 'D:\\media\\unsafe' },
+    });
+    expect(res.statusCode).toBe(400);
+    const list = await app.inject({ method: 'GET', url: '/api/v1/rootfolder', headers: authHeaders() });
+    expect(list.json()[0].path).toBe('/media/safe');
+  });
+
   it('POST /api/v1/rootfolder rejects a duplicate path (unique constraint -> non-500)', async () => {
     await app.inject({
       method: 'POST',

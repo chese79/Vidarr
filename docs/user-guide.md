@@ -7,7 +7,10 @@ This guide covers the web app. For installation and Docker setup, see the [READM
 ## Start here
 
 1. Open Vidarr and complete the owner account sign-in if prompted.
-2. In **Settings → Root Folders**, add the destination for organized music videos. For Docker, the path must be accessible *inside the Vidarr container*; a host path alone is insufficient.
+2. In **Settings → Root Folders**, add the destination for organized music videos. For Docker,
+   enter the absolute path *inside the Vidarr container*, such as `/media/music-videos` or
+   `/mnt/d/media/music-videos`. Do not enter a Windows host path such as `D:\media`; Docker must
+   first mount that host folder and the Root Folder must use the mount's container-side path.
 3. In **Settings → Quality Profiles**, review the qualities Vidarr may accept. Choose a root folder and quality profile when adding an artist.
 4. Optionally add Plex, Jellyfin, or Navidrome under **Settings → Library Connectors**. Use **Test** to check the connection and **Sync** to read artists and, for Plex or Jellyfin, inventory the selected video library.
 5. Review artist names in **Match Review**. Only confirm the correct MusicBrainz artist. Confirmed artists appear in **Library**.
