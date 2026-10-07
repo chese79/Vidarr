@@ -16,9 +16,11 @@ import QueuePage from './pages/QueuePage';
 import CalendarPage from './pages/CalendarPage';
 import HistoryPage from './pages/HistoryPage';
 import SystemTasksPage from './pages/SystemTasksPage';
+import GenresPage from './pages/GenresPage';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
+  { to: '/genres', label: 'Genres' },
   { to: '/calendar', label: 'Calendar' },
   { to: '/discover', label: 'Discover' },
   { to: '/match-review', label: 'Match Review' },
@@ -71,6 +73,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LibraryPage />} />
           <Route path="/artist/:id" element={<ArtistDetailPage />} />
+          <Route path="/genres" element={<GenresPage />} />
           <Route path="/quality-profiles" element={<QualityProfilesPage />} />
           <Route path="/root-folders" element={<RootFoldersPage />} />
           <Route path="/discover" element={<DiscoverPage />} />

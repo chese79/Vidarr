@@ -509,7 +509,9 @@ export default function LibraryPage() {
   // Reuses the existing plain artist list purely to derive the genre filter's
   // options — no new endpoint needed just for a distinct-values dropdown.
   const allArtists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
-  const genreOptions = [...new Set(allArtists.data?.map((a) => a.genre).filter((g): g is string => Boolean(g)))].sort();
+  // An artist can carry several genres ("rock, shoegaze"); offer each one, not the
+  // joined string, since the server filter matches a single genre within the list.
+  const genreOptions = [...new Set((allArtists.data ?? []).flatMap((a) => a.genre?.split(',').map((g) => g.trim()).filter(Boolean) ?? []))].sort();
 
   const canAdd = (rootFolders.data?.length ?? 0) > 0 && (qualityProfiles.data?.length ?? 0) > 0;
 

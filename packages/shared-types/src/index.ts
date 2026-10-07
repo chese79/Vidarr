@@ -918,3 +918,101 @@ export const PlayCountSyncResultSchema = z.object({
   unmatched: z.number().int(),
 });
 export type PlayCountSyncResult = z.infer<typeof PlayCountSyncResultSchema>;
+
+// --- Artist genres: per-source candidates, an editor, and library-wide counts ---
+
+export const GenreLevel = z.enum(['genre', 'subgenre']);
+export type GenreLevel = z.infer<typeof GenreLevel>;
+
+export const GenreSourceName = z.enum(['user', 'connector', 'embedded', 'musicbrainz', 'lastfm']);
+export type GenreSourceName = z.infer<typeof GenreSourceName>;
+
+// An empty list means "go back to automatic" (drops the user's explicit genres).
+export const UpdateArtistGenresSchema = z.object({
+  genres: z.array(z.string().trim().min(1).max(80)).max(30),
+});
+export type UpdateArtistGenres = z.infer<typeof UpdateArtistGenresSchema>;
+
+const GenreCandidate = z.object({
+  name: z.string(),
+  level: GenreLevel,
+  parent: z.string().nullable(),
+  votes: z.number().int().nullable(),
+  inEffect: z.boolean(),
+});
+
+export const ArtistGenreViewSchema = z.object({
+  artistId: z.number().int(),
+  genreString: z.string().nullable(),
+  userOverride: z.boolean(),
+  refreshedAt: z.string().nullable(),
+  totalArtists: z.number().int(),
+  effective: z.array(z.object({
+    name: z.string(),
+    level: GenreLevel,
+    parent: z.string().nullable(),
+    sources: z.array(GenreSourceName),
+    score: z.number(),
+    artistCount: z.number().int(),
+    percentOfArtists: z.number(),
+  })),
+  // Always all five keys (empty when a source has nothing) so callers need no undefined checks.
+  sources: z.object({
+    user: z.array(GenreCandidate), connector: z.array(GenreCandidate), embedded: z.array(GenreCandidate),
+    musicbrainz: z.array(GenreCandidate), lastfm: z.array(GenreCandidate),
+  }),
+  alternatives: z.array(z.object({
+    name: z.string(),
+    level: GenreLevel,
+    parent: z.string().nullable(),
+    reason: z.string(),
+    artistCount: z.number().int(),
+    percentOfArtists: z.number(),
+  })),
+});
+export type ArtistGenreView = z.infer<typeof ArtistGenreViewSchema>;
+
+export const GenreRefreshOutcome = z.enum(['updated', 'unchanged-empty', 'not-configured', 'skipped', 'failed']);
+export const ArtistGenreRefreshResultSchema = z.object({
+  musicbrainz: GenreRefreshOutcome,
+  lastfm: GenreRefreshOutcome,
+  view: ArtistGenreViewSchema,
+});
+export type ArtistGenreRefreshResult = z.infer<typeof ArtistGenreRefreshResultSchema>;
+
+export const GenreStatsQuerySchema = z.object({
+  // Sub-genres used by at most this many artists count as "small" in the
+  // consolidation hints.
+  smallThreshold: z.coerce.number().int().min(1).max(50).default(1),
+});
+
+export const GenreStatsSchema = z.object({
+  totalArtists: z.number().int(),
+  artistsWithGenre: z.number().int(),
+  genres: z.array(z.object({
+    name: z.string(),
+    isOther: z.boolean(),
+    artistCount: z.number().int(),
+    percentOfArtists: z.number(),
+    percentOfGenred: z.number(),
+    directArtistCount: z.number().int(),
+    subgenres: z.array(z.object({
+      name: z.string(),
+      parent: z.string(),
+      artistCount: z.number().int(),
+      percentOfArtists: z.number(),
+      percentOfParent: z.number(),
+    })),
+  })),
+  consolidation: z.object({
+    smallThreshold: z.number().int(),
+    variantGroups: z.array(z.object({ names: z.array(z.string()), artistsAffected: z.number().int() })),
+    smallSubgenres: z.array(z.object({
+      parent: z.string(),
+      subgenres: z.array(z.string()),
+      subgenreCount: z.number().int(),
+      artistsAffected: z.number().int(),
+    })),
+  }),
+});
+export type GenreStats = z.infer<typeof GenreStatsSchema>;

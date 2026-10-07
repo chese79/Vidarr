@@ -36,6 +36,9 @@ model Artist {
   posterUrl        String?
   genre            String? // user-editable; auto-fillable from a matched LibraryArtist (Jellyfin) or a "standard" external source (Spotify's controlled-vocabulary genres) — see pipeline/genreMatch.ts
   genreSource      String? // user | embedded | musicbrainz | connector | folksonomy
+  // When ArtistGenre candidates were last fetched from MusicBrainz/Last.fm
+  // (null = never; the backfill job works through these).
+  genresRefreshedAt DateTime?
   metadataRefreshedAt DateTime?
   videoInventoryCheckedAt DateTime?
   videoInventoryError String?
@@ -47,6 +50,26 @@ model Artist {
   sources       ArtistSource[]
   musicbrainzCandidates MusicBrainzArtistCandidate[]
   videoReviewCandidates VideoReviewCandidate[]
+  genres        ArtistGenre[]
+}
+
+// Per-source genre candidates for an artist. Sources are kept side by side
+// (never merged into one value) so the user can see where a genre came from and
+// judge it; the genres actually in effect are derived from these rows by
+// pipeline/artistGenres.ts and mirrored into Artist.genre for older consumers.
+model ArtistGenre {
+  id        Int      @id @default(autoincrement())
+  artistId  Int
+  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  name      String   // normalised (lowercase, MusicBrainz spelling where one exists)
+  level     String   // genre | subgenre
+  parent    String?  // broad genre a subgenre rolls up into
+  source    String   // user | musicbrainz | lastfm | spotify | connector | embedded
+  votes     Int?     // MusicBrainz vote count / Last.fm tag weight (0-100); null for user/connector
+  createdAt DateTime @default(now())
+
+  @@unique([artistId, name, source])
+  @@index([name])
 }
 
 model MusicVideo {

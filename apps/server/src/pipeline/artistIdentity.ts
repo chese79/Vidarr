@@ -11,6 +11,7 @@ import { findPublicArtistSlug, searchArtists as searchImvdbArtists } from '../pr
 import { refreshArtistMetadata } from './metadataRefresh.js';
 import { normalizeTitle } from './normalize.js';
 import { collectArtistVideoInventory } from './artistVideoInventory.js';
+import { storeMusicBrainzGenres } from './artistGenres.js';
 
 function evidenceJson(value: unknown) {
   return JSON.stringify(value);
@@ -62,6 +63,11 @@ export async function enrichConfirmedArtist(artistId: number, mbid: string, obse
       musicbrainzRefreshedAt: new Date(),
     },
   });
+  // Keep MusicBrainz's full, vote-ranked genre list as candidates (the update
+  // above only mirrors the first one into Artist.genre). Never allowed to fail the
+  // confirmation itself — genres are enrichment, identity is the point here.
+  try { await storeMusicBrainzGenres(artistId, metadata); }
+  catch (err) { await logActivity('warn', 'artist-genres:store', err); }
   await prisma.artistSource.upsert({
     where: { artistId_provider_origin: { artistId, provider: 'musicbrainz', origin: 'identity-resolution' } },
     update: { externalId: mbid, lastSeenAt: new Date() },

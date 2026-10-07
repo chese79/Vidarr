@@ -21,6 +21,7 @@ export async function resetDb(): Promise<void> {
   await prisma.musicVideoFile.deleteMany();
   await prisma.musicVideo.deleteMany();
   await prisma.youtubeSource.deleteMany();
+  await prisma.artistGenre.deleteMany();
   await prisma.artist.deleteMany();
   await prisma.qualityProfileItem.deleteMany();
   await prisma.qualityProfile.deleteMany();

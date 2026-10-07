@@ -19,8 +19,9 @@ pipeline is:
 
 MusicBrainz supplies canonical names, aliases, artist type, country, disambiguation, genres, and
 recording relationships. Picard data is consumed from tags embedded in audio files or exposed by a
-media server; Vidarr does not depend on a separate Picard database. Genre precedence is user value,
-embedded Picard metadata, MusicBrainz genres, connector metadata, then folksonomy data.
+media server; Vidarr does not depend on a separate Picard database. Genre precedence is the user's value,
+then embedded Picard metadata or media-server genres, then MusicBrainz genres and Last.fm tags merged
+as peers.
 
 When a read-only audio path is configured, Vidarr retains connector-scoped observations for only
 the files present there: title, album, credited artist, album artist, track/disc positions, genre,
@@ -69,6 +70,20 @@ which canonical videos already exist in each media server, even when Vidarr did 
 download them. Local file ownership and availability in a connected server are related but
 distinct states. A local video matching the artist but not an IMVDb video remains visible as
 inventory alongside the official catalog and is not silently discarded or counted as expected.
+
+## Artist genres
+
+An artist's genres have two levels: broad genres and the sub-genres that roll up into them.
+MusicBrainz and Last.fm are both retained as per-source candidates and never collapsed into one value,
+so the user can see where a genre came from and judge it. The genres in force are chosen from the
+highest-precedence source that has any (see precedence above); the community tier merges MusicBrainz
+and Last.fm, ranks a genre both agree on first, and caps the result so a well-known artist is not
+buried in labels. Last.fm tags are free text and count only when they resolve to a MusicBrainz
+genre. A user's edit is never replaced by a refresh, and a source that fails or answers empty never
+removes stored genres. Library-wide counts are shown as a count and a percentage of Library artists
+per genre and sub-genre so the user can decide whether consolidating is worthwhile; consolidation is
+advisory. Songs do not carry their own genre: almost none have one in either source, so a video
+uses its artist's genres.
 
 ## Discovery and acquisition
 

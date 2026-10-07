@@ -74,6 +74,7 @@ Vidarr prefers an IMVDb curated direct link, then a plausible official VEVO or a
 
 | Page | What to do there |
 | --- | --- |
+| **Genres** | See how many Library artists are in each genre and sub-genre, as a count and a percentage of the library, and which labels might be worth consolidating. See [Genres](#genres). |
 | **Discover** | Review artist recommendations from connected libraries and recommendation providers. Add an artist or dismiss a recommendation. |
 | **Import** | Preview a YouTube playlist, select artists and videos, then submit them to Match Review and Video Review. Choose a root folder and quality profile before importing. |
 | **Playlists** | Build a static list or generate one from filters such as artist, genre, year, ownership, or play count. Choose a playback library and push a playlist to a supported media-server connector. Use **Edit** to rename a playlist, change its library, or (for a smart playlist) change its rules and schedule. Reorder a static playlist with the arrows. See [Editing and removing playlists](#editing-and-removing-playlists). |
@@ -82,6 +83,19 @@ Vidarr prefers an IMVDb curated direct link, then a plausible official VEVO or a
 | **History** | Inspect completed activity and review or acquisition failures. |
 
 Under **Settings**, **General** contains library naming and integration settings; **Quality Profiles** controls acceptable formats; **Root Folders** sets destinations; **Library Connectors** configures media-server reads and playback libraries; **Indexers** and **Download Clients** configure search and acquisition; **System / Tasks** shows maintenance jobs and manual run actions.
+
+## Genres
+
+Every artist has genres (broad, such as *rock*) and sub-genres (specific, such as *shoegaze*). On an artist's page, the **Genres** panel shows the ones in force. Beside each is how many Library artists share it and what percentage of the library that is.
+
+- Vidarr keeps what **MusicBrainz** and **Last.fm** each say, and chooses the strongest few from both. A genre both sources agree on ranks highest. Last.fm needs to be enabled with an API key under **Settings → General**. Use **Refresh from sources** to fetch again.
+- **Alternatives** are genres Vidarr did not choose but could suggest: other sources' candidates, the broad genre for a sub-genre, and genres already used in your library. Click one to add it. Prefer one already in your library over inventing a near-duplicate.
+- Add or remove a genre and the list becomes yours. A refresh then only updates the suggestions; it never replaces your genres. **Reset to automatic** goes back to the sources.
+- **Match from Spotify** replaces your genres with Spotify's first genre for the artist (Spotify must be enabled).
+
+The **Genres** page lists every genre with its artist count, its percentage of the library, and its percentage of artists that have any genre. An artist counts once under each genre or sub-genre it has, and counts under a broad genre when it has any of that genre's sub-genres. Open a genre to see its sub-genres. **Worth consolidating?** points out the same genre spelled two ways and small sub-genres that could fold into a broad genre; it only advises. Edit artists to act on it.
+
+Genre data comes from MusicBrainz (community votes) and Last.fm (listener tags), both crowd-sourced and subjective, so expect some disagreement. Sub-genre detail is much richer for well-known artists than for obscure ones, and very few songs have a genre of their own, so videos use their artist's genres.
 
 ## Editing and removing playlists
 

@@ -9,12 +9,18 @@ import { regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
 import { republishChangedSmartPlaylist } from '../pipeline/playlistPush.js';
 import { reconcilePendingImports } from '../pipeline/pendingImportReconciliation.js';
 import { backfillArtistVideoInventories } from '../pipeline/artistVideoBackfill.js';
+import { backfillArtistGenres } from '../pipeline/artistGenres.js';
 
 export interface ScheduledJob {
   name: string;
   defaultIntervalMs: number;
   run: () => Promise<string>;
+  // Optional: after a run, whether more work remains and the job should run
+  // again straight away (production only) instead of waiting out its interval.
+  rerun?: () => boolean;
 }
+
+let genreBackfillProgressed = false;
 
 async function pollAllYoutubeSources(): Promise<string> {
   const sources = await prisma.youtubeSource.findMany({ where: { monitored: true } });
@@ -32,6 +38,18 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  {
+    name: 'Artist Genre Backfill',
+    defaultIntervalMs: 10 * 60_000,
+    run: async () => {
+      const result = await backfillArtistGenres();
+      genreBackfillProgressed = result.refreshed > 0 && result.remaining > 0;
+      return `${result.checked} checked, ${result.refreshed} updated, ${result.remaining} remaining`;
+    },
+    // Stops rerunning when a pass makes no progress (e.g. MusicBrainz is down)
+    // so it cannot spin; the next interval tick retries.
+    rerun: () => genreBackfillProgressed,
+  },
   {
     name: 'Artist Video Inventory Backfill',
     defaultIntervalMs: 2 * 60_000,

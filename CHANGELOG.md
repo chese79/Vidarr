@@ -5,6 +5,40 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — artist genres and sub-genres, a genre editor, and library-wide genre counts
+
+- Each artist now has genres and sub-genres. MusicBrainz and Last.fm are both kept, side by side, as
+  candidates instead of one overwriting the other. The genres in force are chosen from them: your own
+  edits first, then genres from your media server or file tags, then MusicBrainz and Last.fm merged
+  (a genre both agree on ranks highest), capped at 3 genres and 5 sub-genres so a well-known artist is
+  not buried under a dozen labels. Everything not chosen stays visible as an alternative.
+- The artist page has a genre editor. Every genre shows how many Library artists share it and what
+  percentage of the library that is, so a one-off label is easy to tell from a mainstream one. Add or
+  remove genres, pick from suggested alternatives (other sources' candidates, the broad genre for a
+  chosen sub-genre, and genres already used elsewhere in your library), refresh from MusicBrainz and
+  Last.fm, or reset to automatic. Your edits are never replaced by a refresh.
+- New **Genres** page lists every genre with its artist count, its percentage of the library and of
+  genred artists, and its sub-genres with the same figures. A "Worth consolidating?" panel points at
+  the same genre written two ways and at small sub-genres that could fold into their broad genre. It is
+  advisory only; nothing is changed from there.
+- Last.fm is used when it is enabled with an API key under **Settings → General**. Only Last.fm tags that are
+  real MusicBrainz genres count (decades, nationalities and "female vocalists" are dropped; spellings
+  such as "hip-hop" and "rap" are folded into "hip hop"). A source that fails or returns nothing never
+  removes genres already stored.
+- A background task, **Artist Genre Backfill**, fills in genres for confirmed artists that have none
+  stored yet, ten at a time, and keeps going until done. Genres are also stored when an artist is
+  confirmed in Match Review.
+- Existing data is kept. A genre you typed, or one from a media server, stays in force; a genre
+  that MusicBrainz filled in earlier is replaced by the richer stored list. `Artist.genre` remains the
+  comma-separated display and filter value (now listing sub-genres too), so the Library filter,
+  playlist rules and Discover work as before. The Library genre filter now lists each genre separately
+  instead of whole comma-joined strings.
+- **Match Genre** is now **Match from Spotify** and records the result as your own genre.
+- Database: new `ArtistGenre` table and `Artist.genresRefreshedAt` column (migration
+  `20261006120000_artist_genres`, additive only).
+- Data sources: MusicBrainz genre vocabulary bundled as a snapshot of 2026-10-04 (2,209 names; used to
+  filter Last.fm tags); per-artist MusicBrainz genres and Last.fm tags are fetched live when refreshed.
+
 ### Fixed — Docker root-folder safety
 
 - Reject Windows host paths and relative paths when Vidarr runs in Linux or Docker, preventing

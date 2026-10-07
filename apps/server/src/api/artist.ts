@@ -11,6 +11,8 @@ import { prisma, logActivity } from '../db/client.js';
 import { sortNameFor, normalizeTitle } from '../pipeline/normalize.js';
 import { refreshArtistMetadata } from '../pipeline/metadataRefresh.js';
 import { matchStandardGenre } from '../pipeline/genreMatch.js';
+import { setUserGenres } from '../pipeline/artistGenres.js';
+import { parseGenreList } from '../pipeline/genreTaxonomy.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
 import { computeVideoStatus } from '../pipeline/videoStatus.js';
@@ -741,7 +743,15 @@ export async function artistRoutes(app: FastifyInstance) {
     if (body.name) data.sortName = sortNameFor(body.name);
 
     const before = await prisma.artist.findUniqueOrThrow({ where: { id } });
-    const updated = await prisma.artist.update({ where: { id }, data });
+    let updated = await prisma.artist.update({ where: { id }, data });
+
+    // A genre typed through this older field is the user's own value: record it as
+    // explicit genres so a later MusicBrainz/Last.fm refresh cannot replace it.
+    // null/empty hands control back to the automatic sources.
+    if ('genre' in body) {
+      await setUserGenres(id, parseGenreList(body.genre));
+      updated = await prisma.artist.findUniqueOrThrow({ where: { id } });
+    }
 
     // Turning monitoring on (re-)establishes the artist's full video list from
     // IMVDb immediately, rather than waiting for the next scheduled refresh.
@@ -776,7 +786,9 @@ export async function artistRoutes(app: FastifyInstance) {
     if (!match) {
       return reply.code(404).send({ error: 'No standard genre match found — enable Spotify in Settings.' });
     }
-    await prisma.artist.update({ where: { id }, data: { genre: match.genre } });
+    // An explicit user action, so it becomes the user's genres (replacing earlier
+    // ones) rather than a background candidate.
+    await setUserGenres(id, [match.genre]);
     return match;
   });
 }

@@ -51,6 +51,9 @@ import type {
   UpdatePlaylist,
   DeletePlaylistResult,
   StandardGenreMatch,
+  ArtistGenreView,
+  ArtistGenreRefreshResult,
+  GenreStats,
   PlayCountSyncResult,
   GoogleAuthStatus,
   LocalLoginStatus,
@@ -140,6 +143,9 @@ async function requestBlob(path: string): Promise<Blob> {
 }
 
 export const api = {
+  genres: {
+    stats: (smallThreshold = 1) => request<GenreStats>(`/genres/stats?smallThreshold=${smallThreshold}`),
+  },
   artists: {
     list: () => request<Artist[]>('/artist'),
     matchReview: () => request<Array<Artist & { musicbrainzCandidates: Array<{
@@ -184,6 +190,11 @@ export const api = {
         body: JSON.stringify(data),
       }),
     remove: (id: number) => request<void>(`/artist/${id}`, { method: 'DELETE' }),
+    genres: (id: number) => request<ArtistGenreView>(`/artist/${id}/genres`),
+    updateGenres: (id: number, genres: string[]) =>
+      request<ArtistGenreView>(`/artist/${id}/genres`, { method: 'PUT', body: JSON.stringify({ genres }) }),
+    refreshGenres: (id: number) =>
+      request<ArtistGenreRefreshResult>(`/artist/${id}/genres/refresh`, { method: 'POST' }),
     matchGenre: (id: number) =>
       request<StandardGenreMatch>(`/artist/${id}/match-genre`, { method: 'POST' }),
     musicbrainzCandidates: (id: number) => request<Array<{

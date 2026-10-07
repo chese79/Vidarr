@@ -13,6 +13,8 @@ export interface MusicBrainzArtist {
   country: string | null;
   disambiguation: string | null;
   genres: string[];
+  // Same genres with MusicBrainz's community vote counts, highest first.
+  genreVotes?: Array<{ name: string; votes: number }>;
   aliases: string[];
   youtubeChannels?: string[];
   imvdbSlug?: string | null;
@@ -63,6 +65,9 @@ export function mapArtist(value: any): MusicBrainzArtist {
     country: value.country ?? null,
     disambiguation: value.disambiguation ?? null,
     genres: (value.genres ?? []).map((genre: any) => String(genre.name)),
+    genreVotes: (value.genres ?? [])
+      .map((genre: any) => ({ name: String(genre.name), votes: Number(genre.count ?? 0) }))
+      .sort((a: { votes: number }, b: { votes: number }) => b.votes - a.votes),
     aliases: (value.aliases ?? []).map((alias: any) => String(alias.name)),
     youtubeChannels,
     imvdbSlug,

@@ -9,6 +9,7 @@ import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from './db/client.js';
 import { artistRoutes } from './api/artist.js';
+import { genreRoutes } from './api/genre.js';
 import { musicVideoRoutes } from './api/musicvideo.js';
 import { qualityProfileRoutes } from './api/qualityprofile.js';
 import { rootFolderRoutes } from './api/rootfolder.js';
@@ -143,6 +144,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(googleAuthRoutes);
   await app.register(localAuthRoutes);
   await app.register(artistRoutes);
+  await app.register(genreRoutes);
   await app.register(videoReviewRoutes);
   await app.register(musicVideoRoutes);
   await app.register(qualityProfileRoutes);
