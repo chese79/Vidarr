@@ -5,6 +5,24 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — creating or regenerating a playlist now re-reads your media server first
+
+- Creating a playlist from filters, and regenerating a smart playlist by hand, first re-reads the
+  video library of the chosen playback library (or of every enabled connector with a video library
+  when none is chosen), then builds the playlist. Previously a playlist was built from whatever the
+  last successful connector sync had recorded, so a failed or stale sync silently produced empty
+  playlists.
+- A sync that fails never blocks the playlist: it is built from the last known data, and the page says
+  which library could not be synced and why. A sync already running is not started twice. Scheduled
+  regeneration does not sync; it keeps using the last synced data.
+- The video half of a connector sync is now one shared routine used by both the connector sync and
+  playlist creation. Repeat syncs are much faster because unchanged videos and artist records are
+  no longer rewritten one by one: a 3,600-video library went from about 73 seconds to under 9
+  (most of that is the media server answering). Results are unchanged.
+- Existing test and behaviour note: videos on the server only become playlist candidates when they
+  match a catalog video. In a library of YouTube-style rips whose "artist" is the uploader, few
+  videos match, so playlists stay small until matching improves.
+
 ### Added — artist genres and sub-genres, a genre editor, and library-wide genre counts
 
 - Each artist now has genres and sub-genres. MusicBrainz and Last.fm are both kept, side by side, as
