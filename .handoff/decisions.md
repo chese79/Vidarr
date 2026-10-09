@@ -2,6 +2,7 @@
 
 | Date | Decision | Rationale | Rejected alternatives | Evidence |
 |---|---|---|---|---|
+| 2026-10-08 | Receiving session uses GPT-6 Codex; replace the incoming Claude model pin while preserving source-model history | User explicitly requested "switch modelgpt-6 codex" in the receiving conversation | Require the receiver to use the outgoing Claude model | [verified] direct user instruction in this conversation; current session is GPT-6 Codex |
 | 2026-10-04 | Keep MusicBrainz and Last.fm genres as separate per-source rows; effective genres = user > media-server/file tags > MusicBrainz+Last.fm merged | User asked to keep both and judge consolidation; product-vision precedence | One merged value that overwrote the other; Last.fm last as "folksonomy" | [verified] commit `72a99d7`, docs/product-vision.md |
 | 2026-10-04 | Cap effective genres at 3 genres + 5 sub-genres; the rest stay as alternatives | Well-known artists average ~12 MusicBrainz genres | Show everything in force | [verified] sampled 40 well-known artists |
 | 2026-10-04 | Last.fm tags count only if they resolve to a MusicBrainz genre (after spelling normalization) | 34–44% of strong Last.fm tags are not genres (decades, nationalities) | Accept all tags | [verified] sample analysis |

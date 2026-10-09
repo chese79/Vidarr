@@ -54,7 +54,7 @@ Full log in `decisions.md`. Short version:
 11. The live Jellyfin library is a YouTube-style rip collection. Matching can only improve as far as the real artists exist in Vidarr with catalogs; most do not.
 
 ## Locked — no changes without the user's explicit approval
-- Model: `claude-sonnet-5-5` (Claude Sonnet 5.5; taken from the session context). The receiving session must match it or stop dependent work.
+- Model: `GPT-6 Codex` for the receiving session, explicitly approved by the user on 2026-10-08. Source-model history remains `claude-sonnet-5-5` (Claude Sonnet 5.5).
 - Versions: node `>=22.12.0` (use Node 22 in Docker; host is v24.19.0 and unsupported for build/test), prisma `^5.20.0`, @prisma/client `^5.20.0`, vitest `^5.0.0`, fastify `^5.12.1`, Docker CLI `29.8.0`.
 - Connectors/services: Jellyfin connector id 4 named `JF` (read-only use); MusicBrainz web service; Last.fm API.
 - Deployment config of container `vidarr` (see Gotchas procedure): ports, mounts, env and restart policy must stay identical.
