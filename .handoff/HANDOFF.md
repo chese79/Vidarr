@@ -9,7 +9,15 @@ and merged by this receiving conversation. The branch now integrates them. Autom
 deletion was removed to preserve existing artists and provenance; bracketed version labels,
 empty identities, and stored exact-match identities received regression fixes. [verified] The final
 Node 22 Docker build passed, with 621 server tests and 23 web tests passing and all 32 migrations
-applied to disposable SQLite data. Publication and deployment results will be recorded when complete.
+applied to disposable SQLite data. [verified] PR #3 merged the work into `main` at
+`e78b6915d8cafd3af0c357f9cf85091c7794f8d9`; the automatic Docker publication succeeded.
+[verified] The live `vidarr` service runs that production revision and is healthy with its original
+environment, mounts, port binding, and restart policy. Database backups and `vidarr-pre-e78b691`
+are retained. A completed Jellyfin sync inventoried 3,602 videos with 527 exact matches (previously
+1); all original artist IDs and playlist items/order remain. The additive genre-attempt migration
+is applied and the Library API returns 200. The obsolete October 4 root handoff was archived
+outside the repository. This handoff's implementation, testing, merge, deployment, and live
+acceptance work is complete; the outgoing snapshot's proposed actions below are historical.
 
 Tier: Standard — one feature in flight across code, a live deployment, and a diverged remote; context beyond the diff is essential.
 Created: 2026-10-08 20:50, America/Chicago (-05:00)

@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Verified — completed media-server matching deployment (2026-10-08)
+
+- The combined on-demand playlist and filename-matching work passed the full Node 22 build,
+  621 server tests, and 23 web tests, then merged and published successfully.
+- Live acceptance retained all 3,602 inventory videos, every existing artist ID, and playlist
+  items/order while increasing exact catalog matches from 1 to 527. Service settings and mounts
+  were preserved; the prior container and database backups remain available for rollback.
+
 ### Fixed — match media-server inventory by filename
 
 - Use artist/title identities parsed from Windows or POSIX filenames, then server titles and

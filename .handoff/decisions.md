@@ -2,6 +2,7 @@
 
 | Date | Decision | Rationale | Rejected alternatives | Evidence |
 |---|---|---|---|---|
+| 2026-10-08 | Complete the handoff at production revision e78b691, with prior artists retained | All 621 server and 23 web tests pass; PR #3 merged; Docker publication succeeded; live exact matches increased from 1 to 527 with all 3,602 videos and existing playlist items retained | Leave the implementation unmerged or undeployed | [verified] Docker health, revision label, live database acceptance checks, Library API 200, and GitHub Actions success |
 | 2026-10-08 | Complete the open handoff work together with the previously merged review fixes | User directly requested taking the handoff notes and existing work to a completed state | Leave the branch untested or disconnected from upstream | [verified] direct user instruction in the receiving conversation |
 | 2026-10-08 | Preserve stale artists and source provenance instead of automatic deletion | Filename reinterpretation is not proof that prior user data is disposable; AGENTS.md requires data preservation | Delete unmonitored unmatched artists during sync | [verified] deletion routine removed; regression coverage preserves old artists and provenance |
 | 2026-10-08 | Receiving session uses GPT-6 Codex; replace the incoming Claude model pin while preserving source-model history | User explicitly requested "switch modelgpt-6 codex" in the receiving conversation | Require the receiver to use the outgoing Claude model | [verified] direct user instruction in this conversation; current session is GPT-6 Codex |
