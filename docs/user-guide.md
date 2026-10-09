@@ -115,6 +115,42 @@ Open **Playlists** and choose **Edit** on a playlist.
 
 **Remove from …** takes the playlist off one media server and keeps it in Vidarr. **Delete playlist** also removes it from every server it was published to, unless you choose **Delete, keep it on …**. If a media server cannot be reached, the playlist is still deleted and the page tells you which server still holds a copy so you can remove it there.
 
+## Last.fm account linking and scrobbling
+
+1. Get an application **API key** and **Shared secret** from [Last.fm's API account page](https://www.last.fm/api/account).
+   These are Last.fm credentials, distinct from Vidarr's own API key. No Last.fm password is entered in Vidarr.
+2. Open **Settings → General → Recommendation Providers → Last.fm**, enter both fields and **Save**.
+   Leave saved secrets blank on subsequent edits to retain them. The provider checkbox controls
+   recommendations and genre lookups; it does not control scrobbling.
+3. Under **Last.fm account & scrobbling**, choose **Link account**, then **Authorize on Last.fm**.
+   After granting access in that tab, return to Vidarr and choose **Complete link after authorizing**.
+   The link token expires after an hour; start again if it expires. No public callback URL is needed.
+4. Check **Send now-playing updates and scrobbles for all music-video library playback**.
+
+This sends **all users'** current playback in each enabled Jellyfin or Plex connector's selected
+music-video library to the linked account. Jellyfin needs a credential that can read server-wide
+sessions and the selected video library; Plex needs access to current server sessions. Select the correct
+video library under **Library Connectors**. Subsonic and audio-library playback are not included.
+
+The **Last.fm Playback Scrobbling** task polls every 15 seconds. A track must be longer than
+30 seconds and observed playing for half its duration or four minutes. Pauses, buffering, seeks
+and gaps over 45 seconds do not earn credit; joining mid-play does not credit the earlier portion.
+Polling may miss brief plays and the final unobserved seconds. No old play counts are uploaded.
+Vidarr uses confirmed catalog matches or structured artist/title metadata from the server; videos
+without that metadata are skipped. Correct metadata or confirm matches, then play them again.
+
+Queue and submission counts cover retained records from the last 30 days; pending retries remain
+until resolved. Failed delivery survives restarts and retries with exponential backoff. Last.fm
+ignored plays are shown separately. An ambiguous network failure may retry an already-received
+request with the same original timestamp; Last.fm controls remote duplicate filtering.
+When multiple users play simultaneously, the most recently processed play becomes the account's
+single now-playing display. Qualifying plays are queued separately for each session.
+
+**Disable** or **Unlink account** stops sends and clears queued playback. Unlink is local; revoke
+Vidarr's access in Last.fm's application settings too if needed. Saving a different API key or
+shared secret requires linking again. Revoked sessions stop scrobbling and show a relink message.
+Existing genres, recommendations, catalog records, media and playlists are preserved.
+
 ## Troubleshooting
 
 | Symptom | Check |

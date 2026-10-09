@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, setStoredApiKey } from '../api/client';
 import { renderNamingFormat } from '@vidarr/shared-types';
 import type { RecommendationProviderConfig, TransferMode } from '@vidarr/shared-types';
+import { LastFmAccountSection } from '../components/LastFmAccountSection';
 
 function SecuritySection({ apiKey }: { apiKey: string | null }) {
   const queryClient = useQueryClient();
@@ -254,6 +255,7 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
       setApiKey('');
       setClientSecret('');
       queryClient.invalidateQueries({ queryKey: ['recommendationProviders'] });
+      queryClient.invalidateQueries({ queryKey: ['lastfm'] });
     },
   });
 
@@ -280,6 +282,7 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
           />
         </>
       ) : config.provider === 'lastfm' ? (
+        <>
         <input
           placeholder={`API key${config.hasApiKey ? ' (leave blank to keep)' : ''}`}
           aria-label="API key"
@@ -287,6 +290,14 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
         />
+        <input
+          placeholder={`Shared secret${config.hasClientSecret ? ' (leave blank to keep)' : ''}`}
+          aria-label="Last.fm shared secret"
+          type="password"
+          value={clientSecret}
+          onChange={(e) => setClientSecret(e.target.value)}
+        />
+        </>
       ) : (
         <span className="empty-state" style={{ padding: 0 }}>
           No credentials required
@@ -430,6 +441,7 @@ export default function SettingsPage() {
         googleAllowedEmail={settings.data?.googleAllowedEmail ?? null}
       />
       <RecommendationProvidersSection />
+      <LastFmAccountSection />
     </div>
   );
 }

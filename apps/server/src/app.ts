@@ -17,6 +17,7 @@ import { settingsRoutes } from './api/settings.js';
 import { libraryConnectorRoutes } from './api/libraryconnector.js';
 import { recommendationRoutes } from './api/recommendation.js';
 import { recommendationProviderRoutes } from './api/recommendationprovider.js';
+import { lastFmRoutes } from './api/lastfm.js';
 import { imvdbRoutes } from './api/imvdb.js';
 import { youtubeSourceRoutes } from './api/youtubesource.js';
 import { indexerRoutes } from './api/indexer.js';
@@ -153,6 +154,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(libraryConnectorRoutes);
   await app.register(recommendationRoutes);
   await app.register(recommendationProviderRoutes);
+  await app.register(lastFmRoutes);
   await app.register(imvdbRoutes);
   await app.register(youtubeSourceRoutes);
   await app.register(indexerRoutes);

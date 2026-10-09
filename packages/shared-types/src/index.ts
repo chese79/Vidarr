@@ -493,6 +493,21 @@ export type UpdateRecommendationProviderConfig = z.infer<
   typeof UpdateRecommendationProviderConfigSchema
 >;
 
+export interface LastFmStatus {
+  linked: boolean;
+  username: string | null;
+  scrobblingEnabled: boolean;
+  pendingAuthorization: boolean;
+  pendingExpiresAt: string | null;
+  lastPollAt: string | null;
+  lastScrobbledAt: string | null;
+  lastError: string | null;
+  queued: number;
+  sent: number;
+  ignored: number;
+  failed: number;
+}
+
 export const RecommendationSourceHitSchema = z.object({
   id: z.number().int(),
   source: z.enum(['library', 'lastfm', 'spotify', 'musicbrainz']),

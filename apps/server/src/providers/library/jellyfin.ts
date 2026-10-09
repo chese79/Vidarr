@@ -21,6 +21,25 @@ const { get: jellyfinGet, send: jellyfinSend, getBinary: jellyfinGetBinary } = c
   (token) => `MediaBrowser Token="${token}"`,
 );
 
+const playbackLibraries = new Map<number, { signature: string; expiresAt: number; ids: Set<string> }>();
+async function playbackLibraryIds(config: LibraryConnector): Promise<Set<string>> {
+  const signature = JSON.stringify([config.host, config.authToken, config.videoLibraryId]);
+  const cached = playbackLibraries.get(config.id);
+  if (cached?.signature === signature && cached.expiresAt > Date.now()) return cached.ids;
+  const ids = new Set<string>();
+  for (let start = 0; ; start += 500) {
+    // Jellyfin's Ids filter bypasses ParentId, and virtual library IDs are not
+    // physical ancestors. Enumerate the selected library instead; cache only
+    // one minute while active playback exists to keep polling inexpensive.
+    const body = await jellyfinGet(config, `/Items?ParentId=${encodeURIComponent(config.videoLibraryId!)}&Recursive=true&IncludeItemTypes=MusicVideo&EnableImages=false&EnableUserData=false&StartIndex=${start}&Limit=500`);
+    if (!Array.isArray(body?.Items)) throw new Error('Jellyfin returned invalid library membership');
+    for (const item of body.Items) if (item.Id) ids.add(String(item.Id));
+    if (body.Items.length < 500 || start + body.Items.length >= body.TotalRecordCount) break;
+  }
+  playbackLibraries.set(config.id, { signature, ids, expiresAt: Date.now() + 60_000 });
+  return ids;
+}
+
 // One item per music video in the target library, matched by normalized
 // title + artist (Jellyfin's MusicVideo items carry an Artists array). Exact
 // normalized match only — good enough as long as vidarr's own naming
@@ -67,6 +86,29 @@ async function resolvePlaylistItemId(config: LibraryConnector, item: PlaylistPus
 }
 
 export const jellyfinProvider: LibraryConnectorProvider = {
+  async fetchPlaybackSessions(config) {
+    if (!config.videoLibraryId) return [];
+    const sessions = await jellyfinGet(config, '/Sessions');
+    if (!Array.isArray(sessions)) throw new Error('Jellyfin returned invalid playback sessions');
+    const result = [];
+    const candidates = sessions.filter((session: any) => session.NowPlayingItem?.Type === 'MusicVideo');
+    if (!candidates.length) return [];
+    const libraryIds = await playbackLibraryIds(config);
+    for (const session of candidates) {
+      const item = session.NowPlayingItem;
+      const state = session.PlayState;
+      if (!session.Id || !item?.Id || item.Type !== 'MusicVideo' || !state
+        || typeof state.PositionTicks !== 'number' || typeof item.RunTimeTicks !== 'number') continue;
+      if (!libraryIds.has(String(item.Id))) continue;
+      result.push({
+        sessionId: `${session.Id}:${session.PlaySessionId ?? ''}`,
+        externalId: String(item.Id), positionSeconds: state.PositionTicks / 10_000_000,
+        durationSeconds: item.RunTimeTicks / 10_000_000, playing: state.IsPaused === false,
+        artistName: item.Artists?.[0] ?? item.AlbumArtist, title: item.Name,
+      });
+    }
+    return result;
+  },
   async testConnection(config): Promise<LibraryConnectorTestResult> {
     try {
       await jellyfinGet(config, '/System/Info');
