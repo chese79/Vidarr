@@ -4,6 +4,10 @@ The main menu starts with Library, Playlists, Discover, Artist Review and Video 
 Artist Review retains `/match-review` for existing links. All visible UI borders use `#FFFFC5`;
 thumbnail and gradient backgrounds retain a separate dark surface token.
 
+Artist Review lists artists with the most suggested matches first. Sorting applies before paging
+and within search results, with name and ID breaking ties. Counts include all suggested matches;
+the expandable preview continues to show only the three highest-scoring candidates.
+
 ## Discover
 
 Select an existing artist from the dropdown to review it, or search MusicBrainz by free text.

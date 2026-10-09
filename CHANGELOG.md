@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — Artist Review ordering
+
+- Sort Artist Review by the total number of suggested matches, descending, before pagination.
+  Break ties by artist name and ID. Show the full suggestion count while previewing the top three.
+
 ### Added — playlist defaults and Discover artist review
 
 - Create playlists in Shuffle order with 20 videos by default. Save a default playback library,

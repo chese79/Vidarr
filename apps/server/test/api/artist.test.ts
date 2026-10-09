@@ -73,6 +73,28 @@ describe('artist routes', () => {
     expect(next.json().items[0].name).toBe('Review Beta');
   });
 
+  it('sorts by all suggested matches before paging, excluding rejected matches', async () => {
+    const artists = [];
+    for (const name of ['Review Alpha', 'Review Beta', 'Review Zulu']) {
+      artists.push(await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name, sortName: name }));
+    }
+    for (const [index, count] of [2, 2, 5].entries()) {
+      for (let n = 0; n < count; n++) await prisma.musicBrainzArtistCandidate.create({ data: {
+        artistId: artists[index].id, musicbrainzArtistId: `candidate-${index}-${n}`, name: `Match ${n}`, score: n / 10, evidence: '{}',
+      } });
+    }
+    for (let n = 0; n < 6; n++) await prisma.musicBrainzArtistCandidate.create({ data: {
+      artistId: artists[0].id, musicbrainzArtistId: `rejected-${n}`, name: 'Rejected', score: 1, evidence: '{}', status: 'rejected',
+    } });
+    const get = (suffix: string) => app.inject({ method: 'GET', url: `/api/v1/artist/match-review${suffix}`, headers: authHeaders() });
+    const first = (await get('/page?search=Review&limit=1')).json();
+    expect(first.total).toBe(3);
+    expect(first.items[0]).toMatchObject({ id: artists[2].id, suggestedMatchCount: 5 });
+    expect(first.items[0].musicbrainzCandidates).toHaveLength(3);
+    expect((await get('/page?search=Review&limit=1&offset=1')).json().items[0].id).toBe(artists[0].id);
+    expect((await get('')).json().map((row: { id: number }) => row.id)).toEqual([artists[2].id, artists[0].id, artists[1].id]);
+  });
+
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();
