@@ -85,6 +85,11 @@ per genre and sub-genre so the user can decide whether consolidating is worthwhi
 advisory. Songs do not carry their own genre: almost none have one in either source, so a video
 uses its artist's genres.
 
+Community agreement is ranked before relative vote strength, so a genre both sources support
+remains ahead of single-source candidates when the effective-genre caps apply. Background genre
+backfill records each attempt independently of a successful refresh. Failed attempts cool down
+for ten minutes while later artists continue; stored candidates and success timestamps are retained.
+
 ## Discovery and acquisition
 
 For a canonical artist, the user can discover the artist's music-video catalog, select wanted

@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — genre ranking and backfill progress
+
+- Prioritize genres supported by both MusicBrainz and Last.fm before single-source candidates,
+  including when the effective-genre cap applies.
+- Continue artist genre backfill past failed lookups. Attempts have a ten-minute cooldown and
+  are tracked separately from successful refreshes, preserving stored genres and retrying failed
+  identities without blocking later artists. Additive Prisma migration:
+  `20261008120000_genre_refresh_attempts`.
+
 ### Fixed — same-path upgrade recovery
 
 - Retain the previous video during a same-path quality upgrade until metadata writing and
