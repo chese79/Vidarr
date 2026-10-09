@@ -4,6 +4,7 @@ import { normalizeTitle } from './normalize.js';
 import { createHash, randomInt } from 'node:crypto';
 
 export interface PlaylistFilters {
+  onlyUnwatched?: boolean;
   yearMin?: number;
   yearMax?: number;
   genre?: string;
@@ -112,27 +113,33 @@ async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'an
 
   const matched = checks.length
     ? candidates.filter((v) => (matchMode === 'all' ? checks.every((c) => c(v)) : checks.some((c) => c(v))))
-    : [];
+    : candidates;
 
-  return matched.map((video) => video.id);
+  const eligible = filters.onlyUnwatched ? matched.filter((v) => {
+    const counts = v.libraryVideos.map((item) => item.playCount).filter((count): count is number => count !== null);
+    if (!targetConnectorId && v.file?.playCount != null) counts.push(v.file.playCount);
+    return counts.length > 0 && counts.every((count) => count === 0);
+  }) : matched;
+  return eligible.map((video) => video.id);
 }
 
 export async function generatePlaylistFromFilters(
   name: string,
   filters: PlaylistFilters,
   matchMode: 'all' | 'any',
-  options: { smart?: boolean; regenerateIntervalMinutes?: number | null; targetConnectorId?: number | null; sortMode?: 'artist_title' | 'shuffle' } = {},
+  options: { smart?: boolean; regenerateIntervalMinutes?: number | null; targetConnectorId?: number | null; sortMode?: 'artist_title' | 'shuffle'; maxVideos?: number | null } = {},
 ): Promise<GeneratePlaylistResult> {
   const matchedIds = await matchingVideoIds(filters, matchMode, options.targetConnectorId);
   const sortMode = options.sortMode ?? 'artist_title';
   const shuffleSeed = sortMode === 'shuffle' ? randomInt(0, 2 ** 31) : null;
-  const sortedIds = orderedIds(matchedIds, sortMode, shuffleSeed);
+  const sortedIds = orderedIds(matchedIds, sortMode, shuffleSeed).slice(0, options.maxVideos ?? undefined);
 
   const playlist = await prisma.playlist.create({ data: {
     name,
     kind: options.smart ? 'smart' : 'static',
-    ruleFilters: options.smart ? JSON.stringify(filters) : null,
-    ruleMatchMode: options.smart ? matchMode : null,
+    ruleFilters: JSON.stringify(filters),
+    ruleMatchMode: matchMode,
+    maxVideos: options.maxVideos ?? null,
     regenerateIntervalMinutes: options.smart ? options.regenerateIntervalMinutes ?? null : null,
     lastGeneratedAt: options.smart ? new Date() : null,
     targetConnectorId: options.targetConnectorId ?? null,
@@ -145,20 +152,20 @@ export async function generatePlaylistFromFilters(
     });
   }
 
-  return { playlistId: playlist.id, matchedCount: matchedIds.length };
+  return { playlistId: playlist.id, matchedCount: sortedIds.length };
 }
 
-export async function regenerateSmartPlaylist(playlistId: number): Promise<{ matchedCount: number; changed: boolean }> {
+export async function regenerateSmartPlaylist(playlistId: number, allowStatic = false): Promise<{ matchedCount: number; changed: boolean }> {
   const playlist = await prisma.playlist.findUnique({
     where: { id: playlistId },
     include: { items: { orderBy: { sortOrder: 'asc' }, select: { musicVideoId: true } } },
   });
-  if (!playlist || playlist.kind !== 'smart' || !playlist.ruleFilters || !playlist.ruleMatchMode) {
+  if (!playlist || (playlist.kind !== 'smart' && !allowStatic) || !playlist.ruleFilters || !playlist.ruleMatchMode) {
     throw new Error('Smart playlist not found');
   }
   const filters = PlaylistFiltersSchema.parse(JSON.parse(playlist.ruleFilters));
   const matchMode = MatchMode.parse(playlist.ruleMatchMode);
-  const matchedIds = orderedIds(await matchingVideoIds(filters, matchMode, playlist.targetConnectorId), playlist.sortMode, playlist.shuffleSeed);
+  const matchedIds = orderedIds(await matchingVideoIds(filters, matchMode, playlist.targetConnectorId), playlist.sortMode, playlist.shuffleSeed).slice(0, playlist.maxVideos ?? undefined);
   const previousIds = playlist.items.map((item) => item.musicVideoId);
   const changed = matchedIds.length !== previousIds.length || matchedIds.some((id, index) => id !== previousIds[index]);
   await prisma.$transaction(async (tx) => {

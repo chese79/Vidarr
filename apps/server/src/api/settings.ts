@@ -8,8 +8,14 @@ export async function settingsRoutes(app: FastifyInstance) {
     return serializeSettings(await prisma.settings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } }));
   });
 
-  app.put('/api/v1/config', async (req) => {
+  app.put('/api/v1/config', async (req, reply) => {
     const body = UpdateSettingsSchema.parse(req.body);
+    if (body.defaultPlaybackConnectorId != null) {
+      const connector = await prisma.libraryConnector.findUnique({ where: { id: body.defaultPlaybackConnectorId } });
+      if (!connector?.enabled || !connector.videoLibraryId || !['plex', 'jellyfin'].includes(connector.type)) {
+        return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin video library' });
+      }
+    }
     return serializeSettings(await prisma.settings.upsert({
       where: { id: 1 },
       update: body,

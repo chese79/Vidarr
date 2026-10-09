@@ -13,10 +13,6 @@ export class PlaylistEditError extends Error {
   }
 }
 
-function hasAnyFilter(filters: NonNullable<UpdatePlaylist['filters']>): boolean {
-  return Object.values(filters).some((value) => value !== undefined && !(Array.isArray(value) && value.length === 0));
-}
-
 // Applies a PATCH to a playlist. Returns the regeneration outcome when the edit
 // changed what a smart playlist should contain (so the caller can republish),
 // or null when membership wasn't affected (e.g. a rename).
@@ -35,16 +31,10 @@ export async function updatePlaylist(
 
   const isSmart = playlist.kind === 'smart';
   const touchesRules = body.filters !== undefined || body.matchMode !== undefined
-    || body.regenerateIntervalMinutes !== undefined || body.sortMode !== undefined;
-  if (!isSmart && touchesRules) {
+    || body.regenerateIntervalMinutes !== undefined || body.sortMode !== undefined || body.maxVideos !== undefined;
+  if (!isSmart && touchesRules && !body.replaceFromFilters) {
     throw new PlaylistEditError('Only smart playlists have rules. A static playlist’s videos and order are edited directly.', 400);
   }
-  if (body.filters && !hasAnyFilter(body.filters)) {
-    // An empty rule set matches nothing, which would silently empty (and then
-    // republish an empty) playlist — make the user say what they actually want.
-    throw new PlaylistEditError('Enable at least one filter', 400);
-  }
-
   const data: Record<string, unknown> = {};
   if (body.name !== undefined) data.name = body.name;
 
@@ -87,9 +77,12 @@ export async function updatePlaylist(
   }
 
   let sortChanged = false;
-  if (isSmart) {
+  if (isSmart || body.replaceFromFilters) {
+    if (body.maxVideos !== undefined) data.maxVideos = body.maxVideos;
+    if (!isSmart && !playlist.ruleFilters && !body.filters) throw new PlaylistEditError("Select filters before replacing videos", 400);
     if (body.filters) data.ruleFilters = JSON.stringify(body.filters);
     if (body.matchMode) data.ruleMatchMode = body.matchMode;
+    if (!playlist.ruleMatchMode && body.replaceFromFilters && !body.matchMode) data.ruleMatchMode = 'all';
     if (body.regenerateIntervalMinutes !== undefined) data.regenerateIntervalMinutes = body.regenerateIntervalMinutes;
     if (body.sortMode && body.sortMode !== playlist.sortMode) {
       data.sortMode = body.sortMode;
@@ -103,8 +96,8 @@ export async function updatePlaylist(
 
   await prisma.playlist.update({ where: { id }, data });
 
-  const membershipAffected = isSmart && (body.filters !== undefined || body.matchMode !== undefined || rebound || sortChanged);
-  return { regenerated: membershipAffected ? await regenerateSmartPlaylist(id) : null };
+  const membershipAffected = (isSmart || body.replaceFromFilters) && (body.filters !== undefined || body.matchMode !== undefined || body.maxVideos !== undefined || rebound || sortChanged);
+  return { regenerated: membershipAffected ? await regenerateSmartPlaylist(id, !isSmart) : null };
 }
 
 // Rewrites a static playlist's order. Requires the complete, exact set of

@@ -40,7 +40,7 @@ export default function MatchReviewPage() {
   });
 
   return <div>
-    <div className="page-header"><h2>Match Review</h2></div>
+    <div className="page-header"><h2>Artist Review</h2></div>
     <p className="empty-state">Audio and video observations stay here until you confirm their MusicBrainz artist. Channel names are hints, not artist identities.</p>
     {message && <p role="status" className="empty-state">{message} {linkedArtistId && <Link to={`/artist/${linkedArtistId}`}>Open artist</Link>}</p>}
     <div className="library-filter-bar">

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -12,13 +12,68 @@ const artistLetter = (name: string) => {
 
 export default function DiscoverPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    if (typeof location.state?.discoverScroll === "number") {
+      const frame = requestAnimationFrame(() => window.scrollTo(0, location.state.discoverScroll));
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [location.state]);
   const [params, setParams] = useSearchParams();
   const [refreshing, setRefreshing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [message, setMessage] = useState<string | null>(location.state?.message ?? null);
+  const selected = new Set((params.get('selected') ?? '').split(',').map(Number).filter((id) => id > 0));
+  const setSelected = (next: Set<number> | ((current: Set<number>) => Set<number>)) => {
+    const ids = typeof next === 'function' ? next(selected) : next;
+    const copy = new URLSearchParams(params);
+    ids.size ? copy.set('selected', [...ids].join(',')) : copy.delete('selected');
+    setParams(copy, { replace: true });
+  };
+  const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
+  const mbQuery = params.get('mbQuery') ?? '';
+  const lookup = useQuery({ queryKey: ['discover-musicbrainz', mbQuery], queryFn: () => api.artists.searchMusicbrainz(mbQuery), enabled: Boolean(mbQuery) });
+  function review(id: number, collectSources: boolean) {
+    navigate(`/artist/${id}`, { state: { discoverReturnTo: `/discover?${params}`, discoverScroll: window.scrollY, collectSources } });
+  }
+  const addReview = useMutation({
+    mutationFn: (mbid: string) => {
+      const root = rootFolders.data?.[0]; const profile = qualityProfiles.data?.[0];
+      if (!root || !profile) throw new Error('Add a root folder and quality profile first.');
+      return api.artists.addMusicbrainz({ musicbrainzArtistId: mbid, rootFolderId: root.id, qualityProfileId: profile.id });
+    },
+    onSuccess: (artist) => { queryClient.invalidateQueries({ queryKey: ['artists'] }); review(artist.id, false); },
+  });
   const recommendations = useQuery({ queryKey: ['recommendations'], queryFn: api.recommendations.list });
+  useEffect(() => {
+    if (recommendations.isSuccess && typeof location.state?.discoverScroll === 'number') {
+      const frame = requestAnimationFrame(() => window.scrollTo(0, location.state.discoverScroll));
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [recommendations.isSuccess, location.state]);
   const rootFolders = useQuery({ queryKey: ['rootFolders'], queryFn: api.rootFolders.list });
   const qualityProfiles = useQuery({ queryKey: ['qualityProfiles'], queryFn: api.qualityProfiles.list });
+  const [validation, setValidation] = useState<{ name: string; validated: boolean; sources: string[]; warnings: string[] } | null>(null);
+  const [validating, setValidating] = useState(false);
+  const createNew = useMutation({
+    mutationFn: (data: { name: string; allowUnverified: boolean }) => {
+      const root = rootFolders.data?.[0]; const profile = qualityProfiles.data?.[0];
+      if (!root || !profile) throw new Error('Add a root folder and quality profile first.');
+      return api.artists.addNew({ ...data, rootFolderId: root.id, qualityProfileId: profile.id });
+    },
+    onSuccess: ({ artist }) => { queryClient.invalidateQueries({ queryKey: ['artists'] }); review(artist.id, false); },
+  });
+  async function validateAndAdd() {
+    const name = value('newArtistName').trim();
+    if (!name) return;
+    setValidating(true); setValidation(null);
+    try {
+      const result = await api.artists.validateNew(name);
+      setValidation({ name, ...result });
+      if (result.validated) await createNew.mutateAsync({ name, allowUnverified: false });
+    } catch (error) { setMessage(`Could not add artist: ${(error as Error).message}`); }
+    finally { setValidating(false); }
+  }
   const all = recommendations.data ?? [];
   const value = (key: string) => params.get(key) ?? '';
   const update = (key: string, next: string) => {
@@ -62,7 +117,31 @@ export default function DiscoverPage() {
   }
 
   return <div>
-    <div className="page-header"><h2>Discover</h2><button onClick={refresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh Recommendations'}</button></div>
+    <div className="page-header"><h2>Discover</h2><div className="form-row" style={{ marginBottom: 0 }}><button onClick={refresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh Recommendations'}</button><button className="add-new-artist" onClick={() => update('addNew', value('addNew') ? '' : '1')}>Add New Artist</button></div></div>
+    {value('addNew') && <form className="card" aria-label="Add New Artist" onSubmit={(e) => { e.preventDefault(); void validateAndAdd(); }}>
+      <div className="form-row"><input aria-label="New artist name" placeholder="Artist name" maxLength={120} required value={value('newArtistName')} onChange={(e) => { update('newArtistName', e.target.value); setValidation(null); }} /><button disabled={!canAdd || validating || createNew.isPending}>{validating ? 'Checking sources…' : 'Validate & Add'}</button></div>
+      <p>Checks MusicBrainz, Last.fm and IMVDb. Artists remain unmonitored until you select wanted videos. An artist without a confirmed MusicBrainz identity stays in Artist Review.</p>
+      {validation && !validation.validated && validation.name === value('newArtistName').trim() && <div role="alert"><p>No source validated “{validation.name}”. Check the spelling, or add it as an unverified artist for review. {validation.warnings.join(' ')}</p><button type="button" disabled={createNew.isPending} onClick={() => createNew.mutate({ name: validation.name, allowUnverified: true })}>Add unverified artist anyway</button></div>}
+      {createNew.isError && <p role="alert">{(createNew.error as Error).message}</p>}
+    </form>}
+    <section className="card" aria-label="Find an artist to review">
+      <div className="form-row">
+        <label>Existing artists <select aria-label="Existing artists" value={value('libraryArtist')} onChange={(e) => update('libraryArtist', e.target.value)}><option value="">Choose an artist</option>{artists.data?.map((artist) => <option key={artist.id} value={artist.id}>{artist.name}</option>)}</select></label>
+        <button disabled={!value('libraryArtist')} onClick={() => review(Number(value('libraryArtist')), true)}>Review Artist</button>
+      </div>
+      <form className="form-row" onSubmit={(e) => { e.preventDefault(); update('mbQuery', value('artistSearch').trim()); }}>
+        <input aria-label="Search MusicBrainz artists" placeholder="Artist name" maxLength={120} value={value('artistSearch')} onChange={(e) => update('artistSearch', e.target.value)} />
+        <button disabled={!value('artistSearch').trim() || lookup.isFetching}>Search MusicBrainz</button>
+      </form>
+      {lookup.isFetching && <p role="status">Searching MusicBrainz…</p>}
+      {lookup.isError && <p role="alert">{(lookup.error as Error).message}</p>}
+      {addReview.isError && <p role="alert">{(addReview.error as Error).message}</p>}
+      {lookup.isSuccess && !lookup.data.length && <p>No artists found.</p>}
+      {lookup.data?.map((artist) => <div className="form-row" key={artist.id}>
+        <span>{artist.name} · {[artist.type, artist.country, artist.disambiguation].filter(Boolean).join(' · ')}</span>
+        <button disabled={!canAdd || addReview.isPending} onClick={() => addReview.mutate(artist.id)}>Add to Library &amp; Review</button>
+      </div>)}
+    </section>
     {message && <p className="empty-state" role="status">{message}</p>}
     {(rootFolders.isError || qualityProfiles.isError) && <p className="empty-state" role="alert">Could not load root folders or quality profiles. Check your connection and reload.</p>}
     {rootFolders.isSuccess && qualityProfiles.isSuccess && !canAdd && <p className="empty-state">Add a root folder and a quality profile before you can add recommended artists.</p>}

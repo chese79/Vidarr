@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { credentialPlaceholder } from '../credentialFields';
 import type { Indexer, IndexerImplementation } from '@vidarr/shared-types';
 
 function parseCategories(input: string): number[] {
@@ -88,8 +89,9 @@ function IndexerRow({ indexer, status, onTest, onRemove }: {
               style={{ minWidth: 280 }}
             />
             <input
-              placeholder={indexer.hasApiKey ? 'New API key (leave blank to keep current)' : 'API key'}
+              placeholder={credentialPlaceholder(indexer.hasApiKey, 'API key')}
               aria-label="API key"
+              type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
@@ -222,6 +224,7 @@ export default function IndexersPage() {
           <input
             placeholder="API key"
             aria-label="API key"
+            type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
           />

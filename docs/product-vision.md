@@ -92,6 +92,13 @@ for ten minutes while later artists continue; stored candidates and success time
 
 ## Discovery and acquisition
 
+Discover can select an existing Library artist or search MusicBrainz and add the selected identity
+for source collection and video review. Selected acquisition actions return to the preserved Discover
+context. New names are checked against MusicBrainz, Last.fm or IMVDb; additions without successful
+validation require an explicit warning override. Name validation alone does not replace canonical
+MusicBrainz confirmation: ambiguous and non-MusicBrainz identities remain in Artist Review.
+See [Discover and playlist workflows](discovery-playlist-workflows.md).
+
 For a canonical artist, the user can discover the artist's music-video catalog, select wanted
 videos, search for sources, and download a chosen or automatically selected result.
 The artist page's Download Selected action grabs only checked videos with an accepted direct
@@ -178,6 +185,14 @@ non-empty scan reconciles inventory. Video-library provenance is retained even w
 was already observed through an audio library.
 
 ## Playlists
+
+The playlist creator defaults to 20 videos in Shuffle order and a saved default playback library.
+Only activated filters constrain new lists; no active filters admits the eligible library inventory.
+Unwatched is an optional mandatory constraint requiring known play count zero even with ANY matching.
+Genre and Director provide autocomplete; Director is last and Quality has no new-form picker.
+Existing unlimited lists, bindings, saved ordering and legacy Quality rules are preserved. Static
+snapshots can explicitly replace their videos from filters while remaining static. Saved limits apply
+after ordering and survive smart regeneration. See [the workflow details](discovery-playlist-workflows.md).
 
 Creating a playlist from filters or manually regenerating a smart playlist first refreshes
 the chosen playback connector's video inventory (all enabled video connectors for an unbound

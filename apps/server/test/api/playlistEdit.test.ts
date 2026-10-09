@@ -148,10 +148,10 @@ describe('playlist editing', () => {
         expect(await order(id)).toEqual([recent.id]);
       });
 
-      it('rejects a rule set with no active filter instead of silently emptying the playlist', async () => {
+      it('clearing all active filters includes the eligible library inventory', async () => {
         const { id } = await createSmart();
         for (const filters of [{}, { qualityIds: [] }]) {
-          expect((await call('PATCH', `/playlist/${id}`, { filters })).statusCode).toBe(400);
+          expect((await call('PATCH', `/playlist/${id}`, { filters })).statusCode).toBe(200);
         }
         expect(await order(id)).toHaveLength(2);
       });
@@ -464,4 +464,16 @@ describe('playlist editing', () => {
       expect(server.requests).toEqual([]);
     });
   });
+  it('replaces static contents from filters only when explicitly requested', async () => {
+    const one = await serverVideo('One', connectorId);
+    await serverVideo('Two', connectorId);
+    const id = await createStatic('Snapshot', connectorId);
+    await addItems(id, [one.id]);
+    expect((await call('PATCH', `/playlist/${id}`, { maxVideos: 2, filters: {} })).statusCode).toBe(400);
+    const result = await call('PATCH', `/playlist/${id}`, { replaceFromFilters: true, filters: {}, matchMode: 'all', maxVideos: 2, sortMode: 'shuffle' });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().kind).toBe('static');
+    expect(await order(id)).toHaveLength(2);
+  });
+
 });

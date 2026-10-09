@@ -17,6 +17,7 @@ describe('playlist rule drafts', () => {
     ownership: 'both',
     qualityIds: [2, 3],
     addedAfter: '2025-03-04T00:00:00.000Z',
+    onlyUnwatched: true,
     minPlayCount: 5,
     artistIds: [10],
     musicVideoIds: [7, 8],
@@ -34,7 +35,7 @@ describe('playlist rule drafts', () => {
   });
 
   it('sends only filters whose toggle is on and that have a value', () => {
-    const draft = { ...emptyRuleDraft(), enableYear: false, yearMin: '1990', genre: 'rock', enableGenre: false, director: '  ' };
+    const draft = { ...emptyRuleDraft(), enableYear: false, yearMin: '1990', genre: 'rock', enableGenre: false, director: 'Someone', ownership: 'both' as const, addedAfter: '2025-03-04', enableDirector: false, enableOwnership: false, enableAddedAfter: false };
     expect(draftToFilters(draft)).toEqual({});
   });
 
@@ -43,7 +44,7 @@ describe('playlist rule drafts', () => {
     // count — otherwise the form would allow saving a rule set that matches nothing.
     expect(hasActiveFilter({ ...emptyRuleDraft(), enableYear: true })).toBe(false);
     expect(hasActiveFilter({ ...emptyRuleDraft(), enableYear: true, yearMin: '2000' })).toBe(true);
-    expect(hasActiveFilter({ ...emptyRuleDraft(), ownership: 'local' })).toBe(true);
+    expect(hasActiveFilter({ ...emptyRuleDraft(), ownership: 'local', enableOwnership: true })).toBe(true);
     expect(hasActiveFilter(emptyRuleDraft())).toBe(false);
   });
 

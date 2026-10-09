@@ -32,6 +32,7 @@ async function imvdbGet(apiKey: string, path: string): Promise<any> {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const res = await fetch(`${API_BASE}${path}`, {
       headers: { 'IMVDB-APP-KEY': apiKey, Accept: 'application/json', 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(15_000),
     });
     if (res.ok) return res.json();
     lastError = new Error(`IMVDb request failed: ${res.status} ${res.statusText}`);

@@ -365,6 +365,6 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
 }
 
 function serializeConnector<T extends { authToken: string | null; password: string | null }>(connector: T) {
-  const { authToken, password: _password, ...safe } = connector;
-  return { ...safe, authToken: null, hasAuthToken: Boolean(authToken) };
+  const { authToken, password, ...safe } = connector;
+  return { ...safe, authToken: null, hasAuthToken: Boolean(authToken), hasPassword: Boolean(password) };
 }

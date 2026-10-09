@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { credentialPlaceholder } from '../credentialFields';
 import type {
   DiscoveredServer,
   LibraryConnector,
@@ -177,7 +178,7 @@ function ConnectorRow({
             />
             {connector.type !== 'subsonic' && (
               <input
-                placeholder={`${connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key'}${connector.hasAuthToken ? ' (leave blank to keep)' : ''}`}
+                placeholder={credentialPlaceholder(connector.hasAuthToken, connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key')}
                 aria-label={connector.type === 'plex' ? 'Plex token' : 'Jellyfin API key'}
                 type="password"
                 value={authToken}
@@ -194,7 +195,7 @@ function ConnectorRow({
             )}
             {connector.type === 'subsonic' && (
               <input
-                placeholder="New password (leave blank to keep current)"
+                placeholder={credentialPlaceholder(connector.hasPassword, 'Password')}
                 aria-label="New password"
                 type="password"
                 value={password}

@@ -60,7 +60,7 @@ describe('libraryconnector routes', () => {
       },
     });
 
-    expect(res.json()).toMatchObject({ authToken: null, hasAuthToken: true });
+    expect(res.json()).toMatchObject({ authToken: null, hasAuthToken: true, hasPassword: true });
     expect(res.json()).not.toHaveProperty('password');
     expect(JSON.stringify(res.json())).not.toContain('connector-secret');
     expect(JSON.stringify(res.json())).not.toContain('connector-password');
