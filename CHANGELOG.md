@@ -5,6 +5,13 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — catalog version identities
+
+- Keep distinct IMVDb video identities separate even when their song titles match. New versions
+  receive stable `Version N` display labels rather than inheriting an existing version's owned
+  file, playlist references, or accepted sources. A title-only legacy entry is adopted only when
+  the incoming title is unambiguous; existing artist/title keys remain compatible.
+
 ### Added — artist genres and sub-genres, a genre editor, and library-wide genre counts
 
 - Each artist now has genres and sub-genres. MusicBrainz and Last.fm are both kept, side by side, as

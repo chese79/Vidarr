@@ -129,6 +129,10 @@ YouTube publication time is separate from its IMVDb release year and Vidarr cata
 Repeat scans compare video IDs and titles across the full channel, so an old upload newly linked
 to the artist or retitled later is still found; they batch last-seen updates for speed.
 Repeated song titles may be distinct official video versions and must remain separate.
+Metadata refresh matches a known IMVDb identity before considering a title. It adopts a title-only
+legacy record only when that incoming title is unique, and never reassigns a known IMVDb identity
+by title. Same-title collisions receive stable `Version N` display labels, preserving the existing
+artist/title database key and giving each version a separate import filename.
 Connector-confirmed artists enter a persistent source-check queue as soon as the connector sync
 finishes. The scheduler checks new artists first in bounded batches, continuing while work remains, and also backfills confirmed
 artists from older catalogs. One local-file scan when the queue drains covers all confirmed artists; each
