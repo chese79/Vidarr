@@ -160,7 +160,7 @@ export const api = {
     matchReviewPage: (opts: { offset: number; limit: number; search?: string }) => {
       const params = new URLSearchParams({ offset: String(opts.offset), limit: String(opts.limit) });
       if (opts.search) params.set('search', opts.search);
-      return request<{ total: number; offset: number; limit: number; items: Array<Artist & { musicbrainzCandidates: Array<{
+      return request<{ total: number; offset: number; limit: number; items: Array<Artist & { suggestedMatchCount: number; musicbrainzCandidates: Array<{
         id: number; musicbrainzArtistId: string; name: string; score: number; disambiguation: string | null;
       }> }> }>(`/artist/match-review/page?${params}`);
     },

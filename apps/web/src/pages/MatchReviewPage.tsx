@@ -54,7 +54,7 @@ export default function MatchReviewPage() {
       {review.data?.items.map((artist) => <div className="artist-row" role="listitem" key={artist.id}>
         <div className="artist-row-header">
           <div className="artist-image" aria-hidden="true">{artist.name.slice(0, 1).toUpperCase()}</div>
-          <div className="artist-row-main"><span className="artist-name">{artist.name}</span><span className="artist-meta">{artist.musicbrainzMatchStatus} · {artist.musicbrainzCandidates.length} suggested matches</span></div>
+          <div className="artist-row-main"><span className="artist-name">{artist.name}</span><span className="artist-meta">{artist.musicbrainzMatchStatus} · {artist.suggestedMatchCount} suggested matches</span></div>
           <div className="artist-row-actions"><button className="secondary" aria-expanded={expanded === artist.id} onClick={() => setExpanded(expanded === artist.id ? null : artist.id)}>{expanded === artist.id ? 'Hide matches' : 'Review matches'}</button></div>
         </div>
         {expanded === artist.id && <div className="artist-accordion" role="region" aria-label={`MusicBrainz matches for ${artist.name}`}>

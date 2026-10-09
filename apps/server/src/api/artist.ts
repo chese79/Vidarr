@@ -31,6 +31,29 @@ function escapeLikeTerm(value: string): string {
   return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+async function loadArtistReview(search?: string, offset = 0, limit?: number) {
+  const predicate = Prisma.sql`a."musicbrainzMatchStatus" NOT IN ('confirmed', 'linked')
+    ${search ? Prisma.sql`AND a."name" LIKE ${`%${escapeLikeTerm(search)}%`} ESCAPE '\\'` : Prisma.empty}`;
+  const [count, ranks] = await Promise.all([
+    prisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`SELECT COUNT(*) AS total FROM "Artist" a WHERE ${predicate}`),
+    prisma.$queryRaw<Array<{ id: number; suggestedMatchCount: bigint }>>(Prisma.sql`
+      SELECT a."id", (SELECT COUNT(*) FROM "MusicBrainzArtistCandidate" c
+        WHERE c."artistId" = a."id" AND c."status" = 'suggested') AS suggestedMatchCount
+      FROM "Artist" a WHERE ${predicate}
+      ORDER BY suggestedMatchCount DESC, a."sortName" ASC, a."id" ASC
+      ${limit !== undefined ? Prisma.sql`LIMIT ${limit} OFFSET ${offset}` : Prisma.empty}`),
+  ]);
+  const artists = await prisma.artist.findMany({
+    where: { id: { in: ranks.map((row) => row.id) } },
+    include: { musicbrainzCandidates: { where: { status: 'suggested' }, orderBy: [{ score: 'desc' }, { id: 'asc' }], take: 3 } },
+  });
+  const byId = new Map(artists.map((artist) => [artist.id, artist]));
+  return { total: Number(count[0].total), items: ranks.flatMap((row) => {
+    const artist = byId.get(row.id);
+    return artist ? [{ ...artist, suggestedMatchCount: Number(row.suggestedMatchCount) }] : [];
+  }) };
+}
+
 interface ArtistSummaryRow {
   id: number;
   name: string;
@@ -127,12 +150,7 @@ export async function artistRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/v1/artist/match-review', async () => {
-    return prisma.artist.findMany({
-      where: { musicbrainzMatchStatus: { notIn: ['confirmed', 'linked'] },
-        OR: [{ musicbrainzMatchStatus: { not: 'confirmed' } }, { musicbrainzArtistId: null }] },
-      include: { musicbrainzCandidates: { where: { status: 'suggested' }, orderBy: { score: 'desc' }, take: 3 } },
-      orderBy: { sortName: 'asc' },
-    });
+    return (await loadArtistReview()).items;
   });
 
   app.get('/api/v1/artist/match-review/page', async (req) => {
@@ -140,18 +158,7 @@ export async function artistRoutes(app: FastifyInstance) {
     const offset = Math.max(0, Number.parseInt(query.offset ?? '0', 10) || 0);
     const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit ?? '25', 10) || 25));
     const search = query.search?.trim().slice(0, 100);
-    const where: Prisma.ArtistWhereInput = {
-      musicbrainzMatchStatus: { notIn: ['confirmed', 'linked'] },
-      OR: [{ musicbrainzMatchStatus: { not: 'confirmed' } }, { musicbrainzArtistId: null }],
-      ...(search ? { name: { contains: search } } : {}),
-    };
-    const [total, items] = await Promise.all([
-      prisma.artist.count({ where }),
-      prisma.artist.findMany({ where,
-        include: { musicbrainzCandidates: { where: { status: 'suggested' }, orderBy: { score: 'desc' }, take: 3 } },
-        orderBy: [{ sortName: 'asc' }, { id: 'asc' }], skip: offset, take: limit,
-      }),
-    ]);
+    const { total, items } = await loadArtistReview(search, offset, limit);
     return { total, offset, limit, items };
   });
 
