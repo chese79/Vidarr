@@ -98,30 +98,30 @@ describe('playlist routes', () => {
     await prisma.libraryConnector.update({ where: { id: connector.id }, data: { userId: 'user-1', videoLibraryId: 'videos-1' } });
     const first = await createMusicVideo(artistId, { title: 'First', hasFile: false, releaseYear: 2000 });
     await createLibraryVideo(connector.id, { musicVideoId: first.id, externalId: 'video-1', title: 'First' });
-    const created = await app.inject({ method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
-      payload: { name: 'Smart publish', filters: { yearMin: 1990 }, matchMode: 'all', smart: true, targetConnectorId: connector.id } });
-    const playlistId = created.json().playlistId;
     const requests: string[] = [];
     let nextId = 1;
+    // Regenerating now re-reads the media server first, so "the server gains a video" is
+    // expressed by changing what the stubbed server lists, not by inserting a row by hand.
+    const serverItems = [{ Id: 'video-1', Name: 'First', Artists: ['Test Artist'] }];
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string }) => {
       requests.push(`${options.method ?? 'GET'} ${url}`);
       // Push verifies each reconciled item id directly instead of searching.
       const itemLookup = url.match(/\/Users\/[^/]+\/Items\/([^/?]+)$/);
       if (itemLookup) return { ok: true, json: async () => ({ Id: itemLookup[1] }) };
       if (url.includes('/Users/') && url.includes('/Items?')) return { ok: true,
-        json: async () => ({ Items: [
-          { Id: 'video-1', Name: 'First', Artists: ['Test Artist'] },
-          { Id: 'video-2', Name: 'Second', Artists: ['Test Artist'] },
-        ] }) };
+        json: async () => ({ Items: serverItems }) };
       if (url.endsWith('/Playlists') && options.method === 'POST') return { ok: true, status: 200,
         text: async () => JSON.stringify({ Id: `playlist-${nextId++}` }) };
       if (url.includes('/Items/playlist-') && options.method === 'DELETE') return { ok: true, status: 204, text: async () => '' };
       throw new Error(`Unexpected request: ${url}`);
     }));
+    const created = await app.inject({ method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
+      payload: { name: 'Smart publish', filters: { yearMin: 1990 }, matchMode: 'all', smart: true, targetConnectorId: connector.id } });
+    const playlistId = created.json().playlistId;
     const firstPush = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/push/${connector.id}`, headers: authHeaders() });
     const unchanged = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
     const second = await createMusicVideo(artistId, { title: 'Second', hasFile: false, releaseYear: 2001 });
-    await createLibraryVideo(connector.id, { musicVideoId: second.id, externalId: 'video-2', title: 'Second' });
+    serverItems.push({ Id: 'video-2', Name: 'Second', Artists: ['Test Artist'] });
     const changed = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
     const sync = await prisma.playlistSync.findUniqueOrThrow({ where: { playlistId_connectorId: { playlistId, connectorId: connector.id } } });
     const publishesAfterChange = requests.filter((request) => request.includes('POST') && request.endsWith('/Playlists')).length;

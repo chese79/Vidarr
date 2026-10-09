@@ -7,7 +7,7 @@ import {
 } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
-import { generatePlaylistFromFilters, regenerateSmartPlaylist } from '../pipeline/playlistGenerator.js';
+import { generatePlaylistWithSync, regenerateSmartPlaylistWithSync } from '../pipeline/playlistSync.js';
 import { PlaylistEditError, reorderPlaylistItems, updatePlaylist } from '../pipeline/playlistEdit.js';
 import {
   pushPlaylist,
@@ -75,7 +75,7 @@ export async function playlistRoutes(app: FastifyInstance) {
     const body = GeneratePlaylistBodySchema.parse(req.body);
     if (!await validPlaybackConnector(body.targetConnectorId)) return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin video library' });
     try {
-      return await generatePlaylistFromFilters(body.name, body.filters, body.matchMode, {
+      return await generatePlaylistWithSync(body.name, body.filters, body.matchMode, {
         smart: body.smart,
         regenerateIntervalMinutes: body.regenerateIntervalMinutes,
         targetConnectorId: body.targetConnectorId,
@@ -91,7 +91,7 @@ export async function playlistRoutes(app: FastifyInstance) {
     const id = Number((req.params as { id: string }).id);
     const playlist = await prisma.playlist.findUnique({ where: { id }, select: { kind: true } });
     if (!playlist || playlist.kind !== 'smart') return reply.code(404).send({ error: 'Smart playlist not found' });
-    const result = await regenerateSmartPlaylist(id);
+    const result = await regenerateSmartPlaylistWithSync(id);
     await republishChangedSmartPlaylist(id, result.changed);
     return result;
   });

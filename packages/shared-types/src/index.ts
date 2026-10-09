@@ -886,9 +886,23 @@ export const GeneratePlaylistBodySchema = z.object({
 });
 export type GeneratePlaylistBody = z.infer<typeof GeneratePlaylistBodySchema>;
 
+// What happened to each media-server connector when the video libraries were re-read
+// just before building a playlist. A failed or skipped sync does not stop the
+// playlist; it is built from the last known data.
+export const ConnectorSyncReportSchema = z.object({
+  connectorId: z.number().int(),
+  name: z.string(),
+  status: z.enum(['synced', 'failed', 'skipped']),
+  videoCount: z.number().int().optional(),
+  matchedCount: z.number().int().optional(),
+  message: z.string().optional(),
+});
+export type ConnectorSyncReport = z.infer<typeof ConnectorSyncReportSchema>;
+
 export const GeneratePlaylistResultSchema = z.object({
   playlistId: z.number().int(),
   matchedCount: z.number().int(),
+  sync: z.array(ConnectorSyncReportSchema).optional(),
 });
 export type GeneratePlaylistResult = z.infer<typeof GeneratePlaylistResultSchema>;
 

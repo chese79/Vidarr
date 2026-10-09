@@ -179,6 +179,18 @@ was already observed through an audio library.
 
 ## Playlists
 
+Creating a playlist from filters or manually regenerating a smart playlist first refreshes
+the chosen playback connector's video inventory (all enabled video connectors for an unbound
+playlist). Failures use the last known inventory and are reported; scheduled regeneration
+does not trigger a connector refresh. Sync reports include the number of exact catalog matches.
+
+Video matching considers artist/title identities parsed from the filename, server title, and
+server metadata in that order, choosing the strongest catalog match. Windows and POSIX paths
+are supported; upload decorations may be removed, but live and remix version labels remain.
+The original server metadata is retained. Newly observed artists use the parsed credit when
+available, without MusicBrainz confirmation. Prior artist observations and provenance remain
+for review and are not deleted by this filename-matching change.
+
 Vidarr creates playlists only from videos available in the selected playback library and can send
 them to Plex or Jellyfin. Users can build playlists manually or from metadata rules such as artist,
 genre, year, play count, ownership, quality, date added, director, or other catalog metadata.

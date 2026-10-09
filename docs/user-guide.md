@@ -77,7 +77,7 @@ Vidarr prefers an IMVDb curated direct link, then a plausible official VEVO or a
 | **Genres** | See how many Library artists are in each genre and sub-genre, as a count and a percentage of the library, and which labels might be worth consolidating. See [Genres](#genres). |
 | **Discover** | Review artist recommendations from connected libraries and recommendation providers. Add an artist or dismiss a recommendation. |
 | **Import** | Preview a YouTube playlist, select artists and videos, then submit them to Match Review and Video Review. Choose a root folder and quality profile before importing. |
-| **Playlists** | Build a static list or generate one from filters such as artist, genre, year, ownership, or play count. Choose a playback library and push a playlist to a supported media-server connector. Use **Edit** to rename a playlist, change its library, or (for a smart playlist) change its rules and schedule. Reorder a static playlist with the arrows. See [Editing and removing playlists](#editing-and-removing-playlists). |
+| **Playlists** | Build a static list or generate one from filters such as artist, genre, year, ownership, or play count. Choose a playback library and push a playlist to a supported media-server connector. Use **Edit** to rename a playlist, change its library, or (for a smart playlist) change its rules and schedule. Reorder a static playlist with the arrows. Creating or regenerating a playlist first re-reads the media server's video library, so it uses what is there now; if that read fails, the playlist is built from the last synced data and the page says so. See [Editing and removing playlists](#editing-and-removing-playlists). |
 | **Calendar** | See recently added monitored videos, newest first. Vidarr generally knows a release year rather than an exact release date. |
 | **Queue** | Watch active acquisitions and imports. |
 | **History** | Inspect completed activity and review or acquisition failures. |
@@ -98,6 +98,13 @@ The **Genres** page lists every genre with its artist count, its percentage of t
 Genre data comes from MusicBrainz (community votes) and Last.fm (listener tags), both crowd-sourced and subjective, so expect some disagreement. Sub-genre detail is much richer for well-known artists than for obscure ones, and very few songs have a genre of their own, so videos use their artist's genres.
 
 ## Editing and removing playlists
+
+Before you generate a playlist from filters or manually regenerate a smart playlist, Vidarr
+refreshes the playback library and reports how many videos match your catalog exactly. For
+videos credited to uploader channels, matching first tries `Artist - Title` from the filename,
+then the server title, then the server metadata. Live and remix labels are kept. Probable or
+ambiguous matches still require review before they can join a playlist. Old artist observations
+remain in Match Review; this matching update does not delete them.
 
 Open **Playlists** and choose **Edit** on a playlist.
 

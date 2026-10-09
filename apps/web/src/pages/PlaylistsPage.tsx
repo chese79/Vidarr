@@ -11,6 +11,7 @@ import {
   parseStoredRules,
   type RuleDraft,
 } from './playlistRules';
+import { describeSync } from './playlistSyncText';
 
 interface Notice {
   kind: 'status' | 'alert';
@@ -65,7 +66,7 @@ function GeneratePlaylistPanel() {
       sortMode,
     }),
     onSuccess: (r) => {
-      setResult(`Created "${name}" with ${r.matchedCount} video(s).`);
+      setResult([`Created "${name}" with ${r.matchedCount} video(s).`, describeSync(r.sync)].filter(Boolean).join(' '));
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
       setName('');
     },
@@ -295,7 +296,11 @@ function PlaylistCard({ playlistId, onDeleted }: {
   });
   const regenerate = useMutation({
     mutationFn: () => api.playlists.regenerate(playlistId),
-    onSuccess: invalidate,
+    onSuccess: (result) => {
+      invalidate();
+      const sync = describeSync(result.sync);
+      setNotice(sync ? { kind: result.sync?.some((r) => r.status === 'failed') ? 'alert' : 'status', text: sync } : null);
+    },
   });
 
   async function handlePush(connectorId: number) {

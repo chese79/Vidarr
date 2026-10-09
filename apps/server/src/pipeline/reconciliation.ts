@@ -106,3 +106,28 @@ export function matchLibraryVideo(
 
   return { musicVideoId: null, matchConfidence: null };
 }
+
+// Matches a video that has several possible identities (file name, server title,
+// server metadata — see videoIdentity.ts). The strongest result wins: an exact
+// match from any identity beats a fuzzy one, and a probable beats an ambiguous.
+// A previous match is only a fallback when no identity found anything, so a
+// better identity can replace an older, weaker match but a miss never erases one.
+export function matchLibraryVideoIdentities(
+  candidates: MatchCandidate[],
+  canonicalVideos: CanonicalVideo[],
+  previous: PreviousMatch | null,
+  rejectedMusicVideoId: number | null,
+): MatchResult {
+  let best: MatchResult | null = null;
+  let bestRank = -1;
+  for (const candidate of candidates) {
+    const result = matchLibraryVideo(candidate, canonicalVideos, null, rejectedMusicVideoId);
+    if (result.musicVideoId == null) continue;
+    const rank = result.matchConfidence === null ? 2 : result.matchConfidence === 'probable' ? 1 : 0;
+    if (rank > bestRank) { best = result; bestRank = rank; }
+    if (rank === 2) break;
+  }
+  if (best) return best;
+  if (previous?.musicVideoId != null && previous.musicVideoId !== rejectedMusicVideoId) return { ...previous };
+  return { musicVideoId: null, matchConfidence: null };
+}

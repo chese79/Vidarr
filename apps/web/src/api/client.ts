@@ -48,6 +48,7 @@ import type {
   UpdateMusicVideo,
   GeneratePlaylistBody,
   GeneratePlaylistResult,
+  ConnectorSyncReport,
   UpdatePlaylist,
   DeletePlaylistResult,
   StandardGenreMatch,
@@ -363,7 +364,7 @@ export const api = {
     list: () => request<Playlist[]>('/playlist'),
     generate: (data: GeneratePlaylistBody) =>
       request<GeneratePlaylistResult>('/playlist/generate', { method: 'POST', body: JSON.stringify(data) }),
-    regenerate: (id: number) => request<{ matchedCount: number; changed: boolean }>(`/playlist/${id}/regenerate`, { method: 'POST' }),
+    regenerate: (id: number) => request<{ matchedCount: number; changed: boolean; sync?: ConnectorSyncReport[] }>(`/playlist/${id}/regenerate`, { method: 'POST' }),
     create: (data: CreatePlaylist) =>
       request<Playlist>('/playlist', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: UpdatePlaylist) =>

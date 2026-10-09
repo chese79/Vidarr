@@ -6,7 +6,8 @@ import { normalizeTitle } from '../pipeline/normalize.js';
 import { syncPlayCounts } from '../pipeline/playCountSync.js';
 import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discovery.js';
 import { refreshRecommendations } from '../pipeline/recommendations.js';
-import { matchLibraryVideo, type CanonicalVideo, type MatchConfidence } from '../pipeline/reconciliation.js';
+import { syncConnectorVideos } from '../pipeline/libraryVideoSync.js';
+import type { QualityProfile, RootFolder } from '@prisma/client';
 import { resolveArtistIdentityAndCatalog } from '../pipeline/artistIdentity.js';
 import { scanEmbeddedMusicLibrary } from '../pipeline/embeddedMusicScan.js';
 import { syncLibraryRecordings } from '../pipeline/libraryRecordingSync.js';
@@ -290,160 +291,17 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
         }
       }
 
-      const provider = getLibraryConnectorProvider(connector.type);
-      const videos = provider.fetchVideos && connector.videoLibraryId
-        ? await provider.fetchVideos(connector)
-        : [];
-      if (defaults[0] && defaults[1]) {
-        const sourcedVideoArtists = new Set<number>();
-        for (const video of videos) {
-          const nameHint = artistNameHint(video.artistName);
-          if (!isUsableArtistHint(nameHint)) continue;
-          const key = normalizeTitle(nameHint);
-          let canonical = canonicalByName.get(key);
-          if (!canonical) {
-            canonical = await prisma.artist.create({
-              data: {
-                name: nameHint,
-                sortName: nameHint.replace(/^the\s+/i, ''),
-                monitored: false,
-                rootFolderId: defaults[0].id,
-                qualityProfileId: defaults[1].id,
-              },
-              select: { id: true, name: true, musicbrainzMatchStatus: true },
-            });
-            canonicalByName.set(key, canonical);
-          }
-          if (sourcedVideoArtists.has(canonical.id)) continue;
-          sourcedVideoArtists.add(canonical.id);
-          await prisma.artistSource.upsert({
-            where: { artistId_provider_origin: { artistId: canonical.id, provider: connector.type, origin: `video-connector:${id}` } },
-            update: { externalId: video.externalId, lastSeenAt: new Date() },
-            create: { artistId: canonical.id, provider: connector.type, externalId: video.externalId, origin: `video-connector:${id}` },
-          });
-        }
-      }
-      await prisma.libraryConnector.update({
-        where: { id },
-        data: { syncTotal: artists.length + videos.length },
+      // The video half is shared with on-demand syncing before playlist creation
+      // (pipeline/libraryVideoSync.ts). Observed artists above already exist, so
+      // their lookup is handed over rather than rebuilt.
+      const { videoCount } = await syncConnectorVideos(connector, {
+        defaults: defaults as [RootFolder | null, QualityProfile | null],
+        canonicalByName,
+        onFetched: (count) => prisma.libraryConnector.update({
+          where: { id },
+          data: { syncTotal: artists.length + count },
+        }).then(() => undefined),
       });
-      // A suddenly empty server response may mean an unavailable mount or a
-      // temporary media-server indexing failure. Preserve known availability
-      // until a non-empty scan can reconcile it safely.
-      if (provider.fetchVideos && connector.videoLibraryId && videos.length > 0) {
-        const canonicalVideos: CanonicalVideo[] = (
-          await prisma.musicVideo.findMany({
-            where: { catalogKind: { in: ['official', 'supplementary'] } },
-            select: { id: true, title: true, releaseYear: true, durationSeconds: true, artist: { select: { name: true } } },
-          })
-        ).map((video) => ({
-          id: video.id,
-          normalizedTitle: normalizeTitle(video.title),
-          normalizedArtistName: normalizeTitle(video.artist.name),
-          releaseYear: video.releaseYear,
-          durationSeconds: video.durationSeconds,
-        }));
-        // A prior sync's match must never be silently dropped just because
-        // *this* sync's search misses (an artist/video rename upstream, for
-        // instance) — see matchLibraryVideo's "previous" fallback. Also
-        // carries each row's rejectedMusicVideoId so a human's "not that
-        // one" decision from a past review sticks across syncs.
-        const existingMatches = await prisma.libraryVideo.findMany({
-          where: { connectorId: id },
-          select: { externalId: true, musicVideoId: true, matchConfidence: true, rejectedMusicVideoId: true },
-        });
-        const existingByExternalId = new Map(existingMatches.map((v) => [v.externalId, {
-          ...v,
-          matchConfidence: v.matchConfidence as MatchConfidence | null,
-        }]));
-        // The "mark everything stale, then re-mark what's still there" reset
-        // must be one atomic transaction — if it were two separate
-        // statements and anything after the reset threw (a bad title from
-        // the remote server, a dropped connection mid-sync), the reset would
-        // already be committed with nothing to undo it, leaving every video
-        // for this connector marked unavailable until some future sync
-        // happens to succeed end-to-end.
-        await prisma.$transaction([
-          prisma.libraryVideo.updateMany({ where: { connectorId: id }, data: { available: false } }),
-          ...videos.map((video) => {
-            const normalizedArtistName = normalizeTitle(artistNameHint(video.artistName));
-            const normalizedTitle = normalizeTitle(video.title);
-            const existing = existingByExternalId.get(video.externalId);
-            const match = matchLibraryVideo(
-              {
-                normalizedArtistName,
-                normalizedTitle,
-                releaseYear: video.releaseYear ?? null,
-                durationSeconds: video.durationSeconds ?? null,
-              },
-              canonicalVideos,
-              existing
-                ? { musicVideoId: existing.musicVideoId, matchConfidence: existing.matchConfidence as MatchConfidence | null }
-                : null,
-              existing?.rejectedMusicVideoId ?? null,
-            );
-            return prisma.libraryVideo.upsert({
-              where: { connectorId_externalId: { connectorId: id, externalId: video.externalId } },
-              update: {
-                title: video.title,
-                normalizedTitle,
-                artistName: video.artistName,
-                normalizedArtistName,
-                releaseYear: video.releaseYear ?? null,
-                durationSeconds: video.durationSeconds ?? null,
-                path: video.path ?? null,
-                playCount: video.playCount ?? null,
-                hasThumbnail: video.hasThumbnail ?? false,
-                available: true,
-                lastSyncedAt: new Date(),
-                musicVideoId: match.musicVideoId,
-                matchConfidence: match.matchConfidence,
-              },
-              create: {
-                connectorId: id,
-                externalId: video.externalId,
-                title: video.title,
-                normalizedTitle,
-                artistName: video.artistName,
-                normalizedArtistName,
-                releaseYear: video.releaseYear ?? null,
-                durationSeconds: video.durationSeconds ?? null,
-                path: video.path ?? null,
-                playCount: video.playCount ?? null,
-                hasThumbnail: video.hasThumbnail ?? false,
-                musicVideoId: match.musicVideoId,
-                matchConfidence: match.matchConfidence,
-              },
-            });
-          }),
-        ]);
-        const confirmedIds = videos
-          .map((video) => {
-            const match = matchLibraryVideo(
-              {
-                normalizedArtistName: normalizeTitle(artistNameHint(video.artistName)),
-                normalizedTitle: normalizeTitle(video.title),
-                releaseYear: video.releaseYear ?? null,
-                durationSeconds: video.durationSeconds ?? null,
-              },
-              canonicalVideos,
-              existingByExternalId.get(video.externalId) ?? null,
-              existingByExternalId.get(video.externalId)?.rejectedMusicVideoId ?? null,
-            );
-            return match.matchConfidence === null ? match.musicVideoId : null;
-          })
-          .filter((value): value is number => value != null);
-        if (confirmedIds.length) {
-          await prisma.musicVideo.updateMany({
-            where: { id: { in: confirmedIds } },
-            data: { awaitingServerScanAt: null },
-          });
-          await prisma.artist.updateMany({
-            where: { musicVideos: { some: { id: { in: confirmedIds } } } },
-            data: { reconciledAt: new Date() },
-          });
-        }
-      }
 
       // Backfill vidarr's own Artist.genre from this connector's synced data
       // when we don't already have one — never overwrites a user-set or
@@ -470,15 +328,15 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
           lastSyncStatus: 'success',
           lastSyncError: null,
           syncRunning: false,
-          syncProcessed: artists.length + videos.length,
-          syncTotal: artists.length + videos.length,
+          syncProcessed: artists.length + videoCount,
+          syncTotal: artists.length + videoCount,
         },
       });
       const recommendations = await refreshRecommendations();
       return {
         ok: true,
         artistCount: artists.length,
-        videoCount: videos.length,
+        videoCount,
         recordingCount: embeddedScan.recordings.length,
         recommendationCount: recommendations.totalRecommendations,
       };
