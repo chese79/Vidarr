@@ -508,9 +508,50 @@ model RecommendationProviderConfig {
   enabled        Boolean   @default(false)
   apiKey         String? // Last.fm
   clientId       String? // Spotify
-  clientSecret   String? // Spotify
+  clientSecret   String? // Spotify client secret / Last.fm shared secret
   accessToken    String? // Spotify (cached client-credentials token)
   tokenExpiresAt DateTime? // Spotify
+}
+
+// Independent of recommendation-provider enablement. Never expose credentials
+// through status responses. Disabling/unlinking discards pending playback.
+model LastFmAccount {
+  id                Int       @id @default(1)
+  username          String?
+  sessionKey        String?
+  pendingToken      String?
+  pendingExpiresAt  DateTime?
+  scrobblingEnabled Boolean   @default(false)
+  lastPollAt        DateTime?
+  lastScrobbledAt   DateTime?
+  lastError         String?
+}
+
+// One observed play, including its durable submission state. A stable start
+// timestamp is reused on retry; accepted/ignored submissions are never resent.
+model LastFmPlayback {
+  id              Int      @id @default(autoincrement())
+  connectorId     Int
+  libraryId       String
+  sessionId       String
+  externalId      String
+  artist          String
+  track           String
+  durationSeconds Float
+  startedAt       Int
+  lastObservedAt  DateTime
+  positionSeconds Float
+  playing         Boolean
+  listenedSeconds Float    @default(0)
+  active          Boolean  @default(true)
+  nowPlayingSent  Boolean  @default(false)
+  status          String?  // null (observing), pending, sent, ignored, failed
+  attempts        Int      @default(0)
+  nextAttemptAt   DateTime?
+  lastError       String?
+
+  @@index([connectorId, sessionId, active])
+  @@index([status, startedAt])
 }
 
 model Recommendation {

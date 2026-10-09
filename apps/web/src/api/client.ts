@@ -24,6 +24,7 @@ import type {
   Recommendation,
   RecommendationRefreshResult,
   RecommendationProviderConfig,
+  LastFmStatus,
   UpdateRecommendationProviderConfig,
   ImvdbArtist,
   ImvdbVideoCandidate,
@@ -416,6 +417,15 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
+  },
+  lastfm: {
+    status: () => request<LastFmStatus>('/lastfm'),
+    startLink: () => request<{ authorizationUrl: string }>('/lastfm/link', { method: 'POST' }),
+    completeLink: () => request<LastFmStatus>('/lastfm/link/complete', { method: 'POST' }),
+    setScrobbling: (scrobblingEnabled: boolean) => request<LastFmStatus>('/lastfm', {
+      method: 'PUT', body: JSON.stringify({ scrobblingEnabled }),
+    }),
+    unlink: () => request<LastFmStatus>('/lastfm', { method: 'DELETE' }),
   },
   imvdb: {
     searchArtists: (q: string) =>

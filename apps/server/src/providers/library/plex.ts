@@ -68,6 +68,23 @@ async function resolvePlaylistItemId(config: LibraryConnector, item: PlaylistPus
 }
 
 export const plexProvider: LibraryConnectorProvider = {
+  async fetchPlaybackSessions(config) {
+    if (!config.videoLibraryId) return [];
+    const body = await plexGet(config, '/status/sessions');
+    const items = body?.MediaContainer?.Metadata;
+    if (items != null && !Array.isArray(items)) throw new Error('Plex returned invalid playback sessions');
+    return (items ?? []).filter((item: any) =>
+      item.ratingKey != null && item.Session?.id != null
+      && String(item.librarySectionID) === config.videoLibraryId
+      && typeof item.viewOffset === 'number' && typeof item.duration === 'number'
+      && ['playing', 'paused', 'buffering'].includes(item.Player?.state),
+    ).map((item: any) => ({
+      sessionId: String(item.Session.id), externalId: String(item.ratingKey),
+      positionSeconds: item.viewOffset / 1000, durationSeconds: item.duration / 1000,
+      playing: item.Player.state === 'playing', artistName: item.grandparentTitle,
+      title: item.title,
+    }));
+  },
   async testConnection(config): Promise<LibraryConnectorTestResult> {
     try {
       const body = await plexGet(config, '/library/sections');

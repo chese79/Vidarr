@@ -223,6 +223,22 @@ Plex sections without reliable artist metadata use title matching only when exac
 the selected library has that title; duplicate titles require review rather than an arbitrary pick.
 Existing static playlists and their item order are preserved by the additive migration.
 
+## Last.fm playback reporting
+
+Last.fm account linking is distinct from recommendation and genre providers. It requires the
+owner's Last.fm application API key/shared secret and browser authorization; Vidarr never asks for
+a Last.fm password. Scrobbling is explicitly enabled after linking. The configured scope is all
+users' playback in every enabled Plex/Jellyfin connector's selected music-video library, reported
+to one linked Last.fm account. Audio and other video libraries are outside that scope.
+
+Only observed playback qualifies: no backfill from historical play counts, no listening credit
+for pauses, buffering, seeks or long polling gaps. A video must exceed 30 seconds and have half
+its duration or four minutes of observed playback, whichever is shorter. Confirmed catalog
+identity or structured server artist/title metadata supplies the track identity; scrobbling does
+not infer names from filenames or promote fuzzy matches. Account/credential changes discard old
+queued playback so it cannot be submitted to another account. Retried submissions retain their
+original UTC start timestamp.
+
 ## Current alignment priorities
 
 1. Use the observed release/recording set as supporting evidence for ambiguous artist matches.

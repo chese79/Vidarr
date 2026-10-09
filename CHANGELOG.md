@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — Last.fm account linking and music-video scrobbling
+
+- Link a Last.fm account in Settings → General with an API key and shared secret, authorize
+  Vidarr on Last.fm, then enable scrobbling independently of recommendations and genre lookups.
+- Observe all users' current playback in enabled Jellyfin/Plex connectors' selected music-video
+  libraries. Send now-playing updates and qualifying scrobbles without importing historical counts.
+- Persist listening progress and a retry queue across restarts. Pauses, buffering, seeks and long
+  observation gaps earn no playback credit. Missing metadata and unconfirmed matches are skipped.
+- Show queue, submission and authorization status. Unlinking, disabling scrobbling or changing API
+  credentials discards pending playback; the additive migration preserves existing catalog data.
+
 ### Verified — completed media-server matching deployment (2026-10-08)
 
 - The combined on-demand playlist and filename-matching work passed the full Node 22 build,

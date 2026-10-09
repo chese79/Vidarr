@@ -40,6 +40,17 @@ export interface LibrarySection {
   type: string;
 }
 
+// Only current playback in the selected video library; all server users.
+export interface LibraryPlaybackSession {
+  sessionId: string;
+  externalId: string;
+  positionSeconds: number;
+  durationSeconds: number;
+  playing: boolean;
+  artistName?: string;
+  title?: string;
+}
+
 export interface PlaylistPushItem {
   artistName: string;
   title: string;
@@ -62,6 +73,7 @@ export interface LibraryItemMatch {
 }
 
 export interface LibraryConnectorProvider {
+  fetchPlaybackSessions?(config: LibraryConnector): Promise<LibraryPlaybackSession[]>;
   testConnection(config: LibraryConnector): Promise<LibraryConnectorTestResult>;
   fetchArtists(config: LibraryConnector): Promise<FetchedLibraryArtist[]>;
   fetchVideos?(config: LibraryConnector): Promise<FetchedLibraryVideo[]>;

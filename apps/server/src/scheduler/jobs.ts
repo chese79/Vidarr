@@ -10,6 +10,7 @@ import { republishChangedSmartPlaylist } from '../pipeline/playlistPush.js';
 import { reconcilePendingImports } from '../pipeline/pendingImportReconciliation.js';
 import { backfillArtistVideoInventories } from '../pipeline/artistVideoBackfill.js';
 import { backfillArtistGenres } from '../pipeline/artistGenres.js';
+import { pollLastFmPlayback } from '../pipeline/lastfmScrobbling.js';
 
 export interface ScheduledJob {
   name: string;
@@ -38,6 +39,7 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  { name: 'Last.fm Playback Scrobbling', defaultIntervalMs: 15_000, run: () => pollLastFmPlayback() },
   {
     name: 'Artist Genre Backfill',
     defaultIntervalMs: 10 * 60_000,
