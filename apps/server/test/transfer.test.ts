@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { placeFile, replaceFile } from '../src/pipeline/transfer.js';
+import { placeFile, replaceFile, stageFileReplacement } from '../src/pipeline/transfer.js';
 
 describe('placeFile', () => {
   let tmpDir: string;
@@ -15,6 +15,7 @@ describe('placeFile', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -60,5 +61,22 @@ describe('placeFile', () => {
     const sourceStat = await fs.stat(sourcePath);
     const destStat = await fs.stat(destPath);
     expect(destStat.ino).toBe(sourceStat.ino);
+  });
+
+  it('restores the source and original library file for a failed cross-filesystem move', async () => {
+    const destPath = path.join(tmpDir, 'dest.mp4');
+    await fs.writeFile(destPath, 'old video bytes');
+    const rename = fs.rename.bind(fs);
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (from === sourcePath || to === sourcePath) {
+        throw Object.assign(new Error('cross-device move'), { code: 'EXDEV' });
+      }
+      return rename(from, to);
+    });
+    const replacement = await stageFileReplacement(sourcePath, destPath, 'move');
+    await expect(fs.access(sourcePath)).rejects.toThrow();
+    await replacement.rollback();
+    await expect(fs.readFile(destPath, 'utf-8')).resolves.toBe('old video bytes');
+    await expect(fs.readFile(sourcePath, 'utf-8')).resolves.toBe('fake video bytes');
   });
 });

@@ -43,13 +43,13 @@ export async function placeFile(
 // Quality upgrades can intentionally resolve to the same destination when a
 // user's naming format omits {Quality}. Hardlinking directly over that path
 // fails with EEXIST, so stage the new file beside it and swap only after the
-// staging operation succeeds. The backup keeps the old library file available
-// for rollback if the final rename unexpectedly fails.
-export async function replaceFile(
+// staging operation succeeds. The caller retains the backup until recording
+// succeeds, or rolls the filesystem changes back if it fails.
+export async function stageFileReplacement(
   sourcePath: string,
   destPath: string,
   mode: TransferMode,
-): Promise<void> {
+): Promise<{ commit: () => Promise<void>; rollback: () => Promise<void> }> {
   const suffix = `.vidarr-${randomUUID()}`;
   const stagedPath = `${destPath}${suffix}.new`;
   const backupPath = `${destPath}${suffix}.old`;
@@ -61,16 +61,29 @@ export async function replaceFile(
       await fs.rename(stagedPath, destPath);
     } catch (err) {
       await fs.rename(backupPath, destPath);
-      if (mode === 'move') await fs.rename(stagedPath, sourcePath).catch(() => {});
-      else await fs.unlink(stagedPath).catch(() => {});
       throw err;
     }
-    // The replacement is already committed at this point. A stale backup is
-    // preferable to reporting the import as failed after the new file won.
-    await fs.unlink(backupPath).catch(() => {});
   } catch (err) {
-    if (mode === 'move') await fs.rename(stagedPath, sourcePath).catch(() => {});
+    if (mode === 'move') await placeFile(stagedPath, sourcePath, 'move').catch(() => {});
     else await fs.unlink(stagedPath).catch(() => {});
     throw err;
   }
+  return {
+    // The caller commits only after metadata and database recording succeed.
+    // Failure to remove a backup should not turn a successful import into failure.
+    commit: async () => { await fs.unlink(backupPath).catch(() => {}); },
+    rollback: async () => {
+      // Keep the backup intact if restoring the replacement to its staging
+      // source fails; never discard the last copy of the original video.
+      if (mode === 'move') await placeFile(destPath, sourcePath, 'move');
+      else await fs.unlink(destPath);
+      await fs.rename(backupPath, destPath);
+    },
+  };
+}
+
+// Standalone callers have no later recording step; imports use the staged API.
+export async function replaceFile(sourcePath: string, destPath: string, mode: TransferMode): Promise<void> {
+  const replacement = await stageFileReplacement(sourcePath, destPath, mode);
+  await replacement.commit();
 }

@@ -43,11 +43,11 @@ export const JOBS: ScheduledJob[] = [
     defaultIntervalMs: 10 * 60_000,
     run: async () => {
       const result = await backfillArtistGenres();
-      genreBackfillProgressed = result.refreshed > 0 && result.remaining > 0;
+      genreBackfillProgressed = result.checked > 0 && result.remaining > 0;
       return `${result.checked} checked, ${result.refreshed} updated, ${result.remaining} remaining`;
     },
-    // Stops rerunning when a pass makes no progress (e.g. MusicBrainz is down)
-    // so it cannot spin; the next interval tick retries.
+    // Failed attempts cool down while later artists are processed. Stop when
+    // no eligible work remains; the next interval tick retries cooled-down rows.
     rerun: () => genreBackfillProgressed,
   },
   {

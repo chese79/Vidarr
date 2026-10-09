@@ -87,7 +87,7 @@ export function selectEffective(rows: GenreRow[]): EffectiveGenre[] {
     return all.sort((a, b) => Number(a.level === 'subgenre') - Number(b.level === 'subgenre'));
   }
   const rank = (a: EffectiveGenre, b: EffectiveGenre) =>
-    b.score - a.score || b.sources.length - a.sources.length || a.name.localeCompare(b.name);
+    b.sources.length - a.sources.length || b.score - a.score || a.name.localeCompare(b.name);
   const genres = all.filter((e) => e.level === 'genre').sort(rank).slice(0, MAX_EFFECTIVE_GENRES);
   const subs = all.filter((e) => e.level === 'subgenre').sort(rank).slice(0, MAX_EFFECTIVE_SUBGENRES);
   return [...genres, ...subs];
@@ -473,10 +473,17 @@ export async function getArtistGenreView(artistId: number): Promise<GenreView> {
 // scheduler re-invokes this straight away while work remains.
 export async function backfillArtistGenres(batchSize = 10): Promise<{ checked: number; refreshed: number; remaining: number }> {
   const where = { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null }, genresRefreshedAt: null } as const;
-  const artists = await prisma.artist.findMany({ where, select: { id: true }, orderBy: { id: 'asc' }, take: batchSize });
+  const retryBefore = new Date(Date.now() - 10 * 60_000);
+  const artists = await prisma.artist.findMany({
+    where: { ...where, OR: [{ genresRefreshAttemptedAt: null }, { genresRefreshAttemptedAt: { lte: retryBefore } }] },
+    select: { id: true }, orderBy: [{ genresRefreshAttemptedAt: 'asc' }, { id: 'asc' }], take: batchSize,
+  });
   let refreshed = 0;
   for (const artist of artists) {
     try {
+      // Record attempts independently of successful refreshes so a permanently
+      // failing identity cannot keep every later artist out of the next batch.
+      await prisma.artist.update({ where: { id: artist.id }, data: { genresRefreshAttemptedAt: new Date() } });
       await refreshArtistGenres(artist.id);
       const after = await prisma.artist.findUnique({ where: { id: artist.id }, select: { genresRefreshedAt: true } });
       if (after?.genresRefreshedAt) refreshed++;

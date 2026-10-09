@@ -23,21 +23,42 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
   const videos = await getArtistVideos(settings?.imvdbApiKey ?? null, artist.imvdbArtistId, artist.name);
   const existing = await prisma.musicVideo.findMany({
     where: { artistId },
-    select: { id: true, imvdbVideoId: true, normalizedTitle: true },
+    select: { id: true, imvdbVideoId: true, title: true, normalizedTitle: true },
   });
-  const existingByImvdbId = new Map(existing.filter((v) => v.imvdbVideoId).map((v) => [v.imvdbVideoId as string, v.id]));
-  const existingByTitle = new Map(existing.map((v) => [v.normalizedTitle, v.id]));
+  const existingByImvdbId = new Map(existing.filter((v) => v.imvdbVideoId).map((v) => [v.imvdbVideoId as string, v]));
+  const existingByTitle = new Map(existing.map((v) => [v.normalizedTitle, v]));
+  const incomingTitleCounts = new Map<string, number>();
+  for (const video of videos) {
+    const key = normalizeTitle(video.title);
+    incomingTitleCounts.set(key, (incomingTitleCounts.get(key) ?? 0) + 1);
+  }
   const savedIds = new Set<number>();
 
   let videosAdded = 0;
   let videosUpdated = 0;
   for (const video of videos) {
     try {
-      const existingId = existingByImvdbId.get(video.imvdbVideoId) ?? existingByTitle.get(normalizeTitle(video.title));
+      const titleKey = normalizeTitle(video.title);
+      const byTitle = existingByTitle.get(titleKey);
+      // Only adopt a title-only entry when the provider result is unambiguous.
+      // A title never transfers ownership from one known IMVDb identity to another.
+      const matched = existingByImvdbId.get(video.imvdbVideoId)
+        ?? (!byTitle?.imvdbVideoId && incomingTitleCounts.get(titleKey) === 1 ? byTitle : undefined);
+      const existingId = matched?.id;
+      let title = video.title;
+      const occupied = (value: string) => {
+        const owner = existingByTitle.get(normalizeTitle(value));
+        return owner !== undefined && owner.id !== existingId;
+      };
+      // Preserve the existing artist/title key and naming convention. Distinct
+      // official versions get separate, stable display labels, as public IMVDb
+      // videographies already do, rather than sharing one file destination.
+      if (occupied(title) && matched && !occupied(matched.title)) title = matched.title;
+      for (let version = 2; occupied(title); version++) title = `${video.title} (Version ${version})`;
       const data = {
         imvdbVideoId: video.imvdbVideoId,
-        title: video.title,
-        normalizedTitle: normalizeTitle(video.title),
+        title,
+        normalizedTitle: normalizeTitle(title),
         releaseYear: video.year,
         thumbnailUrl: video.thumbnailUrl,
         director: video.director,
@@ -57,6 +78,9 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
           ...data,
         } });
       savedIds.add(saved.id);
+      if (matched) existingByTitle.delete(matched.normalizedTitle);
+      existingByTitle.set(saved.normalizedTitle, saved);
+      existingByImvdbId.set(video.imvdbVideoId, saved);
       if (existingId) videosUpdated++;
       else videosAdded++;
       for (const source of video.sources) {

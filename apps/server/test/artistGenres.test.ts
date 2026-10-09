@@ -23,6 +23,7 @@ import {
   refreshArtistGenres,
   selectEffective,
   setUserGenres,
+  backfillArtistGenres,
   type EffectiveGenre,
   type GenreRow,
 } from '../src/pipeline/artistGenres.js';
@@ -57,6 +58,17 @@ describe('selectEffective', () => {
     expect(out[0].name).toBe('shoegaze');
     expect(out[0].sources.sort()).toEqual(['lastfm', 'musicbrainz']);
     expect(out.map((e) => e.name)).toEqual(expect.arrayContaining(['art rock', 'dream pop']));
+  });
+
+  it('keeps weaker community agreement ahead of strong single-source genres at the cap', () => {
+    const rows = [
+      row('rock', 'musicbrainz', 1, 'genre'), row('rock', 'lastfm', 10, 'genre'),
+      row('pop', 'musicbrainz', 10, 'genre'), row('jazz', 'lastfm', 100, 'genre'),
+      row('blues', 'lastfm', 90, 'genre'),
+    ];
+    const selected = selectEffective(rows);
+    expect(selected[0].name).toBe('rock');
+    expect(selected).toHaveLength(3);
   });
 
   it('scales votes within each source so counts and 0-100 weights are comparable', () => {
@@ -241,6 +253,26 @@ describe('artist genre refresh and editing (database)', () => {
     musicBrainz.lookup.mockRejectedValue(new Error('down'));
     await refreshArtistGenres(artist.id);
     expect((await prisma.artist.findUniqueOrThrow({ where: { id: artist.id } })).genresRefreshedAt).toBeNull();
+  });
+
+  it('processes later artists while failed lookups cool down and retries failures later', async () => {
+    const failed = await confirmed('Failed');
+    const healthy = await confirmed('Healthy');
+    const lookup = async (id: string) => {
+      if (id.endsWith(failed.id.toString(16).padStart(12, '0'))) throw new Error('permanent 404');
+      return { genres: ['rock'] };
+    };
+    musicBrainz.lookup.mockImplementation(lookup);
+    expect(await backfillArtistGenres(1)).toMatchObject({ checked: 1, refreshed: 0, remaining: 2 });
+    expect(await backfillArtistGenres(1)).toMatchObject({ checked: 1, refreshed: 1, remaining: 1 });
+    expect((await prisma.artist.findUniqueOrThrow({ where: { id: healthy.id } })).genre).toBe('rock');
+    expect(await backfillArtistGenres(1)).toMatchObject({ checked: 0, remaining: 1 });
+    const failedRow = await prisma.artist.findUniqueOrThrow({ where: { id: failed.id } });
+    expect(failedRow.genresRefreshedAt).toBeNull();
+    expect(failedRow.genresRefreshAttemptedAt).not.toBeNull();
+    await prisma.artist.update({ where: { id: failed.id }, data: { genresRefreshAttemptedAt: new Date(Date.now() - 11 * 60_000) } });
+    mbReturns([{ name: 'jazz', votes: 5 }]);
+    expect(await backfillArtistGenres(1)).toMatchObject({ checked: 1, refreshed: 1, remaining: 0 });
   });
 
   it('preserves a genre typed before this feature and does not let a refresh overwrite it', async () => {
