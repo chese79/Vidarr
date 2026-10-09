@@ -56,7 +56,9 @@ type KnownArtists = { has(normalizedName: string): boolean };
 // artist whose own name contains " - " both work); the reverse "Title - Artist"
 // when only the right-hand side is known; otherwise the first dash.
 function splitArtistTitle(text: string, known: KnownArtists): { artist: string; title: string } | null {
-  const stem = text.replace(/\s*\[[^\]]+\]\s*$/, '').replace(/\s*\((?:19|20)\d{2}\)\s*$/, '').trim();
+  // Clean only the title after splitting. Cleaning the entire stem can turn a
+  // malformed artist fragment into a plausible observation, or erase a version.
+  const stem = text.trim();
   const parts = stem.split(DASH);
   if (parts.length < 2) return null;
   let best: { artist: string; title: string } | null = null;

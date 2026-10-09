@@ -128,5 +128,6 @@ export function matchLibraryVideoIdentities(
     if (rank === 2) break;
   }
   if (best) return best;
-  return matchLibraryVideo(candidates[0], canonicalVideos, previous, rejectedMusicVideoId);
+  if (previous?.musicVideoId != null && previous.musicVideoId !== rejectedMusicVideoId) return { ...previous };
+  return { musicVideoId: null, matchConfidence: null };
 }

@@ -55,7 +55,7 @@ export async function syncVideoConnectors(targetConnectorId?: number | null): Pr
         onFetched: (count) => prisma.libraryConnector.update({ where: { id: connector.id }, data: { syncTotal: count } }).then(() => undefined),
       });
       reports.push({ connectorId: connector.id, name: connector.name, status: 'synced', videoCount: result.videoCount, matchedCount: result.matched.confirmed });
-      await logActivity('info', 'playlist:video-sync', `${connector.name}: ${result.videoCount} video(s); ${result.matched.confirmed} matched, ${result.matched.probable} probable, ${result.matched.ambiguous} ambiguous, ${result.matched.unmatched} unmatched; ${result.prunedArtists} stale artist record(s) removed`);
+      await logActivity('info', 'playlist:video-sync', `${connector.name}: ${result.videoCount} video(s); ${result.matched.confirmed} matched, ${result.matched.probable} probable, ${result.matched.ambiguous} ambiguous, ${result.matched.unmatched} unmatched`);
     } catch (err) {
       const message = (err as Error).message;
       await logActivity('warn', 'playlist:video-sync', `${connector.name}: ${message}`);

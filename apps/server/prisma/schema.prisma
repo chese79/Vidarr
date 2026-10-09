@@ -39,6 +39,7 @@ model Artist {
   // When ArtistGenre candidates were last fetched from MusicBrainz/Last.fm
   // (null = never; the backfill job works through these).
   genresRefreshedAt DateTime?
+  genresRefreshAttemptedAt DateTime?
   metadataRefreshedAt DateTime?
   videoInventoryCheckedAt DateTime?
   videoInventoryError String?

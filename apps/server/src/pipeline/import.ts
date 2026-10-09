@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { prisma, logActivity } from '../db/client.js';
 import { renderNamingFormat } from '@vidarr/shared-types';
-import { placeFile, replaceFile, type TransferMode } from './transfer.js';
+import { placeFile, stageFileReplacement, type TransferMode } from './transfer.js';
 import { writeLibraryMetadata } from './libraryConvention.js';
 import { isPathWithinRoot } from './pathContainment.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
@@ -57,53 +57,61 @@ export async function importDownloadedFile(
   }
 
   const transferMode = settings.transferMode as TransferMode;
+  let replacement: Awaited<ReturnType<typeof stageFileReplacement>> | undefined;
   if (existingFile?.path === destPath) {
-    await replaceFile(sourcePath, destPath, transferMode);
+    replacement = await stageFileReplacement(sourcePath, destPath, transferMode);
   } else {
     await placeFile(sourcePath, destPath, transferMode);
   }
-  const stat = await fs.stat(destPath);
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(destPath);
 
-  await writeLibraryMetadata(destPath, {
-    artistName: musicVideo.artist.name,
-    title: musicVideo.title,
-    year: musicVideo.releaseYear,
-    director: musicVideo.director,
-    thumbnailUrl: musicVideo.thumbnailUrl,
-  });
+    await writeLibraryMetadata(destPath, {
+      artistName: musicVideo.artist.name,
+      title: musicVideo.title,
+      year: musicVideo.releaseYear,
+      director: musicVideo.director,
+      thumbnailUrl: musicVideo.thumbnailUrl,
+    });
 
-  const quality = await prisma.quality.findUnique({ where: { name: qualityName } });
+    const quality = await prisma.quality.findUnique({ where: { name: qualityName } });
 
-  await prisma.$transaction([prisma.musicVideoFile.upsert({
-    where: { musicVideoId },
-    update: {
-      path: destPath,
-      sizeBytes: BigInt(stat.size),
-      qualityId: quality?.id,
-      originalFilename: path.basename(sourcePath),
-      dateAdded: new Date(),
-    },
-    create: {
-      musicVideoId,
-      path: destPath,
-      sizeBytes: BigInt(stat.size),
-      qualityId: quality?.id,
-      originalFilename: path.basename(sourcePath),
-    },
-  }), prisma.musicVideo.update({
-    where: { id: musicVideoId },
-    data: { hasFile: true, awaitingServerScanAt: rootFolder.targetConnector ? new Date() : null },
-  }), prisma.history.create({
-    data: {
-      musicVideoId,
-      eventType: 'downloadFolderImported',
-      data: JSON.stringify({
+    await prisma.$transaction([prisma.musicVideoFile.upsert({
+      where: { musicVideoId },
+      update: {
         path: destPath,
-        quality: qualityName,
-        upgradedFrom: existingFile && existingFile.path !== destPath ? existingFile.path : undefined,
-      }),
-    },
-  })]);
+        sizeBytes: BigInt(stat.size),
+        qualityId: quality?.id,
+        originalFilename: path.basename(sourcePath),
+        dateAdded: new Date(),
+      },
+      create: {
+        musicVideoId,
+        path: destPath,
+        sizeBytes: BigInt(stat.size),
+        qualityId: quality?.id,
+        originalFilename: path.basename(sourcePath),
+      },
+    }), prisma.musicVideo.update({
+      where: { id: musicVideoId },
+      data: { hasFile: true, awaitingServerScanAt: rootFolder.targetConnector ? new Date() : null },
+    }), prisma.history.create({
+      data: {
+        musicVideoId,
+        eventType: 'downloadFolderImported',
+        data: JSON.stringify({
+          path: destPath,
+          quality: qualityName,
+          upgradedFrom: existingFile && existingFile.path !== destPath ? existingFile.path : undefined,
+        }),
+      },
+    })]);
+  } catch (error) {
+    if (replacement) await replacement.rollback();
+    throw error;
+  }
+  await replacement?.commit();
 
   // A quality upgrade can change the filename. Keep the previous file until
   // the replacement is fully recorded, and never delete a path outside the

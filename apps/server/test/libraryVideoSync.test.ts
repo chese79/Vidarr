@@ -81,7 +81,7 @@ describe('syncConnectorVideos', () => {
     provider.fetchVideos.mockResolvedValue([fetched('a', 'One')]);
     await syncConnectorVideos(await connector());
     provider.fetchVideos.mockResolvedValue([]);
-    expect(await syncConnectorVideos(await connector())).toMatchObject({ videoCount: 0, prunedArtists: 0 });
+    expect(await syncConnectorVideos(await connector())).toMatchObject({ videoCount: 0, matched: { confirmed: 0, probable: 0, ambiguous: 0, unmatched: 0 } });
     expect((await rows())[0].available).toBe(true);
   });
 

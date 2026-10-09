@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — match media-server inventory by filename
+
+- Use artist/title identities parsed from Windows or POSIX filenames, then server titles and
+  metadata, so uploader credits no longer prevent catalog matching and playlist membership.
+- Preserve remix and live-version labels and report exact catalog-match counts after playlist
+  sync. Empty metadata and unavailable libraries preserve prior inventory safely.
+- Keep existing artist observations and source provenance; matching does not delete old artists.
+- Correct leading `The` removal in sort names for newly observed video artists.
+
 ### Changed — creating or regenerating a playlist now re-reads your media server first
 
 - Creating a playlist from filters, and regenerating a smart playlist by hand, first re-reads the
@@ -22,6 +31,27 @@ under **Unreleased** in the same commit as the change.
 - Existing test and behaviour note: videos on the server only become playlist candidates when they
   match a catalog video. In a library of YouTube-style rips whose "artist" is the uploader, few
   videos match, so playlists stay small until matching improves.
+### Fixed — genre ranking and backfill progress
+
+- Prioritize genres supported by both MusicBrainz and Last.fm before single-source candidates,
+  including when the effective-genre cap applies.
+- Continue artist genre backfill past failed lookups. Attempts have a ten-minute cooldown and
+  are tracked separately from successful refreshes, preserving stored genres and retrying failed
+  identities without blocking later artists. Additive Prisma migration:
+  `20261008120000_genre_refresh_attempts`.
+
+### Fixed — same-path upgrade recovery
+
+- Retain the previous video during a same-path quality upgrade until metadata writing and
+  database recording succeed. Failed copy, hardlink, or move imports restore the previous file
+  and leave the replacement available for retry, including moves across filesystems.
+
+### Fixed — catalog version identities
+
+- Keep distinct IMVDb video identities separate even when their song titles match. New versions
+  receive stable `Version N` display labels rather than inheriting an existing version's owned
+  file, playlist references, or accepted sources. A title-only legacy entry is adopted only when
+  the incoming title is unambiguous; existing artist/title keys remain compatible.
 
 ### Added — artist genres and sub-genres, a genre editor, and library-wide genre counts
 

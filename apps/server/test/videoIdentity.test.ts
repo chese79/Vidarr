@@ -46,6 +46,12 @@ describe('isPlausibleArtistName', () => {
 });
 
 describe('videoIdentities', () => {
+  it('preserves bracketed live and remix labels from filenames', () => {
+    for (const label of ['Live', 'Aphex Twin remix']) {
+      const identity = videoIdentities({ title: 'x', artistName: 'Unknown Artist', path: `/m/Blur - Beetlebum [${label}].mp4` }, known('Blur'))[0];
+      expect(identity.title).toBe(`Beetlebum [${label}]`);
+    }
+  });
   it('takes the real artist and title from the file name, not the uploader', () => {
     const [first] = videoIdentities({ title: 'deftones - 7 Words', artistName: 'SuperDeftoner', path: `${WIN}Deftones - 7 Words.mp4` }, known());
     expect(first).toEqual({ artistName: 'Deftones', title: '7 Words', source: 'filename' });
@@ -153,5 +159,10 @@ describe('matchLibraryVideoIdentities', () => {
 
   it('reports no match when nothing fits', () => {
     expect(matchLibraryVideoIdentities([cand('Nobody', 'Nothing')], canonical, null, null)).toEqual({ musicVideoId: null, matchConfidence: null });
+  });
+  it('handles an empty identity list without losing an existing match or restoring a rejection', () => {
+    expect(matchLibraryVideoIdentities([], canonical, null, null)).toEqual({ musicVideoId: null, matchConfidence: null });
+    expect(matchLibraryVideoIdentities([], canonical, { musicVideoId: 2, matchConfidence: null }, null)).toEqual({ musicVideoId: 2, matchConfidence: null });
+    expect(matchLibraryVideoIdentities([], canonical, { musicVideoId: 2, matchConfidence: null }, 2)).toEqual({ musicVideoId: null, matchConfidence: null });
   });
 });

@@ -85,6 +85,11 @@ per genre and sub-genre so the user can decide whether consolidating is worthwhi
 advisory. Songs do not carry their own genre: almost none have one in either source, so a video
 uses its artist's genres.
 
+Community agreement is ranked before relative vote strength, so a genre both sources support
+remains ahead of single-source candidates when the effective-genre caps apply. Background genre
+backfill records each attempt independently of a successful refresh. Failed attempts cool down
+for ten minutes while later artists continue; stored candidates and success timestamps are retained.
+
 ## Discovery and acquisition
 
 For a canonical artist, the user can discover the artist's music-video catalog, select wanted
@@ -129,6 +134,10 @@ YouTube publication time is separate from its IMVDb release year and Vidarr cata
 Repeat scans compare video IDs and titles across the full channel, so an old upload newly linked
 to the artist or retitled later is still found; they batch last-seen updates for speed.
 Repeated song titles may be distinct official video versions and must remain separate.
+Metadata refresh matches a known IMVDb identity before considering a title. It adopts a title-only
+legacy record only when that incoming title is unique, and never reassigns a known IMVDb identity
+by title. Same-title collisions receive stable `Version N` display labels, preserving the existing
+artist/title database key and giving each version a separate import filename.
 Connector-confirmed artists enter a persistent source-check queue as soon as the connector sync
 finishes. The scheduler checks new artists first in bounded batches, continuing while work remains, and also backfills confirmed
 artists from older catalogs. One local-file scan when the queue drains covers all confirmed artists; each
@@ -161,11 +170,26 @@ Existing files and media-server records must never be deleted merely because a c
 temporarily fails.
 During a quality upgrade, the previous file remains in place until the replacement is recorded
 successfully; cleanup never removes a prior path outside the configured root folder.
+When the replacement uses the same path, a backup of the previous file survives until metadata
+writing and the import database transaction both succeed. A failure restores the previous file
+and keeps the replacement available for retry, including move transfers across filesystems.
 An unexpectedly empty video-library scan also preserves the last known availability; a later
 non-empty scan reconciles inventory. Video-library provenance is retained even when the artist
 was already observed through an audio library.
 
 ## Playlists
+
+Creating a playlist from filters or manually regenerating a smart playlist first refreshes
+the chosen playback connector's video inventory (all enabled video connectors for an unbound
+playlist). Failures use the last known inventory and are reported; scheduled regeneration
+does not trigger a connector refresh. Sync reports include the number of exact catalog matches.
+
+Video matching considers artist/title identities parsed from the filename, server title, and
+server metadata in that order, choosing the strongest catalog match. Windows and POSIX paths
+are supported; upload decorations may be removed, but live and remix version labels remain.
+The original server metadata is retained. Newly observed artists use the parsed credit when
+available, without MusicBrainz confirmation. Prior artist observations and provenance remain
+for review and are not deleted by this filename-matching change.
 
 Vidarr creates playlists only from videos available in the selected playback library and can send
 them to Plex or Jellyfin. Users can build playlists manually or from metadata rules such as artist,

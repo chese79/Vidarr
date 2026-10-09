@@ -62,7 +62,7 @@ describe('syncConnectorVideos identity parsing', () => {
     const { videos } = await catalog('Beck', ['Devils Haircut']);
     provider.fetchVideos.mockResolvedValue([server('a', 'Beck - Devils Haircut', 'BeckVEVO', '/media/music videos/Beck - Some Other Name.mp4')]);
     await syncConnectorVideos(await connector());
-    expect(await prisma.libraryVideo.findFirstOrThrow()).toMatchObject({ musicVideoId: videos[0].id, matchConfidence: null });
+    expect(await prisma.libraryVideo.findFirstOrThrow()).toMatchObject({ musicVideoId: videos[0].id, matchConfidence: null, normalizedTitle: 'devils haircut' });
   });
 
   it('does not confirm a different version of a song just because the title is similar', async () => {
@@ -72,6 +72,18 @@ describe('syncConnectorVideos identity parsing', () => {
     // Either no match or a fuzzy one — never "confirmed", so it cannot silently stand in for the original.
     const row = await prisma.libraryVideo.findFirstOrThrow();
     expect(row.musicVideoId !== null && row.matchConfidence === null).toBe(false);
+  });
+
+  it('does not strip bracketed live labels into an exact catalog match', async () => {
+    await catalog('Blur', ['Beetlebum']);
+    provider.fetchVideos.mockResolvedValue([server('a', 'x', 'Unknown Artist', '/m/Blur - Beetlebum [Live].mp4')]);
+    const result = await syncConnectorVideos(await connector());
+    expect(result.matched.confirmed).toBe(0);
+  });
+
+  it('records an empty-metadata video without failing the sync', async () => {
+    provider.fetchVideos.mockResolvedValue([server('a', '', '', '')]);
+    expect((await syncConnectorVideos(await connector())).matched.unmatched).toBe(1);
   });
 
   it('records a new artist under its real name, with a sort name that drops "The"', async () => {
@@ -114,7 +126,7 @@ describe('syncConnectorVideos identity parsing', () => {
       .toMatchObject({ normalizedArtistName: 'deftones', normalizedTitle: '7 words', musicVideoId: videos[0].id });
   });
 
-  describe('retiring artist records left by earlier syncs', () => {
+  describe('preserving artist records left by earlier syncs', () => {
     const old = new Date('2020-01-01T00:00:00Z');
     const leftover = async (name: string, data: Record<string, unknown> = {}) => {
       const artist = await prisma.artist.create({ data: { name, sortName: name, rootFolderId, qualityProfileId, monitored: false, ...data } });
@@ -122,7 +134,7 @@ describe('syncConnectorVideos identity parsing', () => {
       return artist;
     };
 
-    it('removes only unidentified, unmonitored artists that nothing else refers to', async () => {
+    it('preserves old artists and their provenance when new filenames identify a different artist', async () => {
       const plain = await leftover('uploader one');
       const identified = await leftover('Identified', { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: '00000000-0000-4000-8000-000000000001' });
       const monitored = await leftover('Monitored One', { monitored: true });
@@ -134,13 +146,13 @@ describe('syncConnectorVideos identity parsing', () => {
 
       const result = await syncConnectorVideos(await connector());
 
-      expect(result.prunedArtists).toBe(1);
-      expect(await prisma.artist.findUnique({ where: { id: plain.id } })).toBeNull();
+      expect(result.videoCount).toBe(1);
+      expect(await prisma.artist.findUnique({ where: { id: plain.id } })).not.toBeNull();
       for (const keep of [identified, monitored, withVideo, heardElsewhere]) {
         expect(await prisma.artist.findUnique({ where: { id: keep.id } }), keep.name).not.toBeNull();
       }
-      // The stale link itself goes even where the artist stays; other provenance is untouched.
-      expect(await prisma.artistSource.count({ where: { artistId: identified.id, origin: `video-connector:${connectorId}` } })).toBe(0);
+      // Historical provenance remains even when a new scan credits a different artist.
+      expect(await prisma.artistSource.count({ where: { artistId: identified.id, origin: `video-connector:${connectorId}` } })).toBe(1);
       expect(await prisma.artistSource.count({ where: { artistId: heardElsewhere.id, origin: `connector:${connectorId}` } })).toBe(1);
     });
 
@@ -148,14 +160,14 @@ describe('syncConnectorVideos identity parsing', () => {
       const seen = await leftover('Some Band');
       provider.fetchVideos.mockResolvedValue([server('a', 'x', 'Unknown Artist', '/m/Some Band - Some Song.mp4')]);
       const result = await syncConnectorVideos(await connector());
-      expect(result.prunedArtists).toBe(0);
+      expect(result.videoCount).toBe(1);
       expect(await prisma.artist.findUnique({ where: { id: seen.id } })).not.toBeNull();
     });
 
     it('removes nothing when the server returns no videos', async () => {
       const plain = await leftover('uploader one');
       provider.fetchVideos.mockResolvedValue([]);
-      expect((await syncConnectorVideos(await connector())).prunedArtists).toBe(0);
+      expect((await syncConnectorVideos(await connector())).videoCount).toBe(0);
       expect(await prisma.artist.findUnique({ where: { id: plain.id } })).not.toBeNull();
     });
   });

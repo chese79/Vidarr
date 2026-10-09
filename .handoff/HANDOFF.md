@@ -1,5 +1,16 @@
 # Handoff: Vidarr — video-identity matching (finish, test, merge, deploy)
 
+## Receiving-session status, 2026-10-08
+
+The original outgoing snapshot below is historical context. The receiver verified the committed
+handoff with the installed schema-2.0 Git verifier, and the user approved GPT-6 Codex and requested
+completion of the open work. The four upstream review-fix commits were already reviewed, tested,
+and merged by this receiving conversation. The branch now integrates them. Automatic stale-artist
+deletion was removed to preserve existing artists and provenance; bracketed version labels,
+empty identities, and stored exact-match identities received regression fixes. [verified] The final
+Node 22 Docker build passed, with 621 server tests and 23 web tests passing and all 32 migrations
+applied to disposable SQLite data. Publication and deployment results will be recorded when complete.
+
 Tier: Standard — one feature in flight across code, a live deployment, and a diverged remote; context beyond the diff is essential.
 Created: 2026-10-08 20:50, America/Chicago (-05:00)
 Intended receiver: another Claude Code / Codex session on this same machine (Windows 10, Docker Desktop).

@@ -99,6 +99,13 @@ Genre data comes from MusicBrainz (community votes) and Last.fm (listener tags),
 
 ## Editing and removing playlists
 
+Before you generate a playlist from filters or manually regenerate a smart playlist, Vidarr
+refreshes the playback library and reports how many videos match your catalog exactly. For
+videos credited to uploader channels, matching first tries `Artist - Title` from the filename,
+then the server title, then the server metadata. Live and remix labels are kept. Probable or
+ambiguous matches still require review before they can join a playlist. Old artist observations
+remain in Match Review; this matching update does not delete them.
+
 Open **Playlists** and choose **Edit** on a playlist.
 
 - **Rename** changes the name in Vidarr only. Choose **Update on …** to push it again; a push replaces the published copy, so the new name appears in Plex or Jellyfin.
