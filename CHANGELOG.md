@@ -5,6 +5,13 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — show saved credentials as masked entries
+
+- Password, token, API-key and shared-secret fields show a fixed masked saved indicator.
+  Blank edits preserve the existing credential; the display mask is never submitted as a value.
+- Indexer and download-client API keys are also masked while typing. Library connectors expose
+  only a password-presence flag so Subsonic credentials can show the same saved indicator.
+
 ### Added — Last.fm account linking and music-video scrobbling
 
 - Link a Last.fm account in Settings → General with an API key and shared secret, authorize

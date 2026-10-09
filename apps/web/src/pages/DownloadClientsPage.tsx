@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { credentialPlaceholder } from '../credentialFields';
 import type { DownloadClient, DownloadClientImplementation } from '@vidarr/shared-types';
 
 // Inline edit for an existing download client — previously the only way to
@@ -76,7 +77,7 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
                   onChange={(e) => setUsername(e.target.value)}
                 />
                 <input
-                  placeholder={client.hasPassword ? 'New password (leave blank to keep current)' : 'Password'}
+                  placeholder={credentialPlaceholder(client.hasPassword, 'Password')}
                   aria-label="Password"
                   type="password"
                   value={password}
@@ -85,8 +86,9 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
               </>
             ) : (
               <input
-                placeholder={client.hasApiKey ? 'New API key (leave blank to keep current)' : 'API key'}
+                placeholder={credentialPlaceholder(client.hasApiKey, 'API key')}
                 aria-label="API key"
+                type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
               />
@@ -246,6 +248,7 @@ export default function DownloadClientsPage() {
             <input
               placeholder="API key"
               aria-label="API key"
+              type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />

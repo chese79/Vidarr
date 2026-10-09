@@ -4,6 +4,7 @@ import { api, setStoredApiKey } from '../api/client';
 import { renderNamingFormat } from '@vidarr/shared-types';
 import type { RecommendationProviderConfig, TransferMode } from '@vidarr/shared-types';
 import { LastFmAccountSection } from '../components/LastFmAccountSection';
+import { credentialPlaceholder } from '../credentialFields';
 
 function SecuritySection({ apiKey }: { apiKey: string | null }) {
   const queryClient = useQueryClient();
@@ -101,7 +102,7 @@ function GoogleSignOnSection({
         <input
           id="google-client-secret"
           type="password"
-          placeholder={hasGoogleClientSecret ? 'Leave blank to keep current secret' : ''}
+          placeholder={credentialPlaceholder(hasGoogleClientSecret, 'Client secret')}
           value={clientSecret}
           onChange={(e) => setClientSecret(e.target.value)}
         />
@@ -188,6 +189,7 @@ function LocalLoginSection({ adminUsername }: { adminUsername: string | null }) 
           <input
             id="admin-password"
             type="password"
+            placeholder={credentialPlaceholder(Boolean(adminUsername), 'Password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
@@ -236,7 +238,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   musicbrainz: 'MusicBrainz',
 };
 
-function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
+export function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
   const queryClient = useQueryClient();
   const [enabled, setEnabled] = useState(config.enabled);
   const [apiKey, setApiKey] = useState('');
@@ -274,7 +276,7 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
             onChange={(e) => setClientId(e.target.value)}
           />
           <input
-            placeholder={`Client Secret${config.hasClientSecret ? ' (leave blank to keep)' : ''}`}
+            placeholder={credentialPlaceholder(config.hasClientSecret, 'Client Secret')}
             aria-label="Client Secret"
             type="password"
             value={clientSecret}
@@ -284,14 +286,14 @@ function ProviderRow({ config }: { config: RecommendationProviderConfig }) {
       ) : config.provider === 'lastfm' ? (
         <>
         <input
-          placeholder={`API key${config.hasApiKey ? ' (leave blank to keep)' : ''}`}
+          placeholder={credentialPlaceholder(config.hasApiKey, 'API key')}
           aria-label="API key"
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
         />
         <input
-          placeholder={`Shared secret${config.hasClientSecret ? ' (leave blank to keep)' : ''}`}
+          placeholder={credentialPlaceholder(config.hasClientSecret, 'Shared secret')}
           aria-label="Last.fm shared secret"
           type="password"
           value={clientSecret}
@@ -386,7 +388,7 @@ export default function SettingsPage() {
           <input
             id="imvdb-api-key"
             type="password"
-            placeholder={settings.data?.hasImvdbApiKey ? 'Leave blank to keep current key' : ''}
+            placeholder={credentialPlaceholder(settings.data?.hasImvdbApiKey, 'API key')}
             value={imvdbApiKey}
             onChange={(e) => setImvdbApiKey(e.target.value)}
           />

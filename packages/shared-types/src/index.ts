@@ -337,6 +337,7 @@ export const LibraryConnectorSchema = z.object({
   host: z.string().min(1),
   authToken: z.string().nullable(),
   hasAuthToken: z.boolean(),
+  hasPassword: z.boolean().optional(),
   username: z.string().nullable(),
   userId: z.string().nullable(),
   musicLibraryId: z.string().nullable(),

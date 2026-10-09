@@ -84,6 +84,11 @@ Vidarr prefers an IMVDb curated direct link, then a plausible official VEVO or a
 
 Under **Settings**, **General** contains library naming and integration settings; **Quality Profiles** controls acceptable formats; **Root Folders** sets destinations; **Library Connectors** configures media-server reads and playback libraries; **Indexers** and **Download Clients** configure search and acquisition; **System / Tasks** shows maintenance jobs and manual run actions.
 
+Saved credentials show `•••••••• (saved; enter a replacement)` in password, key, token and
+shared-secret fields. The fixed mask indicates presence without exposing the value or length.
+Leave an edit field blank to retain the saved credential, or type a replacement. The owner-password
+form requires a new password when saving; its mask only indicates that a password is already set.
+
 ## Genres
 
 Every artist has genres (broad, such as *rock*) and sub-genres (specific, such as *shoegaze*). On an artist's page, the **Genres** panel shows the ones in force. Beside each is how many Library artists share it and what percentage of the library that is.
