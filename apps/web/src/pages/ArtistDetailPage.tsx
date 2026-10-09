@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
@@ -275,6 +275,13 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
 export default function ArtistDetailPage() {
   const { id } = useParams();
   const artistId = Number(id);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const returnTo = typeof location.state?.discoverReturnTo === 'string' && /^\/discover(?:\?|$)/.test(location.state.discoverReturnTo) ? location.state.discoverReturnTo : null;
+  const returnToDiscover = (message?: string) => {
+    if (returnTo) navigate(returnTo, { state: { discoverScroll: location.state.discoverScroll, message } });
+  };
+  const collected = useRef(false);
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState('');
@@ -292,6 +299,7 @@ export default function ArtistDetailPage() {
   const artist = useQuery({
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
+    refetchInterval: returnTo ? 5000 : false,
   });
   const videoInventory = useQuery({
     queryKey: ['artist-video-inventory', artistId],
@@ -308,6 +316,12 @@ export default function ArtistDetailPage() {
     },
     onError: (error: Error) => setArtistActionMessage(error.message),
   });
+  useEffect(() => {
+    if (returnTo && location.state?.collectSources && artist.data?.musicbrainzMatchStatus === 'confirmed' && !collected.current) {
+      collected.current = true;
+      collectVideoInventory.mutate();
+    }
+  }, [returnTo, location.state, artist.data?.musicbrainzMatchStatus]);
   const musicbrainzCandidates = useQuery({
     queryKey: ['musicbrainzCandidates', artistId],
     queryFn: () => api.artists.musicbrainzCandidates(artistId),
@@ -456,14 +470,17 @@ export default function ArtistDetailPage() {
   }
 
   async function handleBulkSearch() {
-    setBulkSearching(true);
-    setBulkMessage(null);
-    const result = await api.musicVideos.bulkSearch([...selected]);
-    setBulkMessage(`${result.grabbed} grabbed, ${result.skipped} skipped`);
-    setSelected(new Set());
-    setBulkSearching(false);
-    queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
-    queryClient.invalidateQueries({ queryKey: ['queue'] });
+    setBulkSearching(true); setBulkMessage(null);
+    try {
+      const result = await api.musicVideos.bulkSearch([...selected]);
+      const message = `${result.grabbed} grabbed, ${result.skipped} skipped`;
+      setBulkMessage(message);
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+      queryClient.invalidateQueries({ queryKey: ['queue'] });
+      if (returnTo) returnToDiscover(message);
+      else if (!result.skipped) setSelected(new Set());
+    } catch (error) { setBulkMessage(`Search failed: ${(error as Error).message}`); }
+    finally { setBulkSearching(false); }
   }
 
   async function handleBulkDownload() {
@@ -489,10 +506,12 @@ export default function ArtistDetailPage() {
     setBulkMessage(`${downloaded} downloaded, ${ids.length - downloaded} failed. Failed videos remain selected.`);
     setBulkDownloading(false);
     queryClient.invalidateQueries({ queryKey: ['queue'] });
+    if (returnTo && downloaded === ids.length) returnToDiscover(`${downloaded} downloads submitted.`);
   }
 
   return (
     <div>
+      {returnTo && <button className="secondary" onClick={() => returnToDiscover()}>Back to Discover</button>}
       <div className="page-header">
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <ArtistHeaderImage artistId={artistId} name={artist.data.name} />

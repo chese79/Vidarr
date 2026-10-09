@@ -1,5 +1,9 @@
 # Vidarr user guide
 
+For the current Discover artist-addition and review flow, playlist defaults and editing controls,
+see [Discover and playlist workflows](discovery-playlist-workflows.md). Match Review is now labeled
+**Artist Review** in the main menu; its existing links remain valid.
+
 Vidarr organizes **official song music videos** around confirmed artists. It can discover videos from IMVDb, an artist's YouTube links, and video files already in your library; it can then search for missing videos, download them, and track availability in a media server.
 
 This guide covers the web app. For installation and Docker setup, see the [README](../README.md) and [deployment guide](deployment.md).

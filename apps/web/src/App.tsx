@@ -20,13 +20,13 @@ import GenresPage from './pages/GenresPage';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
+  { to: '/playlists', label: 'Playlists' },
+  { to: '/discover', label: 'Discover' },
+  { to: '/match-review', label: 'Artist Review' },
+  { to: '/video-review', label: 'Video Review' },
   { to: '/genres', label: 'Genres' },
   { to: '/calendar', label: 'Calendar' },
-  { to: '/discover', label: 'Discover' },
-  { to: '/match-review', label: 'Match Review' },
-  { to: '/video-review', label: 'Video Review' },
   { to: '/import', label: 'Import' },
-  { to: '/playlists', label: 'Playlists' },
   { to: '/queue', label: 'Queue' },
   { to: '/history', label: 'History' },
 ];

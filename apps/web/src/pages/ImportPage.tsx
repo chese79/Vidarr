@@ -105,7 +105,7 @@ export default function ImportPage() {
         Number(qualityProfileId),
       );
       setResult(
-        `Sent ${outcome.pendingReview} video(s) to Video Review, created ${outcome.artistsCreated} artist observation(s) for Match Review, skipped ${outcome.skipped}.`,
+        `Sent ${outcome.pendingReview} video(s) to Video Review, created ${outcome.artistsCreated} artist observation(s) for Artist Review, skipped ${outcome.skipped}.`,
       );
       setGroups(null);
       setUrl('');

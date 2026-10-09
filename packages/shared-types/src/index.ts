@@ -244,6 +244,7 @@ export const UpdateMusicVideoSchema = CreateMusicVideoSchema.omit({ artistId: tr
 export type UpdateMusicVideo = z.infer<typeof UpdateMusicVideoSchema>;
 
 export const SettingsSchema = z.object({
+  defaultPlaybackConnectorId: z.number().int().positive().nullable().optional(),
   namingFormat: z.string(),
   transferMode: TransferMode,
   minFreeSpaceMb: z.number().int(),
@@ -781,6 +782,7 @@ export const PlaylistSchema = z.object({
   lastGeneratedAt: z.string().nullable(),
   targetConnectorId: z.number().int().nullable(),
   sortMode: z.enum(['artist_title', 'shuffle']),
+  maxVideos: z.number().int().positive().nullable().optional(),
   shuffleSeed: z.number().int().nullable(),
   items: z.array(PlaylistItemSchema),
   syncs: z.array(PlaylistSyncSchema),
@@ -878,6 +880,7 @@ export type MatchMode = z.infer<typeof MatchMode>;
 // Every field is optional — only the filters the user actually enables are
 // applied, combined with `matchMode` (AND = "all", OR = "any").
 export const PlaylistFiltersSchema = z.object({
+  onlyUnwatched: z.boolean().optional(),
   yearMin: z.number().int().optional(),
   yearMax: z.number().int().optional(),
   genre: z.string().min(1).optional(),
@@ -892,6 +895,7 @@ export const PlaylistFiltersSchema = z.object({
 export type PlaylistFilters = z.infer<typeof PlaylistFiltersSchema>;
 
 export const GeneratePlaylistBodySchema = z.object({
+  maxVideos: z.number().int().positive().max(10000).nullable().optional(),
   name: z.string().min(1),
   filters: PlaylistFiltersSchema,
   matchMode: MatchMode,
@@ -926,6 +930,8 @@ export type GeneratePlaylistResult = z.infer<typeof GeneratePlaylistResultSchema
 // regenerateIntervalMinutes, sortMode — only apply to a smart playlist; the
 // route rejects them for a static one, whose membership and order are manual.
 export const UpdatePlaylistSchema = z.object({
+  maxVideos: z.number().int().positive().max(10000).nullable().optional(),
+  replaceFromFilters: z.boolean().optional(),
   name: z.string().trim().min(1).optional(),
   targetConnectorId: z.number().int().positive().nullable().optional(),
   filters: PlaylistFiltersSchema.optional(),

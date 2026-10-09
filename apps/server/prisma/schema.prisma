@@ -281,6 +281,7 @@ model ScheduledTask {
 }
 
 model Settings {
+  defaultPlaybackConnectorId Int? // validated enabled Plex/Jellyfin video connector; stale defaults are ignored
   id             Int     @id @default(1)
   namingFormat   String  @default("{Artist Name}/{Artist Name} - {Video Title} ({Year}) [{Quality}]")
   transferMode   String  @default("hardlink") // "hardlink" | "copy" | "move"
@@ -406,6 +407,7 @@ model Playlist {
   lastGeneratedAt DateTime?
   targetConnectorId Int? // selected Plex/Jellyfin playback library; null preserves legacy playlists
   sortMode String @default("artist_title") // artist_title | shuffle
+  maxVideos Int? // null preserves existing unlimited playlists
   shuffleSeed Int?
 
   items PlaylistItem[]

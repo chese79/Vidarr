@@ -80,6 +80,7 @@ export async function playlistRoutes(app: FastifyInstance) {
         regenerateIntervalMinutes: body.regenerateIntervalMinutes,
         targetConnectorId: body.targetConnectorId,
         sortMode: body.sortMode,
+        maxVideos: body.maxVideos,
       });
     } catch (err) {
       reply.code(502);

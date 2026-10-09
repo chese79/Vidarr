@@ -149,6 +149,10 @@ export const api = {
     stats: (smallThreshold = 1) => request<GenreStats>(`/genres/stats?smallThreshold=${smallThreshold}`),
   },
   artists: {
+    validateNew: (name: string) => request<{ validated: boolean; sources: string[]; warnings: string[] }>('/artist/validate-new', { method: 'POST', body: JSON.stringify({ name }) }),
+    addNew: (data: { name: string; rootFolderId: number; qualityProfileId: number; allowUnverified: boolean }) => request<{ artist: Artist }>('/artist/add-new', { method: 'POST', body: JSON.stringify(data) }),
+    searchMusicbrainz: (q: string) => request<Array<{ id: string; name: string; sortName: string; type: string | null; country: string | null; disambiguation: string | null }>>(`/artist/musicbrainz/search?q=${encodeURIComponent(q)}`),
+    addMusicbrainz: (data: { musicbrainzArtistId: string; rootFolderId: number; qualityProfileId: number }) => request<Artist>('/artist/musicbrainz/add', { method: 'POST', body: JSON.stringify(data) }),
     list: () => request<Artist[]>('/artist'),
     matchReview: () => request<Array<Artist & { musicbrainzCandidates: Array<{
       id: number; musicbrainzArtistId: string; name: string; score: number; disambiguation: string | null;

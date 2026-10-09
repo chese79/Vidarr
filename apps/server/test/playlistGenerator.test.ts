@@ -63,13 +63,13 @@ describe('generatePlaylistFromFilters', () => {
     expect((await prisma.playlistItem.findFirst({ where: { playlistId: result.playlistId } }))?.musicVideoId).toBe(targetVideo.id);
   });
 
-  it('with no filters at all, matches nothing (checks.length === 0 short-circuit)', async () => {
+  it('with no active filters includes all eligible videos', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id, { hasFile: true, releaseYear: 2000 });
     await createMusicVideoFile(video.id);
 
     const result = await generatePlaylistFromFilters('Test', {}, 'all');
-    expect(result.matchedCount).toBe(0);
+    expect(result.matchedCount).toBe(1);
   });
 
   it('filters by year range', async () => {
@@ -244,4 +244,34 @@ describe('generatePlaylistFromFilters', () => {
     expect(refreshed).toEqual({ matchedCount: 5, changed: false });
     expect(after.map((item) => item.musicVideoId)).toEqual(before.items.map((item) => item.musicVideoId));
   });
+  it('limits after shuffling and retains the saved limit and seed on regeneration', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    for (let i = 0; i < 8; i++) {
+      const video = await createMusicVideo(artist.id, { title: `Video ${i}`, hasFile: true });
+      await createMusicVideoFile(video.id, { path: `/video-${i}.mp4` });
+    }
+    const result = await generatePlaylistFromFilters('Limited', {}, 'all', { smart: true, sortMode: 'shuffle', maxVideos: 3 });
+    expect(result.matchedCount).toBe(3);
+    const before = await prisma.playlistItem.findMany({ where: { playlistId: result.playlistId }, orderBy: { sortOrder: 'asc' } });
+    expect(await regenerateSmartPlaylist(result.playlistId)).toEqual({ matchedCount: 3, changed: false });
+    const after = await prisma.playlistItem.findMany({ where: { playlistId: result.playlistId }, orderBy: { sortOrder: 'asc' } });
+    expect(after.map((v) => v.musicVideoId)).toEqual(before.map((v) => v.musicVideoId));
+    expect((await prisma.playlist.findUniqueOrThrow({ where: { id: result.playlistId } })).maxVideos).toBe(3);
+  });
+
+  it('requires a known zero in the selected library, even with ANY matching and local count zero', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId, { genre: 'Rock' });
+    const connector = await createLibraryConnector();
+    const ids: number[] = [];
+    for (const count of [0, 4, null]) {
+      const video = await createMusicVideo(artist.id, { title: `Count ${count}`, hasFile: true });
+      await createMusicVideoFile(video.id, { path: `/count-${count}.mp4`, playCount: 0 });
+      await createLibraryVideo(connector.id, { externalId: `count-${count}`, musicVideoId: video.id, playCount: count });
+      ids.push(video.id);
+    }
+    const result = await generatePlaylistFromFilters('Unwatched', { onlyUnwatched: true, genre: 'rock' }, 'any', { targetConnectorId: connector.id });
+    const items = await prisma.playlistItem.findMany({ where: { playlistId: result.playlistId } });
+    expect(items.map((item) => item.musicVideoId)).toEqual([ids[0]]);
+  });
+
 });

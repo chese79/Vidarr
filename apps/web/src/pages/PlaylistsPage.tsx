@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
@@ -7,7 +7,6 @@ import {
   PlaylistRuleFields,
   draftToFilters,
   emptyRuleDraft,
-  hasActiveFilter,
   parseStoredRules,
   type RuleDraft,
 } from './playlistRules';
@@ -22,6 +21,19 @@ interface Notice {
 // with a video library chosen (Subsonic has no video playlists).
 function playbackConnectors(connectors: LibraryConnector[] | undefined) {
   return (connectors ?? []).filter((c) => c.enabled && c.type !== 'subsonic' && c.videoLibraryId);
+}
+
+function useDefaultPlaybackLibrary() {
+  const queryClient = useQueryClient();
+  const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list });
+  const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings.get });
+  const options = playbackConnectors(connectors.data);
+  const preferred = options.find((c) => c.id === settings.data?.defaultPlaybackConnectorId)?.id ?? options[0]?.id ?? '';
+  const save = useMutation({
+    mutationFn: (id: number) => api.settings.update({ defaultPlaybackConnectorId: id }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
+  });
+  return { preferred, save };
 }
 
 function ScheduleSelect({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
@@ -44,14 +56,18 @@ function ScheduleSelect({ value, onChange }: { value: number | null; onChange: (
 
 function GeneratePlaylistPanel() {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [name, setName] = useState('');
   const [smart, setSmart] = useState(false);
   const [regenerateIntervalMinutes, setRegenerateIntervalMinutes] = useState<number | null>(null);
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
-  const [sortMode, setSortMode] = useState<'artist_title' | 'shuffle'>('artist_title');
+  const [sortMode, setSortMode] = useState<'artist_title' | 'shuffle'>('shuffle');
   const [draft, setDraft] = useState<RuleDraft>(emptyRuleDraft());
   const [result, setResult] = useState<string | null>(null);
+  const [maxVideos, setMaxVideos] = useState<number | ''>(20);
+  const defaults = useDefaultPlaybackLibrary();
+  const [libraryChosen, setLibraryChosen] = useState(false);
+  useEffect(() => { if (!libraryChosen) setTargetConnectorId(defaults.preferred); }, [defaults.preferred, libraryChosen]);
 
   const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list, enabled: open });
 
@@ -64,6 +80,7 @@ function GeneratePlaylistPanel() {
       regenerateIntervalMinutes,
       targetConnectorId: targetConnectorId || null,
       sortMode,
+      maxVideos: maxVideos || 20,
     }),
     onSuccess: (r) => {
       setResult([`Created "${name}" with ${r.matchedCount} video(s).`, describeSync(r.sync)].filter(Boolean).join(' '));
@@ -73,11 +90,10 @@ function GeneratePlaylistPanel() {
     onError: (err) => setResult(`Failed: ${(err as Error).message}`),
   });
 
-  const anyEnabled = hasActiveFilter(draft);
 
   function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !anyEnabled) return;
+    if (!name.trim() || !maxVideos) return;
     generate.mutate();
   }
 
@@ -107,12 +123,19 @@ function GeneratePlaylistPanel() {
           style={{ minWidth: 220 }}
           required
         />
-        <select aria-label="Playback library" value={targetConnectorId} onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}>
+        <label>Videos to add <input type="number" min={1} max={10000} required aria-label="Videos to add" value={maxVideos} onChange={(e) => setMaxVideos(e.target.value ? Number(e.target.value) : '')} style={{ width: 90 }} /></label>
+        <label><input type="checkbox" checked={draft.onlyUnwatched} onChange={(e) => setDraft({ ...draft, onlyUnwatched: e.target.checked })} /> Only add unwatched videos</label>
+        <select aria-label="Playback library" value={targetConnectorId} onChange={(e) => { setLibraryChosen(true); setTargetConnectorId(e.target.value ? Number(e.target.value) : ''); }}>
           <option value="">Any playback library</option>
           {playbackConnectors(connectors.data).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
+      <div className="form-row">
+        <button type="button" className="secondary" disabled={!targetConnectorId || defaults.save.isPending} onClick={() => targetConnectorId && defaults.save.mutate(targetConnectorId)}>Use as default playback library</button>
+        {defaults.save.isSuccess && <span role="status">Default playback library saved.</span>}
+        {defaults.save.isError && <span role="alert">{(defaults.save.error as Error).message}</span>}
+      </div>
       <div className="form-row" style={{ alignItems: 'center' }}>
         <label>Order <select aria-label="Playlist order" value={sortMode} onChange={(e) => setSortMode(e.target.value as 'artist_title' | 'shuffle')}>
           <option value="artist_title">Artist and title</option>
@@ -125,14 +148,9 @@ function GeneratePlaylistPanel() {
 
       <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix="generate" />
 
-      <button type="submit" disabled={!anyEnabled || generate.isPending}>
+      <button type="submit" disabled={!name.trim() || !maxVideos || generate.isPending}>
         {generate.isPending ? 'Generating…' : 'Generate Playlist'}
       </button>
-      {!anyEnabled && (
-        <span className="empty-state" style={{ marginLeft: 10 }}>
-          Enable at least one filter above.
-        </span>
-      )}
       {result && (
         <p className="empty-state" role="status">
           {result}
@@ -150,6 +168,9 @@ function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
 }) {
   const queryClient = useQueryClient();
   const isSmart = playlist.kind === 'smart';
+  const [replaceVideos, setReplaceVideos] = useState(false);
+  const editRules = isSmart || replaceVideos;
+  const [maxVideos, setMaxVideos] = useState<number | ''>(playlist.maxVideos ?? '');
   const original = parseStoredRules(playlist.ruleFilters, playlist.ruleMatchMode);
 
   const [name, setName] = useState(playlist.name);
@@ -165,12 +186,14 @@ function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
     if (name.trim() !== playlist.name) patch.name = name.trim();
     const target = targetConnectorId === '' ? null : targetConnectorId;
     if (target !== playlist.targetConnectorId) patch.targetConnectorId = target;
-    if (isSmart) {
+    if (editRules) {
+      if (!isSmart) { patch.replaceFromFilters = true; patch.filters = draftToFilters(draft); patch.matchMode = draft.matchMode; }
+      if (maxVideos !== (playlist.maxVideos ?? '') || !isSmart) patch.maxVideos = maxVideos || (isSmart ? null : 20);
       const filters = draftToFilters(draft);
       if (JSON.stringify(filters) !== JSON.stringify(draftToFilters(original))) patch.filters = filters;
       if (draft.matchMode !== original.matchMode) patch.matchMode = draft.matchMode;
       if (sortMode !== playlist.sortMode) patch.sortMode = sortMode;
-      if (interval !== playlist.regenerateIntervalMinutes) patch.regenerateIntervalMinutes = interval;
+      if (isSmart && interval !== playlist.regenerateIntervalMinutes) patch.regenerateIntervalMinutes = interval;
     }
     return patch;
   }
@@ -210,6 +233,8 @@ function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
           style={{ minWidth: 220 }}
           required
         />
+        <label>Videos to add <input type="number" min={1} max={10000} placeholder="Unlimited" disabled={!editRules} aria-label="Videos to add" value={maxVideos} onChange={(e) => setMaxVideos(e.target.value ? Number(e.target.value) : '')} style={{ width: 90 }} /></label>
+        <label><input type="checkbox" disabled={!editRules} checked={draft.onlyUnwatched} onChange={(e) => setDraft({ ...draft, onlyUnwatched: e.target.checked })} /> Only add unwatched videos</label>
         <select
           aria-label="Playback library"
           value={targetConnectorId}
@@ -221,14 +246,15 @@ function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
         </select>
       </div>
 
-      {isSmart && (
+      {!isSmart && <label><input type="checkbox" checked={replaceVideos} onChange={(e) => setReplaceVideos(e.target.checked)} /> Replace videos from filters</label>}
+      {editRules && (
         <>
           <div className="form-row" style={{ alignItems: 'center' }}>
             <label>Order <select aria-label="Playlist order" value={sortMode} onChange={(e) => setSortMode(e.target.value as typeof sortMode)}>
               <option value="artist_title">Artist and title</option>
               <option value="shuffle">Shuffle once</option>
             </select></label>
-            <ScheduleSelect value={interval} onChange={setInterval} />
+            {isSmart && <ScheduleSelect value={interval} onChange={setInterval} />}
           </div>
           <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix={`edit-${playlist.id}`} />
           <p className="empty-state">Saving re-runs these rules now{playlist.syncs.some((s) => s.remotePlaylistId) ? ' and republishes the playlist if its videos changed' : ''}.</p>
@@ -551,6 +577,9 @@ export default function PlaylistsPage() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
+  const defaults = useDefaultPlaybackLibrary();
+  const [libraryChosen, setLibraryChosen] = useState(false);
+  useEffect(() => { if (!libraryChosen) setTargetConnectorId(defaults.preferred); }, [defaults.preferred, libraryChosen]);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const playlists = useQuery({ queryKey: ['playlists'], queryFn: api.playlists.list });
@@ -591,6 +620,8 @@ export default function PlaylistsPage() {
 
       {notice && <p className="empty-state" role={notice.kind === 'alert' ? 'alert' : 'status'}>{notice.text}</p>}
 
+      <GeneratePlaylistPanel />
+      <details style={{ marginTop: 16, marginBottom: 16 }}><summary>Create an empty playlist manually</summary>
       <form className="form-row" onSubmit={handleSubmit}>
         <input
           placeholder="Playlist name"
@@ -600,16 +631,14 @@ export default function PlaylistsPage() {
           style={{ minWidth: 240 }}
           required
         />
-        <select aria-label="Playlist playback library" value={targetConnectorId} onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}>
+        <select aria-label="Playlist playback library" value={targetConnectorId} onChange={(e) => { setLibraryChosen(true); setTargetConnectorId(e.target.value ? Number(e.target.value) : ''); }}>
           <option value="">Any playback library</option>
           {playbackConnectors(connectors.data).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <button type="submit">Create Playlist</button>
       </form>
 
-      <div style={{ marginBottom: 16 }}>
-        <GeneratePlaylistPanel />
-      </div>
+      </details>
 
       {playlists.data?.length ? (
         playlists.data.map((p) => <PlaylistCard key={p.id} playlistId={p.id} onDeleted={handleDeleted} />)

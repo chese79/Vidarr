@@ -2,7 +2,8 @@
   color-scheme: dark;
   --bg: #14161a;
   --bg-elevated: #1d2025;
-  --border: #2c3038;
+  --border: #FFFFC5;
+  --surface-divider: #2c3038;
   --text: #e6e8eb;
   --text-muted: #9aa0aa;
   --accent: #4f8cff;
@@ -215,7 +216,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  background: var(--border);
+  background: var(--surface-divider);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -249,7 +250,7 @@ select {
 .video-thumb-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, var(--bg), var(--border));
+  background: linear-gradient(135deg, var(--bg), var(--surface-divider));
 }
 
 .video-info {
@@ -380,7 +381,7 @@ select {
   height: 44px;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--bg), var(--border));
+  background: linear-gradient(135deg, var(--bg), var(--surface-divider));
   display: grid;
   place-items: center;
   color: var(--text-muted);
@@ -662,3 +663,8 @@ select {
 .genre-stat-figure strong {
   color: var(--text);
 }
+
+/* One border color across every control, panel, badge and navigation surface. */
+*, *::before, *::after { border-color: var(--border) !important; }
+
+button.add-new-artist { background: #2563eb; border: 1px solid var(--border); }

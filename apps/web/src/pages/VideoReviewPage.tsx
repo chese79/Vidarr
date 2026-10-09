@@ -42,7 +42,7 @@ export default function VideoReviewPage() {
 
   return <div>
     <div className="page-header"><h2>Video Review</h2><button onClick={() => scan.mutate()} disabled={scan.isPending}>{scan.isPending ? 'Scanning…' : 'Scan local videos'}</button></div>
-    <p className="empty-state">Only official song music videos belong in Library. Reject interviews, live footage, lyric videos, visualizers, and audio uploads. Resolve the artist in <Link to="/match-review">Match Review</Link> first.</p>
+    <p className="empty-state">Only official song music videos belong in Library. Reject interviews, live footage, lyric videos, visualizers, and audio uploads. Resolve the artist in <Link to="/match-review">Artist Review</Link> first.</p>
     {message && <p role="status" className="empty-state">{message}</p>}
     <div className="library-filter-bar"><input aria-label="Search video candidates" placeholder="Search candidates" value={search} onChange={(event) => setSearch(event.target.value)} />
       {candidates.data && <span className="library-result-count">{candidates.data.total} pending videos</span>}

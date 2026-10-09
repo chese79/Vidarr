@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import {
   CreateArtistSchema,
@@ -20,6 +21,9 @@ import { matchLibraryVideo, type CanonicalVideo } from '../pipeline/reconciliati
 import { autoSearchAndGrab, runBacklogSearch } from '../pipeline/autoSearch.js';
 import { confirmArtistIdentity, discoverArtistIdentityCandidates } from '../pipeline/artistIdentity.js';
 import { collectArtistVideoInventory } from '../pipeline/artistVideoInventory.js';
+import { lookupMusicBrainzArtist, searchMusicBrainzArtists } from '../providers/metadata/musicbrainz.js';
+import { enrichConfirmedArtist } from '../pipeline/artistIdentity.js';
+import { validateNewArtist } from '../pipeline/newArtistValidation.js';
 
 // Escapes SQLite LIKE's own wildcards so a search term containing "%" or "_"
 // is matched literally rather than as a pattern.
@@ -51,6 +55,70 @@ interface ArtistSummaryRow {
 }
 
 export async function artistRoutes(app: FastifyInstance) {
+  app.post('/api/v1/artist/validate-new', async (req) => {
+    const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
+    return validateNewArtist(name);
+  });
+  app.post('/api/v1/artist/add-new', async (req, reply) => {
+    const body = z.object({ name: z.string().trim().min(1).max(120), rootFolderId: z.number().int().positive(), qualityProfileId: z.number().int().positive(), allowUnverified: z.boolean().default(false) }).parse(req.body);
+    const [root, profile] = await Promise.all([prisma.rootFolder.findUnique({ where: { id: body.rootFolderId } }), prisma.qualityProfile.findUnique({ where: { id: body.qualityProfileId } })]);
+    if (!root || !profile) return reply.code(400).send({ error: 'Select a root folder and quality profile first' });
+    const validation = await validateNewArtist(body.name);
+    if (!validation.validated && !body.allowUnverified) return reply.code(409).send({ error: 'Artist could not be validated against Last.fm, MusicBrainz or IMVDb. Confirm adding an unverified artist.', validation });
+    const existing = validation.musicbrainzArtistId
+      ? await prisma.artist.findUnique({ where: { musicbrainzArtistId: validation.musicbrainzArtistId } })
+      : await prisma.artist.findFirst({ where: { name: body.name } });
+    const artist = existing ?? await prisma.artist.create({ data: {
+      name: body.name, sortName: sortNameFor(body.name), rootFolderId: body.rootFolderId, qualityProfileId: body.qualityProfileId,
+      musicbrainzArtistId: validation.musicbrainzArtistId, musicbrainzMatchStatus: validation.musicbrainzArtistId ? 'confirmed' : 'unmatched',
+      musicbrainzMatchConfidence: validation.musicbrainzArtistId ? 1 : null,
+      imvdbArtistId: validation.imvdbArtistId && !await prisma.artist.findUnique({ where: { imvdbArtistId: validation.imvdbArtistId } }) ? validation.imvdbArtistId : null,
+      monitored: false,
+    } });
+    await prisma.artistSource.upsert({ where: { artistId_provider_origin: { artistId: artist.id, provider: 'manual', origin: 'discover-add' } }, update: { lastSeenAt: new Date() }, create: { artistId: artist.id, provider: 'manual', origin: 'discover-add' } });
+    if (artist.musicbrainzArtistId) {
+      void (async () => { await enrichConfirmedArtist(artist.id, artist.musicbrainzArtistId!); await collectArtistVideoInventory(artist.id); })().catch((error) => logActivity('warn', 'discover:add', error));
+    }
+    return { artist, validation };
+  });
+
+  app.get('/api/v1/artist/musicbrainz/search', async (req, reply) => {
+    const { q } = z.object({ q: z.string().trim().min(1).max(120) }).parse(req.query);
+    try { return await searchMusicBrainzArtists(q, 20); }
+    catch (error) { return reply.code(502).send({ error: (error as Error).message }); }
+  });
+
+  app.post('/api/v1/artist/musicbrainz/add', async (req, reply) => {
+    const body = z.object({ musicbrainzArtistId: z.string().uuid(), rootFolderId: z.number().int().positive(), qualityProfileId: z.number().int().positive() }).parse(req.body);
+    const mbid = body.musicbrainzArtistId.toLowerCase();
+    const [root, profile] = await Promise.all([
+      prisma.rootFolder.findUnique({ where: { id: body.rootFolderId } }),
+      prisma.qualityProfile.findUnique({ where: { id: body.qualityProfileId } }),
+    ]);
+    if (!root || !profile) return reply.code(400).send({ error: 'Select a root folder and quality profile first' });
+    try {
+      const metadata = await lookupMusicBrainzArtist(mbid);
+      const artist = await prisma.artist.upsert({
+        where: { musicbrainzArtistId: mbid }, update: {},
+        create: { name: metadata.name, sortName: metadata.sortName, musicbrainzArtistId: mbid,
+          musicbrainzMatchStatus: 'confirmed', musicbrainzMatchConfidence: 1, monitored: false,
+          rootFolderId: body.rootFolderId, qualityProfileId: body.qualityProfileId },
+      });
+      await prisma.artistSource.upsert({
+        where: { artistId_provider_origin: { artistId: artist.id, provider: 'musicbrainz', origin: 'discover-review' } },
+        update: { lastSeenAt: new Date() },
+        create: { artistId: artist.id, provider: 'musicbrainz', externalId: mbid, origin: 'discover-review' },
+      });
+      // Return the identity promptly; collect every catalog source in the background.
+      // The persistent confirmed-artist backfill also retries unfinished collections.
+      void (async () => {
+        await enrichConfirmedArtist(artist.id, mbid);
+        await collectArtistVideoInventory(artist.id);
+      })().catch((error) => logActivity('warn', 'discover:review', error));
+      return artist;
+    } catch (error) { return reply.code(502).send({ error: (error as Error).message }); }
+  });
+
   app.get('/api/v1/artist', async () => {
     return prisma.artist.findMany({
       where: { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null } },

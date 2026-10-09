@@ -5,6 +5,25 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — playlist defaults and Discover artist review
+
+- Create playlists in Shuffle order with 20 videos by default. Save a default playback library,
+  opt into unwatched videos with a known zero play count, and enable only the desired filters.
+  Genre and Director offer autocomplete; Director is last and the Quality picker is removed.
+- Keep saved video limits and shuffle seeds through smart regeneration. Static playlists can
+  explicitly replace their videos from filters; ordinary edits preserve membership and order.
+- Search MusicBrainz or select an existing artist in Discover, collect catalog sources, and review
+  videos on the artist page. Completed selected searches/downloads return to preserved Discover
+  filters, selections and scroll position; failed downloads remain available for retry.
+- Add a blue **Add New Artist** action beside Refresh Recommendations. Validate names against
+  MusicBrainz, Last.fm or IMVDb, and require an explicit warning override for unverified additions.
+  Artists without MusicBrainz confirmation remain in Artist Review and are added unmonitored.
+- Order navigation Library, Playlists, Discover, Artist Review, Video Review, then the remaining
+  entries in their previous order. Rename Match Review in the UI while preserving its route.
+- Apply `#FFFFC5` to borders throughout the UI, retaining existing surface backgrounds.
+- Add nullable playlist-limit and default-library columns; preserve existing unlimited playlists,
+  legacy Quality rules and the prior empty-smart-rule behavior during migration.
+
 ### Fixed — show saved credentials as masked entries
 
 - Password, token, API-key and shared-secret fields show a fixed masked saved indicator.

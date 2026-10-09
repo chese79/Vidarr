@@ -13,6 +13,10 @@ export interface RuleDraft {
   yearMax: string;
   enableGenre: boolean;
   genre: string;
+  enableDirector: boolean;
+  enableOwnership: boolean;
+  enableAddedAfter: boolean;
+  onlyUnwatched: boolean;
   director: string;
   ownership: '' | 'local' | 'server' | 'both';
   qualityIds: number[];
@@ -30,6 +34,7 @@ export function emptyRuleDraft(matchMode: MatchMode = 'all'): RuleDraft {
     matchMode,
     enableYear: false, yearMin: '', yearMax: '',
     enableGenre: false, genre: '',
+    enableDirector: false, enableOwnership: false, enableAddedAfter: false, onlyUnwatched: false,
     director: '', ownership: '', qualityIds: [], addedAfter: '',
     enablePlayCount: false, minPlayCount: '',
     enableArtists: false, artistIds: [],
@@ -39,15 +44,16 @@ export function emptyRuleDraft(matchMode: MatchMode = 'all'): RuleDraft {
 
 export function draftToFilters(draft: RuleDraft): PlaylistFilters {
   const filters: PlaylistFilters = {};
+  if (draft.onlyUnwatched) filters.onlyUnwatched = true;
   if (draft.enableYear) {
     if (draft.yearMin) filters.yearMin = Number(draft.yearMin);
     if (draft.yearMax) filters.yearMax = Number(draft.yearMax);
   }
   if (draft.enableGenre && draft.genre.trim()) filters.genre = draft.genre.trim();
-  if (draft.director.trim()) filters.director = draft.director.trim();
-  if (draft.ownership) filters.ownership = draft.ownership;
+  if (draft.enableDirector && draft.director.trim()) filters.director = draft.director.trim();
+  if (draft.enableOwnership && draft.ownership) filters.ownership = draft.ownership;
   if (draft.qualityIds.length) filters.qualityIds = draft.qualityIds;
-  if (draft.addedAfter) filters.addedAfter = new Date(draft.addedAfter).toISOString();
+  if (draft.enableAddedAfter && draft.addedAfter) filters.addedAfter = new Date(draft.addedAfter).toISOString();
   if (draft.enablePlayCount && draft.minPlayCount) filters.minPlayCount = Number(draft.minPlayCount);
   if (draft.enableArtists && draft.artistIds.length) filters.artistIds = draft.artistIds;
   if (draft.enableVideos && draft.videoIds.length) filters.musicVideoIds = draft.videoIds;
@@ -68,6 +74,10 @@ export function filtersToDraft(filters: PlaylistFilters, matchMode: MatchMode): 
     yearMax: filters.yearMax !== undefined ? String(filters.yearMax) : '',
     enableGenre: filters.genre !== undefined,
     genre: filters.genre ?? '',
+    enableDirector: filters.director !== undefined,
+    enableOwnership: filters.ownership !== undefined,
+    enableAddedAfter: filters.addedAfter !== undefined,
+    onlyUnwatched: filters.onlyUnwatched ?? false,
     director: filters.director ?? '',
     ownership: filters.ownership ?? '',
     qualityIds: filters.qualityIds ?? [],
@@ -107,14 +117,19 @@ export function PlaylistRuleFields({ draft, onChange, targetConnectorId, idPrefi
   const set = (patch: Partial<RuleDraft>) => onChange({ ...draft, ...patch });
 
   const artists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
-  const qualities = useQuery({ queryKey: ['qualities'], queryFn: api.qualities.list });
   const playable = useQuery({
     queryKey: ['musicVideos', 'playable', targetConnectorId ?? ''],
     queryFn: () => api.musicVideos.list(targetConnectorId ? { playableConnectorId: targetConnectorId } : { playable: true }),
   });
 
+  const genres = [...new Set((artists.data ?? []).flatMap((a) => a.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? []))].sort();
+  const directors = [...new Set((playable.data ?? []).map((v) => v.director).filter((v): v is string => Boolean(v)))].sort();
+
   return (
     <>
+      <datalist id={`${idPrefix}-genres`}>{genres.map((g) => <option key={g} value={g} />)}</datalist>
+      <datalist id={`${idPrefix}-directors`}>{directors.map((d) => <option key={d} value={d} />)}</datalist>
+      {draft.qualityIds.length > 0 && <p>This playlist retains a legacy Quality filter. <button type="button" className="secondary" onClick={() => set({ qualityIds: [] })}>Remove legacy filter</button></p>}
       <div className="form-row">
         <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input
@@ -169,6 +184,7 @@ export function PlaylistRuleFields({ draft, onChange, targetConnectorId, idPrefi
         <input
           placeholder="e.g. Rock"
           aria-label="Genre"
+          list={`${idPrefix}-genres`}
           value={draft.genre}
           onChange={(e) => set({ genre: e.target.value })}
           disabled={!draft.enableGenre}
@@ -204,23 +220,11 @@ export function PlaylistRuleFields({ draft, onChange, targetConnectorId, idPrefi
       </div>
 
       <div className="form-row" style={{ alignItems: 'center' }}>
-        <input aria-label="Director" placeholder="Director" value={draft.director} onChange={(e) => set({ director: e.target.value })} />
-        <select aria-label="Ownership" value={draft.ownership} onChange={(e) => set({ ownership: e.target.value as RuleDraft['ownership'] })}>
-          <option value="">Any ownership</option>
-          <option value="local">Local only</option>
-          <option value="server">Media server only</option>
-          <option value="both">Local and media server</option>
+        <label><input type="checkbox" checked={draft.enableOwnership} onChange={(e) => set({ enableOwnership: e.target.checked })} /> Ownership</label>
+        <select aria-label="Ownership" disabled={!draft.enableOwnership} value={draft.ownership} onChange={(e) => set({ ownership: e.target.value as RuleDraft['ownership'] })}>
+          <option value="">Any ownership</option><option value="local">Local only</option><option value="server">Media server only</option><option value="both">Local and media server</option>
         </select>
-        <select
-          multiple
-          aria-label="Quality"
-          value={draft.qualityIds.map(String)}
-          onChange={(e) => set({ qualityIds: [...e.target.selectedOptions].map((option) => Number(option.value)) })}
-          style={{ minWidth: 150, height: 72 }}
-        >
-          {qualities.data?.map((quality) => <option key={quality.id} value={quality.id}>{quality.name}</option>)}
-        </select>
-        <label>Added after <input type="date" aria-label="Added after" value={draft.addedAfter} onChange={(e) => set({ addedAfter: e.target.value })} /></label>
+        <label><input type="checkbox" checked={draft.enableAddedAfter} onChange={(e) => set({ enableAddedAfter: e.target.checked })} /> Added after <input type="date" disabled={!draft.enableAddedAfter} aria-label="Added after" value={draft.addedAfter} onChange={(e) => set({ addedAfter: e.target.value })} /></label>
       </div>
 
       <div className="form-row" style={{ alignItems: 'flex-start' }}>
@@ -271,6 +275,10 @@ export function PlaylistRuleFields({ draft, onChange, targetConnectorId, idPrefi
             </option>
           ))}
         </select>
+      </div>
+      <div className="form-row">
+        <label><input type="checkbox" checked={draft.enableDirector} onChange={(e) => set({ enableDirector: e.target.checked })} /> Director</label>
+        <input aria-label="Director" placeholder="Director" list={`${idPrefix}-directors`} disabled={!draft.enableDirector} value={draft.director} onChange={(e) => set({ director: e.target.value })} />
       </div>
     </>
   );
