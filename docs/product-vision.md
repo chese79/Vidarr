@@ -165,6 +165,9 @@ Existing files and media-server records must never be deleted merely because a c
 temporarily fails.
 During a quality upgrade, the previous file remains in place until the replacement is recorded
 successfully; cleanup never removes a prior path outside the configured root folder.
+When the replacement uses the same path, a backup of the previous file survives until metadata
+writing and the import database transaction both succeed. A failure restores the previous file
+and keeps the replacement available for retry, including move transfers across filesystems.
 An unexpectedly empty video-library scan also preserves the last known availability; a later
 non-empty scan reconciles inventory. Video-library provenance is retained even when the artist
 was already observed through an audio library.

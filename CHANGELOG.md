@@ -5,6 +5,12 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — same-path upgrade recovery
+
+- Retain the previous video during a same-path quality upgrade until metadata writing and
+  database recording succeed. Failed copy, hardlink, or move imports restore the previous file
+  and leave the replacement available for retry, including moves across filesystems.
+
 ### Fixed — catalog version identities
 
 - Keep distinct IMVDb video identities separate even when their song titles match. New versions

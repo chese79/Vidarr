@@ -46,6 +46,31 @@ describe('quality upgrade import safety', () => {
     expect((await prisma.musicVideoFile.findUniqueOrThrow({ where: { musicVideoId: videoId } })).path).toBe(oldPath);
   });
 
+  it.each(['copy', 'hardlink', 'move'])('restores a same-path %s upgrade when database recording fails', async (mode) => {
+    await prisma.settings.update({ where: { id: 1 }, data: { namingFormat: 'old', transferMode: mode } });
+    vi.spyOn(prisma, '$transaction').mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(importDownloadedFile(videoId, sourcePath, '1080p')).rejects.toThrow('database unavailable');
+    await expect(fs.readFile(oldPath, 'utf-8')).resolves.toBe('old video');
+    await expect(fs.readFile(sourcePath, 'utf-8')).resolves.toBe('new video');
+    expect((await prisma.musicVideoFile.findUniqueOrThrow({ where: { musicVideoId: videoId } })).path).toBe(oldPath);
+    expect((await fs.readdir(path.dirname(oldPath))).filter(name => name.includes('.vidarr-'))).toEqual([]);
+  });
+
+  it('restores a same-path upgrade when sidecar writing fails', async () => {
+    await prisma.settings.update({ where: { id: 1 }, data: { namingFormat: 'old' } });
+    await fs.mkdir(path.join(path.dirname(oldPath), 'old.nfo'));
+    await expect(importDownloadedFile(videoId, sourcePath, '1080p')).rejects.toThrow();
+    await expect(fs.readFile(oldPath, 'utf-8')).resolves.toBe('old video');
+  });
+
+  it('commits a same-path upgrade and removes its backup after successful recording', async () => {
+    await prisma.settings.update({ where: { id: 1 }, data: { namingFormat: 'old' } });
+    await importDownloadedFile(videoId, sourcePath, '1080p');
+    await expect(fs.readFile(oldPath, 'utf-8')).resolves.toBe('new video');
+    expect((await fs.readdir(path.dirname(oldPath))).filter(name => name.includes('.vidarr-'))).toEqual([]);
+  });
+
   it('removes the old file only after recording a successful replacement', async () => {
     const result = await importDownloadedFile(videoId, sourcePath, '1080p');
     await expect(fs.access(oldPath)).rejects.toThrow();
