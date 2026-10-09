@@ -6,7 +6,13 @@ import type { ConnectorSyncReport } from '@vidarr/shared-types';
 export function describeSync(reports: ConnectorSyncReport[] | undefined): string {
   if (!reports?.length) return '';
   return reports.map((r) => {
-    if (r.status === 'synced') return `Synced ${r.name} (${r.videoCount ?? 0} video${r.videoCount === 1 ? '' : 's'}).`;
+    if (r.status === 'synced') {
+      const count = r.videoCount ?? 0;
+      const base = `${count} video${count === 1 ? '' : 's'}`;
+      // Only exact catalog matches can be put in a playlist, so say how many there are.
+      const matched = r.matchedCount === undefined ? '' : `, ${r.matchedCount} matched to your catalog`;
+      return `Synced ${r.name} (${base}${matched}).`;
+    }
     if (r.status === 'skipped') return `${r.name}: ${r.message ?? 'sync skipped, using last results.'}`;
     return `Could not sync ${r.name} (${r.message ?? 'unknown error'}); used the last synced data.`;
   }).join(' ');

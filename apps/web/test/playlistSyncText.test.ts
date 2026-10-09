@@ -12,6 +12,11 @@ describe('describeSync', () => {
     expect(describeSync([{ connectorId: 1, name: 'JF', status: 'synced', videoCount: 120 }])).toBe('Synced JF (120 videos).');
   });
 
+  it('says how many videos matched the catalog, since only those can join a playlist', () => {
+    expect(describeSync([{ connectorId: 1, name: 'JF', status: 'synced', videoCount: 3602, matchedCount: 551 }]))
+      .toBe('Synced JF (3602 videos, 551 matched to your catalog).');
+  });
+
   it('spells out a failure and that older data was used', () => {
     const text = describeSync([{ connectorId: 1, name: 'JF', status: 'failed', message: 'timed out' }]);
     expect(text).toContain('Could not sync JF (timed out)');

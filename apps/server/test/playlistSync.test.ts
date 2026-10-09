@@ -49,7 +49,7 @@ describe('on-demand video sync before playlist creation', () => {
     const result = await generatePlaylistWithSync('Fresh', { musicVideoIds: [video.id] }, 'all', { targetConnectorId: jf.id });
 
     expect(result.matchedCount).toBe(1);
-    expect(result.sync).toEqual([{ connectorId: jf.id, name: 'JF', status: 'synced', videoCount: 1 }]);
+    expect(result.sync).toEqual([{ connectorId: jf.id, name: 'JF', status: 'synced', videoCount: 1, matchedCount: 1 }]);
     const items = await prisma.playlistItem.findMany({ where: { playlistId: result.playlistId } });
     expect(items.map((i) => i.musicVideoId)).toEqual([video.id]);
   });

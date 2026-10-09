@@ -894,6 +894,7 @@ export const ConnectorSyncReportSchema = z.object({
   name: z.string(),
   status: z.enum(['synced', 'failed', 'skipped']),
   videoCount: z.number().int().optional(),
+  matchedCount: z.number().int().optional(),
   message: z.string().optional(),
 });
 export type ConnectorSyncReport = z.infer<typeof ConnectorSyncReportSchema>;

@@ -34,7 +34,7 @@ describe('syncConnectorVideos', () => {
     const video = await createMusicVideo(artistId, { title: 'Song One' });
     provider.fetchVideos.mockResolvedValue([fetched('a', 'Song One'), fetched('b', 'Not In Catalog')]);
 
-    expect(await syncConnectorVideos(await connector())).toEqual({ videoCount: 2 });
+    expect(await syncConnectorVideos(await connector())).toMatchObject({ videoCount: 2, matched: { confirmed: 1, unmatched: 1 } });
 
     const [a, b] = await rows();
     expect(a).toMatchObject({ externalId: 'a', available: true, musicVideoId: video.id, matchConfidence: null });
@@ -81,7 +81,7 @@ describe('syncConnectorVideos', () => {
     provider.fetchVideos.mockResolvedValue([fetched('a', 'One')]);
     await syncConnectorVideos(await connector());
     provider.fetchVideos.mockResolvedValue([]);
-    expect(await syncConnectorVideos(await connector())).toEqual({ videoCount: 0 });
+    expect(await syncConnectorVideos(await connector())).toMatchObject({ videoCount: 0, prunedArtists: 0 });
     expect((await rows())[0].available).toBe(true);
   });
 
@@ -101,7 +101,7 @@ describe('syncConnectorVideos', () => {
     expect((await rows())[0].musicVideoId).not.toBe(wanted.id);
   });
 
-  it('creates an observation for a video artist Vidarr does not know yet, once', async () => {
+  it('creates an observation for a video artist Vidarr does not know yet, once (server artist as given)', async () => {
     provider.fetchVideos.mockResolvedValue([
       fetched('a', 'One', { artistName: 'Brand New Uploader' }),
       fetched('b', 'Two', { artistName: 'Brand New Uploader' }),

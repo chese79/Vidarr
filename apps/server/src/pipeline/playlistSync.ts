@@ -13,6 +13,8 @@ export interface ConnectorSyncReport {
   name: string;
   status: 'synced' | 'failed' | 'skipped';
   videoCount?: number;
+  // How many of those videos matched a catalog video exactly (only these can join a playlist).
+  matchedCount?: number;
   message?: string;
 }
 
@@ -49,10 +51,11 @@ export async function syncVideoConnectors(targetConnectorId?: number | null): Pr
       continue;
     }
     try {
-      const { videoCount } = await syncConnectorVideos(connector, {
+      const result = await syncConnectorVideos(connector, {
         onFetched: (count) => prisma.libraryConnector.update({ where: { id: connector.id }, data: { syncTotal: count } }).then(() => undefined),
       });
-      reports.push({ connectorId: connector.id, name: connector.name, status: 'synced', videoCount });
+      reports.push({ connectorId: connector.id, name: connector.name, status: 'synced', videoCount: result.videoCount, matchedCount: result.matched.confirmed });
+      await logActivity('info', 'playlist:video-sync', `${connector.name}: ${result.videoCount} video(s); ${result.matched.confirmed} matched, ${result.matched.probable} probable, ${result.matched.ambiguous} ambiguous, ${result.matched.unmatched} unmatched; ${result.prunedArtists} stale artist record(s) removed`);
     } catch (err) {
       const message = (err as Error).message;
       await logActivity('warn', 'playlist:video-sync', `${connector.name}: ${message}`);

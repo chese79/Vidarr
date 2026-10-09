@@ -2,8 +2,9 @@ import type { LibraryConnector, QualityProfile, RootFolder } from '@prisma/clien
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { normalizeTitle } from './normalize.js';
-import { matchLibraryVideo, type CanonicalVideo, type MatchConfidence } from './reconciliation.js';
-import { artistNameHint, isUsableArtistHint } from './artistObservation.js';
+import { matchLibraryVideoIdentities, type CanonicalVideo, type MatchConfidence } from './reconciliation.js';
+import { artistNameHint } from './artistObservation.js';
+import { observedArtistName, videoIdentities, type VideoIdentity } from './videoIdentity.js';
 
 type CanonicalArtist = { id: number; name: string; musicbrainzMatchStatus: string };
 
@@ -17,13 +18,26 @@ export interface VideoSyncContext {
   onFetched?: (videoCount: number) => Promise<void> | void;
 }
 
+export interface VideoSyncResult {
+  videoCount: number;
+  // How the fetched videos reconciled with the catalog: confirmed = exact match.
+  matched: { confirmed: number; probable: number; ambiguous: number; unmatched: number };
+  // Artist records from earlier syncs that nothing refers to any more (see below).
+  prunedArtists: number;
+}
+
 // Reads a connector's music-video library and reconciles it into LibraryVideo
 // rows matched against the canonical catalog. This is the video half of a library
 // connector sync, shared by the full sync route and by on-demand syncing before a
 // playlist is built, so both behave identically. It never touches the connector's
 // audio-artist observations.
-export async function syncConnectorVideos(connector: LibraryConnector, ctx: VideoSyncContext = {}): Promise<{ videoCount: number }> {
+//
+// A server's own "artist" for a video is often an uploader channel or "Unknown
+// Artist", so each video's real artist and title are worked out first (see
+// videoIdentity.ts) and used for matching and for the artist records this creates.
+export async function syncConnectorVideos(connector: LibraryConnector, ctx: VideoSyncContext = {}): Promise<VideoSyncResult> {
   const id = connector.id;
+  const syncStartedAt = new Date();
   const defaults = ctx.defaults ?? await Promise.all([
     prisma.rootFolder.findFirst({ orderBy: { id: 'asc' } }),
     prisma.qualityProfile.findFirst({ orderBy: { id: 'asc' } }),
@@ -41,6 +55,8 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
   const videos = provider.fetchVideos && connector.videoLibraryId
     ? await provider.fetchVideos(connector)
     : [];
+  const identitiesByVideo = new Map<string, VideoIdentity[]>();
+  let prunedArtists = 0;
   if (defaults[0] && defaults[1]) {
     const origin = `video-connector:${id}`;
     // What an earlier sync already recorded, so artists that have not changed cost no
@@ -55,15 +71,19 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
     const sourcedVideoArtists = new Set<number>();
     const unchangedArtistIds: number[] = [];
     for (const video of videos) {
-      const nameHint = artistNameHint(video.artistName);
-      if (!isUsableArtistHint(nameHint)) continue;
+      // Computed against the artists known so far, which grows as this loop
+      // records new ones, so a later video can attach to an artist an earlier one introduced.
+      const identities = videoIdentities(video, canonicalByName);
+      identitiesByVideo.set(video.externalId, identities);
+      const nameHint = observedArtistName(identities);
+      if (!nameHint) continue;
       const key = normalizeTitle(nameHint);
       let canonical = canonicalByName.get(key);
       if (!canonical) {
         canonical = await prisma.artist.create({
           data: {
             name: nameHint,
-            sortName: nameHint.replace(/^thes+/i, ''),
+            sortName: nameHint.replace(/^the\s+/i, ''),
             monitored: false,
             rootFolderId: defaults[0].id,
             qualityProfileId: defaults[1].id,
@@ -90,9 +110,17 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
         data: { lastSeenAt: new Date() },
       });
     }
+    // Earlier syncs credited videos to whatever artist the server reported — often an
+    // uploader channel. Once a video is credited to its real artist, those records
+    // are connector-owned leftovers: drop the link, then the artist record itself,
+    // but only where nothing else gives it a reason to exist (not identified in
+    // MusicBrainz, not monitored, no videos, sources, candidates or other provenance).
+    // Skipped on an empty fetch, which usually means the server is unavailable.
+    if (videos.length > 0) prunedArtists = await pruneStaleVideoArtists(connector, origin, syncStartedAt);
   }
   await ctx.onFetched?.(videos.length);
 
+  const matched = { confirmed: 0, probable: 0, ambiguous: 0, unmatched: 0 };
   // A suddenly empty server response may mean an unavailable mount or a
   // temporary media-server indexing failure. Preserve known availability
   // until a non-empty scan can reconcile it safely.
@@ -118,7 +146,8 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       where: { connectorId: id },
       select: {
         externalId: true, title: true, artistName: true, releaseYear: true, durationSeconds: true, path: true,
-        playCount: true, hasThumbnail: true, musicVideoId: true, matchConfidence: true, rejectedMusicVideoId: true,
+        playCount: true, hasThumbnail: true, normalizedArtistName: true, normalizedTitle: true,
+        musicVideoId: true, matchConfidence: true, rejectedMusicVideoId: true,
       },
     });
     const existingByExternalId = new Map(existingMatches.map((v) => [v.externalId, {
@@ -126,16 +155,21 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       matchConfidence: v.matchConfidence as MatchConfidence | null,
     }]));
     const planned = videos.map((video) => {
-      const normalizedArtistName = normalizeTitle(artistNameHint(video.artistName));
-      const normalizedTitle = normalizeTitle(video.title);
+      const identities = identitiesByVideo.get(video.externalId) ?? videoIdentities(video, canonicalByName);
+      const primary = identities[0];
+      // Stored normalized fields follow the best identity so everything that
+      // compares on them (Library counts, reconciliation) sees the real artist.
+      const normalizedArtistName = primary ? normalizeTitle(primary.artistName) : normalizeTitle(artistNameHint(video.artistName));
+      const normalizedTitle = primary ? normalizeTitle(primary.title) : normalizeTitle(video.title);
       const existing = existingByExternalId.get(video.externalId);
-      const match = matchLibraryVideo(
-        {
-          normalizedArtistName,
-          normalizedTitle,
-          releaseYear: video.releaseYear ?? null,
-          durationSeconds: video.durationSeconds ?? null,
-        },
+      const candidates = (identities.length ? identities : [{ artistName: artistNameHint(video.artistName), title: video.title }]).map((identity) => ({
+        normalizedArtistName: normalizeTitle(identity.artistName),
+        normalizedTitle: normalizeTitle(identity.title),
+        releaseYear: video.releaseYear ?? null,
+        durationSeconds: video.durationSeconds ?? null,
+      }));
+      const match = matchLibraryVideoIdentities(
+        candidates,
         canonicalVideos,
         existing
           ? { musicVideoId: existing.musicVideoId, matchConfidence: existing.matchConfidence as MatchConfidence | null }
@@ -153,10 +187,18 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
         && existing.path === (video.path ?? null)
         && existing.playCount === (video.playCount ?? null)
         && existing.hasThumbnail === (video.hasThumbnail ?? false)
+        && existing.normalizedArtistName === normalizedArtistName
+        && existing.normalizedTitle === normalizedTitle
         && existing.musicVideoId === match.musicVideoId
         && existing.matchConfidence === match.matchConfidence;
       return { video, normalizedArtistName, normalizedTitle, match, unchanged };
     });
+    for (const { match } of planned) {
+      if (match.musicVideoId == null) matched.unmatched++;
+      else if (match.matchConfidence === null) matched.confirmed++;
+      else if (match.matchConfidence === 'probable') matched.probable++;
+      else matched.ambiguous++;
+    }
     const unchangedIds = planned.filter((p) => p.unchanged).map((p) => p.video.externalId);
     const UNCHANGED_CHUNK = 5000; // stays well inside SQLite's bound-parameter limit
     // The "mark everything stale, then re-mark what's still there" reset
@@ -221,5 +263,37 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       });
     }
   }
-  return { videoCount: videos.length };
+  return { videoCount: videos.length, matched, prunedArtists };
+}
+
+// Removes this connector's video-artist links that the current sync did not renew,
+// then any artist left with no reason to exist. The conditions are deliberately all
+// required: an artist that has been identified, monitored, given videos or sources,
+// or seen by any other connector is never touched, whatever this connector says.
+async function pruneStaleVideoArtists(connector: LibraryConnector, origin: string, syncStartedAt: Date): Promise<number> {
+  const stale = await prisma.artistSource.findMany({
+    where: { provider: connector.type, origin, lastSeenAt: { lt: syncStartedAt } },
+    select: { id: true, artistId: true },
+  });
+  if (!stale.length) return 0;
+  await prisma.artistSource.deleteMany({ where: { id: { in: stale.map((source) => source.id) } } });
+  const artistIds = [...new Set(stale.map((source) => source.artistId))];
+  let removed = 0;
+  for (let i = 0; i < artistIds.length; i += 500) {
+    const result = await prisma.artist.deleteMany({
+      where: {
+        id: { in: artistIds.slice(i, i + 500) },
+        musicbrainzMatchStatus: 'unmatched',
+        musicbrainzArtistId: null,
+        monitored: false,
+        sources: { none: {} },
+        musicVideos: { none: {} },
+        youtubeSources: { none: {} },
+        videoReviewCandidates: { none: {} },
+        musicbrainzCandidates: { none: {} },
+      },
+    });
+    removed += result.count;
+  }
+  return removed;
 }
