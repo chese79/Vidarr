@@ -1,0 +1,63 @@
+{
+  "schema_version": "2.0",
+  "handoff_id": "handoff-vidarr-video-identity-20261008-2050",
+  "tier": "standard",
+  "created_at": "2026-10-08T20:50:00-05:00",
+  "source": {"surface": "claude_code", "model": "claude-sonnet-5-5"},
+  "target": {"surface": "claude_code", "orchestrator": null},
+  "environment": {
+    "pinned": {
+      "model": "claude-sonnet-5-5",
+      "versions": {"node": ">=22.12.0 (use Node 22 in Docker)", "prisma": "^5.20.0", "@prisma/client": "^5.20.0", "vitest": "^5.0.0", "fastify": "^5.12.1", "docker-cli": "29.8.0"},
+      "connectors": {"jellyfin": "connector id 4, JF, read-only", "musicbrainz": "web service", "lastfm": "API 2.0"}
+    },
+    "observed": {"versions": {"node-host": "24.19.0", "node-test-container": "22.23.2", "docker": "29.8.0"}},
+    "approval_authority": "user",
+    "tools": ["bash", "powershell", "read", "write", "edit", "grep", "glob", "webfetch", "websearch", "docker"],
+    "connectors_used": [],
+    "skills": ["shift-handoff"],
+    "env_var_names": ["DATABASE_URL", "PORT", "WEB_DIST_PATH", "NODE_ENV", "PUID", "PGID", "TZ", "LASTFM_KEY"]
+  },
+  "mission": "Finish and ship video-identity matching: get the full suite green on Node 22, merge with the four commits already on origin/main, deploy to the live vidarr container, and confirm a live sync matches far more than 1 of 3,602 server videos. Merge and deploy need the user's renewed approval.",
+  "next_actions": [
+    "Read-only orientation: git log, git status, docker ps, health check; change nothing.",
+    "In a scratch branch from origin/main, merge handoff/video-identity-matching, resolve CHANGELOG.md, and review the four upstream commits (517a857, 163cb36, 3004b07, 8041b97) as a PR.",
+    "Run the full build and tests on Node 22 in Docker with --testTimeout=60000 --hookTimeout=60000 on the command line; wait for exit=0.",
+    "Add the missing CHANGELOG entry (and product-vision note if behavior changes), then report to the user and re-confirm merge, deploy, and the record-deleting cleanup.",
+    "On approval, deploy with the documented procedure and verify with a live sync; do not push to origin/main unless the user says so."
+  ],
+  "open_questions": [
+    "The sync now deletes leftover connector-owned unmatched artist records; the user has not approved that behavior.",
+    "Merge conflicts and quality of the four unreviewed upstream commits are UNKNOWN.",
+    "Whether all 10 live artists with a 'The ' sort name bug were created after ee19234 is UNKNOWN."
+  ],
+  "data_sources": [
+    {"data": "MusicBrainz genre vocabulary (bundled)", "source": "https://musicbrainz.org/ws/2/genre/all?fmt=txt", "pulled_at": "2026-10-04T00:00:00-05:00"},
+    {"data": "MusicBrainz artist/recording tag samples (analysis only)", "source": "MusicBrainz web service", "pulled_at": "2026-10-04T19:00:00-05:00"},
+    {"data": "Last.fm artist/track tag samples (analysis only)", "source": "Last.fm API 2.0", "pulled_at": "2026-10-06T00:00:00-05:00"},
+    {"data": "Jellyfin video library JF, 3,602 videos", "source": "Jellyfin API via the Vidarr connector, read-only", "pulled_at": "2026-10-07T00:00:00-05:00"},
+    {"data": "Live Vidarr database counts and what-if matching", "source": "docker exec vidarr read-only queries", "pulled_at": "2026-10-08T20:40:00-05:00"},
+    {"data": "origin/main state", "source": "git fetch origin", "pulled_at": "2026-10-08T20:40:00-05:00"}
+  ],
+  "git": {
+    "remote": "https://github.com/chese79/Vidarr.git",
+    "branch": "handoff/video-identity-matching",
+    "base": "main",
+    "merge_base": "ee192341379c70d2e1edc2a2c3a5a621a57fa09b",
+    "work_sha": "10487280b525a7091f0199214c7638585f3c4b4a",
+    "changed_files": [
+      {"status": "M", "path": "apps/server/src/pipeline/libraryVideoSync.ts"},
+      {"status": "M", "path": "apps/server/src/pipeline/playlistSync.ts"},
+      {"status": "M", "path": "apps/server/src/pipeline/reconciliation.ts"},
+      {"status": "A", "path": "apps/server/src/pipeline/videoIdentity.ts"},
+      {"status": "M", "path": "apps/server/test/libraryVideoSync.test.ts"},
+      {"status": "A", "path": "apps/server/test/libraryVideoSyncIdentity.test.ts"},
+      {"status": "M", "path": "apps/server/test/playlistSync.test.ts"},
+      {"status": "A", "path": "apps/server/test/videoIdentity.test.ts"},
+      {"status": "M", "path": "apps/web/src/pages/playlistSyncText.ts"},
+      {"status": "M", "path": "apps/web/test/playlistSyncText.test.ts"},
+      {"status": "M", "path": "packages/shared-types/src/index.ts"}
+    ],
+    "binary_files": []
+  }
+}
