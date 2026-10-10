@@ -48,7 +48,7 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update \
   && apt-get install -y --no-install-recommends python3 python3-pip curl xz-utils \
-  && pip3 install --break-system-packages --no-cache-dir yt-dlp \
+  && pip3 install --break-system-packages --no-cache-dir 'yt-dlp[default]' \
   && apt-get purge -y python3-pip \
   && apt-get autoremove -y
 

@@ -17,6 +17,7 @@ import CalendarPage from './pages/CalendarPage';
 import HistoryPage from './pages/HistoryPage';
 import SystemTasksPage from './pages/SystemTasksPage';
 import GenresPage from './pages/GenresPage';
+import DownloadProgress from './components/DownloadProgress';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
@@ -68,6 +69,7 @@ export default function App() {
             </li>
           </ul>
         </nav>
+        <DownloadProgress />
       </aside>
       <main className="content">
         <Routes>

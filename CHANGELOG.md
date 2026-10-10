@@ -5,6 +5,22 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — download concurrency and sidebar progress
+
+- Configure simultaneous video downloads in General Settings (default 3). Additional direct and
+  indexer jobs wait in a persistent FIFO queue; completed or failed jobs free slots automatically.
+- Resume interrupted direct downloads after restart, retaining external client handles and
+  uncertain submissions. Lowering the limit lets active downloads finish before new starts.
+- Show each active download's progress and the waiting count in the left sidebar. Acquisition
+  actions acknowledge queued requests immediately instead of waiting for the whole transfer.
+
+### Fixed — YouTube JavaScript runtime
+
+- Enable Vidarr's Node runtime for every yt-dlp operation and bundle the matching JavaScript
+  challenge solver in Docker. Download failures show the extractor error ahead of warnings.
+- Private YouTube videos still require an accessible alternative source; runtime support does
+  not grant access to private uploads.
+
 ### Fixed — notify Jellyfin about new filesystem entries
 
 - Report changes to the selected library's physical media roots before requesting metadata refresh,

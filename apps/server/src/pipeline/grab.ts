@@ -10,10 +10,30 @@ import { locateVideoFile } from './locateVideoFile.js';
 import { assertIsRealMusicVideo } from './validateVideoFile.js';
 import { hasActiveDownload } from './videoStatus.js';
 import { preferredDirectSource } from './directSourcePriority.js';
+import { drainDownloadQueue, registerDownloadRunner, wakeDownloadQueue } from './downloadDispatcher.js';
 
 const STAGING_DIR = process.env.STAGING_DIR ?? path.join(os.tmpdir(), 'vidarr-staging');
 
+const waiting = new Map<number, { resolve: (result: ImportResult | undefined) => void; reject: (err: unknown) => void }>();
+
+function waitForItem(id: number): Promise<ImportResult | undefined> {
+  return new Promise((resolve, reject) => waiting.set(id, { resolve, reject }));
+}
+
 export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResult> {
+  const item = await enqueueDirectDownload(musicVideoId);
+  const result = waitForItem(item.id);
+  wakeDownloadQueue();
+  return (await result)!;
+}
+
+export async function queueDirectVideo(musicVideoId: number): Promise<{ queueId: number }> {
+  const item = await enqueueDirectDownload(musicVideoId);
+  wakeDownloadQueue();
+  return { queueId: item.id };
+}
+
+async function enqueueDirectDownload(musicVideoId: number): Promise<DownloadQueueItem> {
   const musicVideo = await prisma.musicVideo.findUniqueOrThrow({
     where: { id: musicVideoId },
     include: {
@@ -56,7 +76,7 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
         musicVideoId,
         sourceType: source.provider,
         sourceRef: source.url,
-        status: 'downloading',
+        status: 'queued',
       },
     });
   } catch (err) {
@@ -66,11 +86,16 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     throw err;
   }
 
+  return queueItem;
+}
+
+async function runDirectDownload(queueItem: DownloadQueueItem): Promise<ImportResult> {
+  const musicVideoId = queueItem.musicVideoId;
   let downloadedPath: string | undefined;
   try {
     await fs.mkdir(STAGING_DIR, { recursive: true });
     let lastProgressWrite = 0;
-    downloadedPath = await downloadDirectVideo(source.url, STAGING_DIR, undefined, (fraction) => {
+    downloadedPath = await downloadDirectVideo(queueItem.sourceRef, STAGING_DIR, undefined, (fraction) => {
       const now = Date.now();
       if (now - lastProgressWrite < 1000) return; // throttle DB writes
       lastProgressWrite = now;
@@ -78,6 +103,7 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
         .update({ where: { id: queueItem.id }, data: { progress: fraction } })
         .catch(() => {});
     });
+    await prisma.downloadQueueItem.update({ where: { id: queueItem.id }, data: { progress: 1 } });
     await assertIsRealMusicVideo(downloadedPath);
     const result = await importDownloadedFile(musicVideoId, downloadedPath, 'YouTube');
     await fs.unlink(downloadedPath).catch(() => {});
@@ -88,7 +114,7 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     // discard its only copy merely because recording or metadata failed.
     await prisma.downloadQueueItem.update({
       where: { id: queueItem.id },
-      data: { status: 'failed' },
+      data: { status: 'failed', error: (err as Error).message },
     });
     await prisma.history.create({
       data: {
@@ -109,6 +135,7 @@ export async function grabFromIndexer(
   downloadClientId: number,
   downloadUrl: string,
   quality: string,
+  waitForSubmission = true,
 ): Promise<void> {
   const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: musicVideoId } });
   if (video.ignored) throw new Error('Video is ignored; unignore it before downloading.');
@@ -118,9 +145,7 @@ export async function grabFromIndexer(
     throw new Error('This video already has an active download.');
   }
 
-  const client = await prisma.downloadClient.findUniqueOrThrow({ where: { id: downloadClientId } });
-  const category = client.category || 'vidarr';
-  const provider = getDownloadClientProvider(client.implementation);
+  await prisma.downloadClient.findUniqueOrThrow({ where: { id: downloadClientId } });
 
   // The queue row is created BEFORE contacting the download client, not
   // after: if anything throws between the two, an addDownload() call that
@@ -139,7 +164,7 @@ export async function grabFromIndexer(
         sourceType: 'indexer',
         sourceRef: downloadUrl,
         downloadClientId,
-        status: 'downloading',
+        status: 'queued',
         quality,
       },
     });
@@ -150,9 +175,22 @@ export async function grabFromIndexer(
     throw err;
   }
 
+  const submitted = waitForSubmission ? waitForItem(queueItem.id) : null;
+  wakeDownloadQueue();
+  if (submitted) await submitted;
+}
+
+async function submitIndexerDownload(queueItem: DownloadQueueItem): Promise<void> {
+  const musicVideoId = queueItem.musicVideoId;
+  const client = await prisma.downloadClient.findUniqueOrThrow({ where: { id: queueItem.downloadClientId! } });
+  const provider = getDownloadClientProvider(client.implementation);
+  const category = client.category || 'vidarr';
   let handle;
+  // Persist uncertainty before making the external call, including if Vidarr
+  // restarts after the client accepted it but before its handle was saved.
+  await prisma.downloadQueueItem.update({ where: { id: queueItem.id }, data: { status: 'submissionUnknown' } });
   try {
-    handle = await provider.addDownload(client, downloadUrl, category);
+    handle = await provider.addDownload(client, queueItem.sourceRef, category);
   } catch (err) {
     // A transport error is ambiguous: the client may have accepted the job
     // before the response was lost. Retain the reservation so an automatic
@@ -161,7 +199,7 @@ export async function grabFromIndexer(
     // failed or deleting the only local evidence of it.
     await prisma.downloadQueueItem.update({
       where: { id: queueItem.id },
-      data: { status: 'submissionUnknown' },
+      data: { status: 'submissionUnknown', error: (err as Error).message },
     });
     await prisma.history.create({
       data: {
@@ -175,15 +213,44 @@ export async function grabFromIndexer(
 
   await prisma.downloadQueueItem.update({
     where: { id: queueItem.id },
-    data: { sourceRef: handle.externalRef },
+    data: { sourceRef: handle.externalRef, status: 'downloading' },
   });
   await prisma.history.create({
     data: {
       musicVideoId,
       eventType: 'grabbed',
-      data: JSON.stringify({ quality, downloadClient: client.name }),
+      data: JSON.stringify({ quality: queueItem.quality, downloadClient: client.name }),
     },
   });
+}
+
+registerDownloadRunner(async item => {
+  try {
+    const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: item.musicVideoId } });
+    if (video.ignored) throw new Error('Video is ignored; unignore it before downloading.');
+    let result: ImportResult | undefined;
+    if (item.sourceType === 'indexer') await submitIndexerDownload(item);
+    else result = await runDirectDownload(item);
+    waiting.get(item.id)?.resolve(result);
+  } catch (err) {
+    const current = await prisma.downloadQueueItem.findUnique({ where: { id: item.id } });
+    if (current && !['failed', 'submissionUnknown'].includes(current.status)) {
+      await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'failed', error: (err as Error).message } });
+      await prisma.history.create({ data: { musicVideoId: item.musicVideoId, eventType: 'downloadFailed',
+        data: JSON.stringify({ error: (err as Error).message }) } });
+    }
+    waiting.get(item.id)?.reject(err);
+    throw err;
+  } finally { waiting.delete(item.id); }
+});
+
+// Only Vidarr-owned transfers are restarted. External clients keep their handles;
+// an uncertain submission is never sent again automatically.
+export async function resumeDownloadQueue(): Promise<void> {
+  await prisma.downloadQueueItem.updateMany({ where: {
+    sourceType: { not: 'indexer' }, status: 'downloading',
+  }, data: { status: 'queued', progress: 0 } });
+  await drainDownloadQueue();
 }
 
 export async function refreshQueue(): Promise<{ completed: number; failed: number; pending: number }> {
@@ -225,7 +292,7 @@ export async function refreshQueue(): Promise<{ completed: number; failed: numbe
         }
       }
 
-      await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'failed' } });
+      await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'failed', error: status.error ?? 'Download failed' } });
       await prisma.history.create({
         data: {
           musicVideoId: item.musicVideoId,
@@ -241,5 +308,6 @@ export async function refreshQueue(): Promise<{ completed: number; failed: numbe
     }
   }
 
+  await drainDownloadQueue();
   return { completed, failed, pending };
 }

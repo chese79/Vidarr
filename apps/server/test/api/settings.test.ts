@@ -28,6 +28,7 @@ describe('settings routes', () => {
       namingFormat: '{Artist Name}/{Video Title} ({Year})/{Artist Name} - {Video Title} ({Year}) [{Quality}]',
       transferMode: 'move',
       minFreeSpaceMb: 1024,
+      maxConcurrentDownloads: 3,
     });
   });
 
@@ -40,6 +41,16 @@ describe('settings routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ transferMode: 'copy', minFreeSpaceMb: 2048 });
+  });
+
+  it('saves the download limit and rejects zero, fractional and excessive values', async () => {
+    const saved = await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { maxConcurrentDownloads: 5 } });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().maxConcurrentDownloads).toBe(5);
+    for (const maxConcurrentDownloads of [0, 1.5, 21]) {
+      expect((await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { maxConcurrentDownloads } })).statusCode).toBe(400);
+    }
+    expect((await app.inject({ method: 'GET', url: '/api/v1/config', headers: authHeaders() })).json().maxConcurrentDownloads).toBe(5);
   });
 
   it('stores third-party secrets without returning them to the browser', async () => {

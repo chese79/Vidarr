@@ -1,5 +1,15 @@
 # Video status and server delivery FAQ
 
+## How many videos download at once?
+
+General Settings → Simultaneous video downloads defaults to **3** (configurable from 1 to 20).
+Extra videos wait in the persistent queue, oldest first. The left sidebar displays each active
+download's progress and how many are waiting. Download actions confirm that a request was queued;
+check Queue for completion or failure. Lowering the limit lets existing transfers finish.
+Interrupted direct downloads resume after restart. External-client jobs and uncertain submissions
+keep their existing handles; uncertain submissions require reconciliation before their slot frees.
+The limit applies to jobs Vidarr manages, including external-client jobs, not unrelated client jobs.
+
 ## What happens after a download?
 
 New installations default to Move. Vidarr places the video and its video-specific metadata,

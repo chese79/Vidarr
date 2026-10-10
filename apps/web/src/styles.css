@@ -670,3 +670,9 @@ select {
 *, *::before, *::after { border-color: var(--border) !important; }
 
 button.add-new-artist { background: #2563eb; border: 1px solid var(--border); }
+/* Download status remains visible throughout the app. */
+.download-progress { margin: 1rem 16px; padding-top: .75rem; border-top: 1px solid var(--border); }
+.download-progress > a { display: block; margin-bottom: .5rem; }
+.download-progress-item { margin-bottom: .75rem; }
+.download-progress-item > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; }
+.download-progress-item progress { display: block; width: 100%; accent-color: #2196f3; margin: .25rem 0; }

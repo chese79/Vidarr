@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { CreateMusicVideoSchema, UpdateMusicVideoSchema } from '@vidarr/shared-types';
 import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
-import { grabYoutubeVideo, grabFromIndexer } from '../pipeline/grab.js';
+import { queueDirectVideo, grabFromIndexer } from '../pipeline/grab.js';
 import { searchAllIndexers } from '../pipeline/search.js';
 import { autoSearchAndGrab } from '../pipeline/autoSearch.js';
 
@@ -69,8 +69,8 @@ export async function musicVideoRoutes(app: FastifyInstance) {
   app.post('/api/v1/musicvideo/:id/grab', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     try {
-      const result = await grabYoutubeVideo(id);
-      return { ok: true, path: result.path };
+      const result = await queueDirectVideo(id);
+      return { ok: true, queued: true, queueId: result.queueId };
     } catch (err) {
       reply.code(502);
       return { ok: false, error: (err as Error).message };
@@ -91,8 +91,8 @@ export async function musicVideoRoutes(app: FastifyInstance) {
     const id = Number((req.params as { id: string }).id);
     const body = req.body as { downloadClientId: number; downloadUrl: string; quality: string };
     try {
-      await grabFromIndexer(id, body.downloadClientId, body.downloadUrl, body.quality);
-      return { ok: true };
+      await grabFromIndexer(id, body.downloadClientId, body.downloadUrl, body.quality, false);
+      return { ok: true, queued: true };
     } catch (err) {
       reply.code(502);
       return { ok: false, error: (err as Error).message };

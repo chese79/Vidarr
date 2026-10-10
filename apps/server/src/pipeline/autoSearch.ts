@@ -1,6 +1,6 @@
 import { prisma, logActivity } from '../db/client.js';
 import { searchAllIndexers } from './search.js';
-import { grabFromIndexer, grabYoutubeVideo } from './grab.js';
+import { grabFromIndexer, queueDirectVideo } from './grab.js';
 import { findYoutubeMatch } from './youtubeMatch.js';
 import { hasActiveDownload } from './videoStatus.js';
 import { preferredDirectSource } from './directSourcePriority.js';
@@ -95,7 +95,7 @@ export async function autoSearchAndGrab(
     const directSource = preferredDirectSource(musicVideo.acquisitionSources);
     if (directSource || musicVideo.youtubeVideoId) {
       try {
-        await grabYoutubeVideo(musicVideoId);
+        await queueDirectVideo(musicVideoId);
         return {
           musicVideoId,
           grabbed: true,
@@ -152,7 +152,7 @@ export async function autoSearchAndGrab(
               },
             }),
           ]);
-          await grabYoutubeVideo(musicVideoId);
+          await queueDirectVideo(musicVideoId);
           const sourceLabel = match.tier === 'vevo' ? 'VEVO' : 'YouTube';
           return {
             musicVideoId,
@@ -203,7 +203,7 @@ export async function autoSearchAndGrab(
     return (b.seeders ?? 0) > (a.seeders ?? 0) ? b : a;
   });
 
-  await grabFromIndexer(musicVideoId, downloadClient.id, best.downloadUrl, best.quality);
+  await grabFromIndexer(musicVideoId, downloadClient.id, best.downloadUrl, best.quality, false);
   return { musicVideoId, grabbed: true, reason: `Grabbed ${best.quality} from ${best.indexerName}` };
 }
 
