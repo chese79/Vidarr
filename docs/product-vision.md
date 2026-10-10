@@ -189,7 +189,9 @@ After import, Vidarr should request a media-server library refresh, wait for or 
 new server item, and surface whether the file is merely on disk or fully available in the player.
 Pending imports are checked against the root folder's selected playback connector every five
 minutes, retrying scan notifications even after a previous notification failed. Jellyfin refreshes
-only the selected video library while retaining existing metadata and images. Only confirmation
+only the selected video library while retaining existing metadata and images. It first reports
+filesystem changes to that library's physical roots through Jellyfin's media-update API; item
+metadata refresh alone does not discover new folders. Only confirmation
 from that root's target connector clears delivery pending; another server's copy does not complete
 delivery. Linking a root queues existing managed files without confirmed target ownership.
 The server path must also match the managed file's relative path below the root, allowing host
