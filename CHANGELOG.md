@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — Library summary responsiveness
+
+- Aggregate confirmed server ownership, play counts and active downloads once before joining
+  video counts, avoiding repeated inventory scans for each video in large libraries.
+
 ### Changed — selected Rune branding
 
 - Apply logo proposal 5 with a fuchsia left V stroke, blue play triangle and cream right stroke.

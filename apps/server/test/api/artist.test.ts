@@ -517,6 +517,24 @@ describe('artist routes', () => {
       expect(item.hasImage).toBe(true);
     });
 
+    it('groups multiple server copies without multiplying video counts and preserves zero local play counts', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId);
+      const video = await createMusicVideo(artist.id, { hasFile: true });
+      await createMusicVideoFile(video.id, { playCount: 0 });
+      const connector = await createLibraryConnector();
+      await createLibraryVideo(connector.id, { externalId: 'copy-a', musicVideoId: video.id, playCount: 4 });
+      await createLibraryVideo(connector.id, { externalId: 'copy-b', musicVideoId: video.id, playCount: 12 });
+      await createLibraryVideo(connector.id, { externalId: 'fuzzy', musicVideoId: video.id, playCount: 999, matchConfidence: 'probable' });
+      const disabled = await createLibraryConnector({ enabled: false });
+      await createLibraryVideo(disabled.id, { musicVideoId: video.id, playCount: 999 });
+      await prisma.downloadQueueItem.create({ data: { musicVideoId: video.id, sourceType: 'youtube', sourceRef: 'queue-a', status: 'queued' } });
+      await prisma.downloadQueueItem.create({ data: { musicVideoId: video.id, sourceType: 'youtube', sourceRef: 'queue-b', status: 'failed' } });
+      const get = () => app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() });
+      expect((await get()).json().items[0]).toMatchObject({ knownVideoCount: 1, localVideoCount: 1, availableVideoCount: 1, downloadingVideoCount: 1, aggregatePlayCount: 0 });
+      await prisma.musicVideoFile.deleteMany({ where: { musicVideoId: video.id } });
+      expect((await get()).json().items[0].aggregatePlayCount).toBe(12);
+    });
+
     it('counts a media-server-matched video with no local file as available, and uses its play count', async () => {
       const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Server Only Artist' });
       const video = await createMusicVideo(artist.id, { title: 'Server Only', hasFile: false });
