@@ -170,6 +170,7 @@ export const api = {
       request<
         Artist & {
           musicVideos: (MusicVideo & {
+              effectivePlayCount: number | null;
             libraryVideos: MatchedLibraryVideo[];
             status: VideoStatus;
             acquisitionSources: Array<{
@@ -187,6 +188,7 @@ export const api = {
     videos: (id: number) => request<Array<{
       id: number; title: string; releaseYear: number | null; director: string | null;
       durationSeconds: number | null; monitored: boolean; ignored: boolean; hasFile: boolean;
+        effectivePlayCount: number | null;
       libraryVideos: Array<{ available: boolean; matchConfidence: string | null; playCount: number | null }>;
       status: VideoStatus;
     }>>(`/artist/${id}/videos`),

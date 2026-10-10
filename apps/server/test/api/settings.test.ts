@@ -26,7 +26,7 @@ describe('settings routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       namingFormat: '{Artist Name}/{Artist Name} - {Video Title} ({Year}) [{Quality}]',
-      transferMode: 'hardlink',
+      transferMode: 'move',
       minFreeSpaceMb: 1024,
     });
   });

@@ -254,7 +254,7 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       .filter((value): value is number => value != null);
     if (confirmedIds.length) {
       await prisma.musicVideo.updateMany({
-        where: { id: { in: confirmedIds } },
+        where: { id: { in: confirmedIds }, artist: { rootFolder: { targetConnectorId: connector.id } } },
         data: { awaitingServerScanAt: null },
       });
       await prisma.artist.updateMany({

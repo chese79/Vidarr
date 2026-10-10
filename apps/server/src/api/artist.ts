@@ -16,7 +16,7 @@ import { setUserGenres } from '../pipeline/artistGenres.js';
 import { parseGenreList } from '../pipeline/genreTaxonomy.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
-import { computeVideoStatus } from '../pipeline/videoStatus.js';
+import { computeVideoStatus, effectivePlayCount } from '../pipeline/videoStatus.js';
 import { matchLibraryVideo, type CanonicalVideo } from '../pipeline/reconciliation.js';
 import { autoSearchAndGrab, runBacklogSearch } from '../pipeline/autoSearch.js';
 import { confirmArtistIdentity, discoverArtistIdentityCandidates } from '../pipeline/artistIdentity.js';
@@ -74,6 +74,7 @@ interface ArtistSummaryRow {
   monitoredVideoCount: number;
   unmatchedVideoCount: number;
   supplementaryVideoCount: number;
+  inventoryVideoCount: number;
   aggregatePlayCount: number | null;
   letter: string;
 }
@@ -415,8 +416,11 @@ export async function artistRoutes(app: FastifyInstance) {
                AND (ulv."musicVideoId" IS NULL OR ulv."matchConfidence" IS NOT NULL)
           ) AS "unmatchedVideoCount",
           (SELECT COUNT(*) FROM "MusicVideo" smv
-             WHERE smv."artistId" = a."id" AND smv."catalogKind" IN ('supplementary', 'inventory')
+             WHERE smv."artistId" = a."id" AND smv."catalogKind" = 'supplementary'
           ) AS "supplementaryVideoCount",
+          (SELECT COUNT(*) FROM "MusicVideo" imv
+             WHERE imv."artistId" = a."id" AND imv."catalogKind" = 'inventory'
+          ) AS "inventoryVideoCount",
           CASE WHEN COALESCE(s."playCountKnownN", 0) > 0 THEN s."playCountSum" ELSE NULL END AS "aggregatePlayCount",
           CASE
             WHEN UPPER(SUBSTR(TRIM(a."sortName"), 1, 1)) BETWEEN 'A' AND 'Z'
@@ -479,6 +483,7 @@ export async function artistRoutes(app: FastifyInstance) {
       monitoredVideoCount: Number(row.monitoredVideoCount),
       unmatchedVideoCount: Number(row.unmatchedVideoCount),
       supplementaryVideoCount: Number(row.supplementaryVideoCount),
+      inventoryVideoCount: Number(row.inventoryVideoCount),
       aggregatePlayCount: row.aggregatePlayCount == null ? null : Number(row.aggregatePlayCount),
     }));
     const availableLetters = letterRows.map((r) => r.letter).sort();
@@ -633,6 +638,7 @@ export async function artistRoutes(app: FastifyInstance) {
             ignored: true,
             hasFile: true,
             awaitingServerScanAt: true,
+            file: { select: { playCount: true } },
             libraryVideos: {
               where: { available: true, connector: { enabled: true } },
               select: { available: true, matchConfidence: true, playCount: true },
@@ -646,6 +652,7 @@ export async function artistRoutes(app: FastifyInstance) {
 
     return artist.musicVideos.map((video) => ({
       ...video,
+      effectivePlayCount: effectivePlayCount(video.file, video.libraryVideos),
       status: computeVideoStatus({
         hasFile: video.hasFile,
         monitored: video.monitored,
@@ -692,6 +699,7 @@ export async function artistRoutes(app: FastifyInstance) {
             },
             queueItems: { select: { status: true, progress: true }, orderBy: { addedAt: 'desc' } },
             acquisitionSources: { orderBy: { id: 'asc' } },
+            file: { select: { playCount: true } },
           },
         },
       },
@@ -721,6 +729,7 @@ export async function artistRoutes(app: FastifyInstance) {
       ...artist,
       musicVideos: artist.musicVideos.map((mv) => ({
         ...mv,
+        effectivePlayCount: effectivePlayCount(mv.file, mv.libraryVideos),
         status: computeVideoStatus({
           hasFile: mv.hasFile,
           monitored: mv.monitored,
@@ -737,7 +746,10 @@ export async function artistRoutes(app: FastifyInstance) {
         missing: artist.musicVideos.filter((mv) => !mv.hasFile && !mv.libraryVideos.some((lv) => lv.available && lv.matchConfidence == null)).length,
         monitored: artist.musicVideos.filter((mv) => mv.monitored).length,
         aggregatePlayCount: (() => {
-          const counts = artist.musicVideos.flatMap((mv) => mv.libraryVideos.map((lv) => lv.playCount).filter((v): v is number => v != null));
+          const counts = artist.musicVideos.flatMap((mv) => {
+            const count = effectivePlayCount(mv.file, mv.libraryVideos);
+            return count == null ? [] : [count];
+          });
           return counts.length ? counts.reduce((sum, value) => sum + value, 0) : null;
         })(),
       },

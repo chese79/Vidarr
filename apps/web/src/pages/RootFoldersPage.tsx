@@ -59,8 +59,8 @@ export default function RootFoldersPage() {
             value={targetConnectorId}
             onChange={(e) => setTargetConnectorId(e.target.value ? Number(e.target.value) : '')}
           >
-            <option value="">No automatic media-server refresh</option>
-            {connectors.data?.filter((connector) => connector.videoLibraryId).map((connector) => (
+            <option value="">Select server — delivery remains pending</option>
+            {connectors.data?.filter((connector) => connector.enabled && ['plex', 'jellyfin'].includes(connector.type) && connector.videoLibraryId).map((connector) => (
               <option key={connector.id} value={connector.id}>{connector.name}</option>
             ))}
           </select>
@@ -90,8 +90,8 @@ export default function RootFoldersPage() {
                     value={rf.targetConnectorId ?? ''}
                     onChange={(e) => updateFolder.mutate({ id: rf.id, targetConnectorId: e.target.value ? Number(e.target.value) : null })}
                   >
-                    <option value="">None</option>
-                    {connectors.data?.filter((connector) => connector.videoLibraryId).map((connector) => (
+                    <option value="">Select server — delivery remains pending</option>
+                    {connectors.data?.filter((connector) => connector.enabled && ['plex', 'jellyfin'].includes(connector.type) && connector.videoLibraryId).map((connector) => (
                       <option key={connector.id} value={connector.id}>{connector.name}</option>
                     ))}
                   </select>
@@ -112,6 +112,8 @@ export default function RootFoldersPage() {
       ) : (
         <p className="empty-state">No root folders yet.</p>
       )}
+      {updateFolder.error && <p className="error">{updateFolder.error.message}</p>}
+      {rootFolders.data?.some(folder => !folder.targetConnectorId) && <p className="muted">Downloads need a target server library that can access this folder. Delivery remains pending until the server catalogs the video.</p>}
     </div>
   );
 }

@@ -62,6 +62,17 @@ describe('duplicate-queue-entry prevention', () => {
     expect(items).toHaveLength(1);
   });
 
+  it('blocks ignored videos in both manual grab paths before creating a queue or contacting a provider', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id, { youtubeVideoId: 'abc123' });
+    await prisma.musicVideo.update({ where: { id: video.id }, data: { ignored: true } });
+    await expect(grabYoutubeVideo(video.id)).rejects.toThrow('ignored');
+    await expect(grabFromIndexer(video.id, 999999, 'http://example.test/release', '1080p')).rejects.toThrow('ignored');
+    expect(await prisma.downloadQueueItem.count()).toBe(0);
+    const { getDownloadClientProvider } = await import('../src/providers/downloadclient/index.js');
+    expect(getDownloadClientProvider).not.toHaveBeenCalled();
+  });
+
   it('grabFromIndexer allows a grab when the only prior attempt failed', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id);

@@ -12,6 +12,20 @@ function render(page: React.ReactNode, url: string, client = new QueryClient()) 
 }
 
 describe('Discover and playlist controls', () => {
+  it('distinguishes available, known, supplementary and inventory counts in Library', () => {
+    const client = new QueryClient();
+    client.setQueryData(['artistSummary', '', '', null, null, null, false, '', '', '', 1], {
+      items: [{ id: 1, name: 'Example Artist', sortName: 'Example Artist', monitored: true,
+        hasImage: false, musicbrainzMatchStatus: 'confirmed', knownVideoCount: 3, availableVideoCount: 1,
+        localVideoCount: 1, missingVideoCount: 2, downloadingVideoCount: 0, monitoredVideoCount: 3,
+        unmatchedVideoCount: 0, supplementaryVideoCount: 1, inventoryVideoCount: 1, aggregatePlayCount: 0 }],
+      total: 1, page: 1, pageSize: 50, availableLetters: ['E'],
+    });
+    const html = render(<LibraryPage />, '/library', client);
+    expect(html).toContain('1 available / 3 known');
+    expect(html).toContain('1 supplementary');
+    expect(html).toContain('1 inventory');
+  });
   it('restores missing and minimum local-video filters from the Library URL', () => {
     const html = render(<LibraryPage />, '/library?missing=true&minLocalVideos=3');
     expect(html).toMatch(/type="checkbox" checked=""\/>Has missing videos/);

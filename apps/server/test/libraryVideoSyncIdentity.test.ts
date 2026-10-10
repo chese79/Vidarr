@@ -48,6 +48,18 @@ describe('syncConnectorVideos identity parsing', () => {
     expect(await prisma.artist.count({ where: { name: 'SuperDeftoner' } })).toBe(0);
   });
 
+  it('clears delivery pending only for the root folder target server', async () => {
+    const { videos } = await catalog('Deftones', ['7 Words']);
+    const videoId = videos[0].id;
+    await prisma.musicVideo.update({ where: { id: videoId }, data: { hasFile: true, awaitingServerScanAt: new Date() } });
+    provider.fetchVideos.mockResolvedValue([server('a', '7 Words', 'Deftones', '/media/7 Words.mp4')]);
+    await syncConnectorVideos(await connector());
+    expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).not.toBeNull();
+    await prisma.rootFolder.update({ where: { id: rootFolderId }, data: { targetConnectorId: connectorId } });
+    await syncConnectorVideos(await connector());
+    expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).toBeNull();
+  });
+
   it('works with Windows paths and strips upload noise from the title', async () => {
     const { videos } = await catalog('Echo and the Bunnymen', ['Lips Like Sugar']);
     provider.fetchVideos.mockResolvedValue([

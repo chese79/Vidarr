@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { resetDb, ensureSettings } from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
+import { prisma } from '../../src/db/client.js';
+import { createLibraryConnector, createArtist, createMusicVideo, createQuality, createQualityProfile, createRootFolder } from '../support/db.js';
 
 describe('rootfolder routes', () => {
   let app: FastifyInstance;
@@ -43,6 +45,21 @@ describe('rootfolder routes', () => {
       payload: { path: '' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects invalid delivery targets and marks existing files pending when a server is linked', async () => {
+    const root = await createRootFolder();
+    const quality = await createQuality();
+    const profile = await createQualityProfile(quality.id);
+    const artist = await createArtist(root.id, profile.id);
+    const video = await createMusicVideo(artist.id, { hasFile: true });
+    const connector = await createLibraryConnector({ enabled: false });
+    await prisma.libraryConnector.update({ where: { id: connector.id }, data: { videoLibraryId: 'videos' } });
+    const update = () => app.inject({ method: 'PUT', url: `/api/v1/rootfolder/${root.id}`, headers: authHeaders(), payload: { targetConnectorId: connector.id } });
+    expect((await update()).statusCode).toBe(400);
+    await prisma.libraryConnector.update({ where: { id: connector.id }, data: { enabled: true } });
+    expect((await update()).statusCode).toBe(200);
+    expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: video.id } })).awaitingServerScanAt).not.toBeNull();
   });
 
   it('rejects a Windows host path when Vidarr runs in Linux', async () => {

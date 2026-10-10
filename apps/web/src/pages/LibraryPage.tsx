@@ -145,12 +145,12 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
           {mv.status.acquisition === 'queued' && <span className="status-chip downloading">Queued</span>}
           {mv.status.acquisition === 'importing' && <span className="status-chip downloading">Importing</span>}
           {mv.status.acquisition === 'submissionUnknown' && <span className="status-chip failed">Submission unknown</span>}
-          {mv.status.acquisition === 'awaitingServerScan' && <span className="status-chip downloading">Awaiting server scan</span>}
+          {mv.status.acquisition === 'awaitingServerScan' && <span className="status-chip downloading">Awaiting server cataloging</span>}
           {mv.status.acquisition === 'failed' && <span className="status-chip failed">Failed</span>}
           {mv.ignored && <span className="status-chip ignored">Ignored</span>}
           <span className="artist-meta">
-            {mv.libraryVideos.some((item) => item.playCount != null)
-              ? `${Math.max(...mv.libraryVideos.map((item) => item.playCount ?? 0))} plays`
+            {mv.effectivePlayCount != null
+              ? `${mv.effectivePlayCount} plays`
               : 'plays unknown'}
           </span>
           <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
@@ -224,11 +224,12 @@ function ArtistRow({
         </div>
         <div className="artist-counts">
           <span>
-            {artist.availableVideoCount}/{artist.knownVideoCount} known
+            {artist.availableVideoCount} available / {artist.knownVideoCount} known
           </span>
           <span>{artist.monitoredVideoCount} monitored</span>
           {artist.unmatchedVideoCount > 0 && <span className="missing">{artist.unmatchedVideoCount} unmatched</span>}
           {artist.supplementaryVideoCount > 0 && <span>{artist.supplementaryVideoCount} supplementary</span>}
+          {artist.inventoryVideoCount > 0 && <span>{artist.inventoryVideoCount} inventory</span>}
           {artist.missingVideoCount > 0 && <span className="missing">{artist.missingVideoCount} missing</span>}
           {artist.downloadingVideoCount > 0 && (
             <span className="downloading">{artist.downloadingVideoCount} downloading</span>

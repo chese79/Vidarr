@@ -346,7 +346,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings.get });
   const [namingFormat, setNamingFormat] = useState('');
-  const [transferMode, setTransferMode] = useState<TransferMode>('hardlink');
+  const [transferMode, setTransferMode] = useState<TransferMode>('move');
   const [minFreeSpaceMb, setMinFreeSpaceMb] = useState(1024);
   const [imvdbApiKey, setImvdbApiKey] = useState('');
 

@@ -46,6 +46,36 @@ describe('quality upgrade import safety', () => {
     expect((await prisma.musicVideoFile.findUniqueOrThrow({ where: { musicVideoId: videoId } })).path).toBe(oldPath);
   });
 
+  it('moves video and its metadata together, preserves supplied NFO, and leaves unrelated files alone', async () => {
+    await prisma.settings.update({ where: { id: 1 }, data: { transferMode: 'move' } });
+    await fs.writeFile(sourcePath.replace('.mp4', '.nfo'), '<musicvideo><title>Song</title></musicvideo>');
+    await fs.writeFile(sourcePath.replace('.mp4', '-thumb.jpg'), 'artwork');
+    await fs.writeFile(sourcePath.replace('.mp4', '.en.srt'), 'subtitles');
+    await fs.writeFile(path.join(directory, 'other.nfo'), 'unrelated');
+    await fs.writeFile(path.join(directory, 'upgrade-other.nfo'), 'another video');
+    const result = await importDownloadedFile(videoId, sourcePath, '1080p');
+    const base = result.path.replace('.mp4', '');
+    await expect(fs.readFile(`${base}.nfo`, 'utf8')).resolves.toContain('<title>Song</title>');
+    await expect(fs.readFile(`${base}-thumb.jpg`, 'utf8')).resolves.toBe('artwork');
+    await expect(fs.readFile(`${base}.en.srt`, 'utf8')).resolves.toBe('subtitles');
+    await expect(fs.access(sourcePath)).rejects.toThrow();
+    await expect(fs.access(sourcePath.replace('.mp4', '.nfo'))).rejects.toThrow();
+    await expect(fs.readFile(path.join(directory, 'other.nfo'), 'utf8')).resolves.toBe('unrelated');
+    await expect(fs.readFile(path.join(directory, 'upgrade-other.nfo'), 'utf8')).resolves.toBe('another video');
+    expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).not.toBeNull();
+  });
+
+  it('restores metadata and retains a move source if database recording fails', async () => {
+    await prisma.settings.update({ where: { id: 1 }, data: { namingFormat: 'old', transferMode: 'move' } });
+    await fs.writeFile(oldPath.replace('.mp4', '.nfo'), 'previous metadata');
+    await fs.writeFile(sourcePath.replace('.mp4', '.nfo'), 'new metadata');
+    vi.spyOn(prisma, '$transaction').mockRejectedValueOnce(new Error('database unavailable'));
+    await expect(importDownloadedFile(videoId, sourcePath, '1080p')).rejects.toThrow('database unavailable');
+    await expect(fs.readFile(oldPath.replace('.mp4', '.nfo'), 'utf8')).resolves.toBe('previous metadata');
+    await expect(fs.readFile(sourcePath.replace('.mp4', '.nfo'), 'utf8')).resolves.toBe('new metadata');
+    await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('new video');
+  });
+
   it.each(['copy', 'hardlink', 'move'])('restores a same-path %s upgrade when database recording fails', async (mode) => {
     await prisma.settings.update({ where: { id: 1 }, data: { namingFormat: 'old', transferMode: mode } });
     vi.spyOn(prisma, '$transaction').mockRejectedValueOnce(new Error('database unavailable'));

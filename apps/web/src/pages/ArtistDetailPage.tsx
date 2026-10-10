@@ -520,7 +520,7 @@ export default function ArtistDetailPage() {
             <div className="artist-meta">
               {artist.data.musicbrainzArtistId ? `MusicBrainz: ${artist.data.musicbrainzArtistId}` : `MusicBrainz: ${artist.data.musicbrainzMatchStatus}`} ·{' '}
               {artist.data.imvdbArtistId ? `IMVDb: ${artist.data.imvdbArtistId}` : 'No IMVDb match'} ·{' '}
-              {artist.data.summary.aggregatePlayCount ?? 'unknown'} plays · {artist.data.summary.available}/{artist.data.summary.known} available ·{' '}
+              {artist.data.summary.aggregatePlayCount ?? 'unknown'} plays · {artist.data.summary.available} available / {artist.data.summary.known} known ·{' '}
               {artist.data.summary.missing} missing · {artist.data.summary.monitored} monitored
             </div>
           </div>
@@ -648,7 +648,9 @@ export default function ArtistDetailPage() {
                   {mv.durationSeconds != null
                     ? `Duration: ${Math.floor(mv.durationSeconds / 60)}:${String(mv.durationSeconds % 60).padStart(2, '0')}`
                     : 'Duration unknown'}
-                  {' · '}{mv.catalogStatus === 'removedReview' ? 'Removed from latest IMVDb catalog — review' : 'In current catalog'}
+                  {' · '}{mv.catalogStatus === 'removedReview' ? 'Removed from latest IMVDb catalog — review'
+                    : mv.catalogKind === 'supplementary' ? 'Supplementary music video'
+                      : mv.catalogKind === 'inventory' ? 'Inventory video' : 'In current IMVDb catalog'}
                 </div>
                 {mv.sourcePublishedAt && <div className="empty-state" style={{ padding: 0 }}>
                   YouTube published {new Date(mv.sourcePublishedAt).toLocaleDateString()}
@@ -687,7 +689,7 @@ export default function ArtistDetailPage() {
                   {mv.status.acquisition === 'queued' && <span className="status-chip downloading">Queued</span>}
                   {mv.status.acquisition === 'importing' && <span className="status-chip downloading">Importing</span>}
                   {mv.status.acquisition === 'submissionUnknown' && <span className="status-chip failed">Submission unknown</span>}
-                  {mv.status.acquisition === 'awaitingServerScan' && <span className="status-chip downloading">Awaiting server scan</span>}
+                  {mv.status.acquisition === 'awaitingServerScan' && <span className="status-chip downloading">Awaiting server cataloging</span>}
                   {mv.status.acquisition === 'failed' && <span className="status-chip failed">Failed</span>}
                   {mv.ignored && <span className="status-chip ignored">Ignored</span>}
                 </div>
