@@ -5,6 +5,13 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — selected Rune branding
+
+- Apply logo proposal 5 with a fuchsia left V stroke, blue play triangle and cream right stroke.
+  Match the ARR wordmark letters to fuchsia and retain VID in cream.
+- Validate the production Docker image with an empty configuration and document tester upgrade
+  and published-image revision checks; all 700 automated tests pass under Node 22.
+
 ### Fixed — Library missing and local-video filters
 
 - Count the same preserved videos in Library summaries and expanded rows, including catalog-review

@@ -23,6 +23,22 @@ Docker and the paths below all work without it.
 
 ## Docker
 
+### Tester release verification
+
+Main publishes `ghcr.io/chese79/vidarr:latest` and a full Git commit SHA tag through
+the repository's **Publish Docker image** workflow. Check that the workflow succeeded for
+the revision being tested; use the SHA tag when a reproducible version is needed.
+Source-based Compose installations use `docker compose up -d --build vidarr` after pulling updates.
+Keep the existing `/config` and media mounts when upgrading.
+
+The October 10, 2026 release validation passed all 667 server and 33 web tests under Node 22,
+plus the production Docker build. An isolated empty-config container successfully applied all
+34 migrations, exposed first-run setup, closed bootstrap-key access after authenticated use,
+served API/UI/logo assets, ran as uid 1000 and provided working `yt-dlp`, `ffmpeg` and `ffprobe`.
+External provider behavior still depends on the tester's configured services and credentials.
+
+### Configuration
+
 To scan Picard tags directly, mount the audio library read-only into the Vidarr container and enter
 that container path as the connector's **Embedded music tag path**. For example, add
 `/host/music:/music:ro` under the Vidarr service volumes and configure `/music`. Vidarr reads tags
