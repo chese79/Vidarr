@@ -58,6 +58,15 @@ export async function importDownloadedFile(
   }
 
   const transferMode = settings.transferMode as TransferMode;
+  const otherOwner = await prisma.musicVideoFile.findFirst({ where: { path: destPath, musicVideoId: { not: musicVideoId } } });
+  if (otherOwner) throw new Error('Destination belongs to another video; choose a distinct naming format.');
+  const destinationExists = await fs.lstat(destPath).then(() => true, (error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error;
+    return false;
+  });
+  if (destinationExists && existingFile?.path !== destPath && path.resolve(sourcePath) !== path.resolve(destPath)) {
+    throw new Error('Destination already exists and is not this video’s managed file; retained for review.');
+  }
   const replacement = await stageImportBundle(sourcePath, destPath, transferMode, {
     artistName: musicVideo.artist.name, title: musicVideo.title,
     year: musicVideo.releaseYear, director: musicVideo.director, thumbnailUrl: musicVideo.thumbnailUrl,

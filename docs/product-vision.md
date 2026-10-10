@@ -166,11 +166,17 @@ require validation.
 
 ## Media-library delivery
 
-Completed downloads default to Move into the configured root folder with predictable names,
+Completed downloads default to Move into an artist/video folder within the configured root with predictable names,
 metadata sidecars, artwork and supplied subtitles. Existing configured Copy/Hardlink preferences
 remain supported and survive upgrades. Video-specific supplied sidecars are renamed with the video;
 unrelated files and symbolic links are not imported. Supplied NFO/artwork is preserved and missing
-metadata is generated. Staging keeps the source intact and backs up replaced files until metadata
+metadata is generated. Supplied NFO details are retained while canonical artist/title, known year
+and director are aligned with Vidarr. Invalid NFOs remain available for recovery. The standard
+layout uses `{Artist Name}/{Video Title} ({Year})/{Artist Name} - {Video Title} ({Year}) [{Quality}]`
+so songs do not become alternate versions of the artist folder in Jellyfin. Upgrades replace the
+previous standard format but preserve custom formats. Imports refuse another video's destination
+or an untracked existing destination instead of overwriting it.
+Staging keeps the source intact and backs up replaced files until metadata
 and database recording succeed; a failure restores the previous bundle.
 Each root folder must be associated with an enabled target Plex or Jellyfin music-video library
 to complete delivery, and that server must be able to access the same destination files.
@@ -182,9 +188,12 @@ metadata; availability there remains distinct from Vidarr's local-file ownership
 After import, Vidarr should request a media-server library refresh, wait for or later reconcile the
 new server item, and surface whether the file is merely on disk or fully available in the player.
 Pending imports are checked against the root folder's selected playback connector every five
-minutes, retrying scan notifications even after a previous notification failed. Only confirmation
+minutes, retrying scan notifications even after a previous notification failed. Jellyfin refreshes
+only the selected video library while retaining existing metadata and images. Only confirmation
 from that root's target connector clears delivery pending; another server's copy does not complete
 delivery. Linking a root queues existing managed files without confirmed target ownership.
+The server path must also match the managed file's relative path below the root, allowing host
+and container mount prefixes to differ. An older copy elsewhere cannot confirm the new delivery.
 Only a unique exact artist/title match clears the pending state; empty scans, duplicate
 matches, conflicting year or duration, and previously rejected matches leave it pending for later
 review or retry.
