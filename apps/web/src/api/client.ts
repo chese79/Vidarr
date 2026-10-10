@@ -491,7 +491,9 @@ export const api = {
       }),
   },
   queue: {
-    list: () => request<QueueItem[]>('/queue'),
+    list: () => request<QueueItem[]>('/queue?activeOnly=true'),
+    results: (section: 'completed' | 'failures', page = 1, pageSize = 50) =>
+      request<{ total: number; page: number; pageSize: number; items: HistoryEntry[] }>(`/queue/${section}?page=${page}&pageSize=${pageSize}`),
     refresh: () => request<QueueRefreshResult>('/queue/refresh', { method: 'POST' }),
   },
   system: {

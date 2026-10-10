@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { RecentQueueResults } from '../components/QueueResults';
 
 export default function QueuePage() {
   const queryClient = useQueryClient();
@@ -8,14 +9,17 @@ export default function QueuePage() {
   const [summary, setSummary] = useState<string | null>(null);
 
   const queue = useQuery({ queryKey: ['queue'], queryFn: api.queue.list, refetchInterval: 3000 });
+  const active = queue.data?.filter(item => item.status !== 'failed') ?? [];
 
   async function handleRefresh() {
     setRefreshing(true);
-    const result = await api.queue.refresh();
+    try { const result = await api.queue.refresh();
     setSummary(`${result.completed} completed, ${result.failed} failed, ${result.pending} still downloading`);
     queryClient.invalidateQueries({ queryKey: ['queue'] });
+    queryClient.invalidateQueries({ queryKey: ['queueResults'] });
     queryClient.invalidateQueries({ queryKey: ['artist'] });
-    setRefreshing(false);
+    } catch (error) { setSummary(`Refresh failed: ${(error as Error).message}`); }
+    finally { setRefreshing(false); }
   }
 
   return (
@@ -37,7 +41,7 @@ export default function QueuePage() {
         </p>
       )}
 
-      {queue.data?.length ? (
+      {queue.isPending ? <p role="status">Loading queue…</p> : queue.isError ? <p role="alert">Could not load queue.</p> : active.length ? (
         <table>
           <thead>
             <tr>
@@ -51,7 +55,7 @@ export default function QueuePage() {
             </tr>
           </thead>
           <tbody>
-            {queue.data.map((item) => (
+            {active.map((item) => (
               <tr key={item.id}>
                 <td>{item.musicVideo.artist.name}</td>
                 <td>{item.musicVideo.title}</td>
@@ -67,6 +71,8 @@ export default function QueuePage() {
       ) : (
         <p className="empty-state">Queue is empty.</p>
       )}
+      <RecentQueueResults section="completed" />
+      <RecentQueueResults section="failures" />
     </div>
   );
 }

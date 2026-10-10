@@ -41,16 +41,24 @@ a {
 
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   width: 200px;
   flex-shrink: 0;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border);
   padding: 16px 0;
 }
+
+.sidebar nav { flex: 1; min-height: 0; overflow-y: auto; }
+.sidebar h1 { flex-shrink: 0; }
 
 .sidebar h1 {
   font-size: 18px;
@@ -102,6 +110,9 @@ a {
 
 .content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 24px 32px;
   max-width: 1100px;
 }
@@ -671,7 +682,7 @@ select {
 
 button.add-new-artist { background: #2563eb; border: 1px solid var(--border); }
 /* Download status remains visible throughout the app. */
-.download-progress { margin: 1rem 16px; padding-top: .75rem; border-top: 1px solid var(--border); }
+.download-progress { flex-shrink: 0; max-height: 40%; overflow-y: auto; margin: 1rem 16px; padding-top: .75rem; border-top: 1px solid var(--border); }
 .download-progress > a { display: block; margin-bottom: .5rem; }
 .download-progress-item { margin-bottom: .75rem; }
 .download-progress-item > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; }
