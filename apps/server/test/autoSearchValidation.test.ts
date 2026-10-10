@@ -29,14 +29,14 @@ vi.mock('../src/pipeline/youtubeValidation.js', () => ({
   validateCandidate: vi.fn(),
 }));
 vi.mock('../src/pipeline/grab.js', () => ({
-  grabYoutubeVideo: vi.fn(),
+  queueDirectVideo: vi.fn(),
   grabFromIndexer: vi.fn(),
 }));
 
 describe('autoSearchAndGrab — YouTube candidate validation', () => {
   it('does not automatically upgrade an unmonitored artist, an unmonitored video, or an ignored video', async () => {
     const { runQualityUpgradeSearch } = await import('../src/pipeline/autoSearch.js');
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id, { youtubeVideoId: 'verified' });
     const low = await createQuality({ name: 'Low', weight: 0 });
@@ -46,10 +46,10 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
       await prisma.musicVideo.update({ where: { id: video.id }, data: { monitored: flag !== 'video', ignored: flag === 'ignored' } });
       expect((await runQualityUpgradeSearch()).upgraded).toBe(0);
     }
-    expect(grabYoutubeVideo).not.toHaveBeenCalled();
+    expect(queueDirectVideo).not.toHaveBeenCalled();
     await prisma.artist.update({ where: { id: artist.id }, data: { monitored: true } });
     await prisma.musicVideo.update({ where: { id: video.id }, data: { monitored: true, ignored: false } });
-    vi.mocked(grabYoutubeVideo).mockResolvedValue({ path: '/media/song.mp4', sizeBytes: 10n });
+    vi.mocked(queueDirectVideo).mockResolvedValue({ queueId: 1 });
     expect((await runQualityUpgradeSearch()).upgraded).toBe(1);
   });
   let rootFolderId: number;
@@ -68,8 +68,8 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
   });
 
   it('reports an authoritative source ahead of an older verified source', async () => {
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
-    vi.mocked(grabYoutubeVideo).mockResolvedValue({ path: '/media/x.mp4' } as never);
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
+    vi.mocked(queueDirectVideo).mockResolvedValue({ queueId: 1 });
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id, { title: 'Song' });
     await prisma.acquisitionSource.createMany({ data: [
@@ -82,13 +82,13 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const result = await autoSearchAndGrab(video.id);
     expect(result.grabbed).toBe(true);
     expect(result.reason).toContain('vimeo');
-    expect(vi.mocked(grabYoutubeVideo)).toHaveBeenCalledWith(video.id);
+    expect(vi.mocked(queueDirectVideo)).toHaveBeenCalledWith(video.id);
   });
 
   it.each(['manual', 'heuristic'])('tries an accepted %s link before a new search', async (authority) => {
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
     const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
-    vi.mocked(grabYoutubeVideo).mockResolvedValue({ path: '/media/x.mp4' } as never);
+    vi.mocked(queueDirectVideo).mockResolvedValue({ queueId: 1 });
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const video = await createMusicVideo(artist.id, { title: 'Song' });
     await prisma.acquisitionSource.create({ data: {
@@ -100,14 +100,14 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const result = await autoSearchAndGrab(video.id);
 
     expect(result).toMatchObject({ grabbed: true, reason: expect.stringContaining(`${authority} youtube`) });
-    expect(vi.mocked(grabYoutubeVideo)).toHaveBeenCalledWith(video.id);
+    expect(vi.mocked(queueDirectVideo)).toHaveBeenCalledWith(video.id);
     expect(vi.mocked(findYoutubeMatch)).not.toHaveBeenCalled();
   });
 
   it('does not grab, and records a History row, when validation rejects the candidate', async () => {
     const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
     const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
     vi.mocked(findYoutubeMatch).mockResolvedValue({
       candidate: { youtubeVideoId: 'rejected-id', title: 'Blinding Lights (Lyrics)', channel: 'Some Channel' },
       tier: 'youtube',
@@ -121,7 +121,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const outcome = await autoSearchAndGrab(video.id);
 
     expect(outcome.grabbed).toBe(false);
-    expect(vi.mocked(grabYoutubeVideo)).not.toHaveBeenCalled();
+    expect(vi.mocked(queueDirectVideo)).not.toHaveBeenCalled();
 
     const history = await prisma.history.findMany({ where: { musicVideoId: video.id } });
     expect(history).toHaveLength(1);
@@ -133,7 +133,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
   it('does not grab, and records a distinct History event, when validation holds the candidate for review', async () => {
     const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
     const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
     vi.mocked(findYoutubeMatch).mockResolvedValue({
       candidate: { youtubeVideoId: 'ambiguous-id', title: 'Blinding Lights', channel: 'Some Channel' },
       tier: 'youtube',
@@ -147,7 +147,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const outcome = await autoSearchAndGrab(video.id);
 
     expect(outcome.grabbed).toBe(false);
-    expect(vi.mocked(grabYoutubeVideo)).not.toHaveBeenCalled();
+    expect(vi.mocked(queueDirectVideo)).not.toHaveBeenCalled();
 
     const history = await prisma.history.findMany({ where: { musicVideoId: video.id } });
     expect(history).toHaveLength(1);
@@ -157,13 +157,13 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
   it('grabs, with no History row, when validation accepts the candidate', async () => {
     const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
     const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
     vi.mocked(findYoutubeMatch).mockResolvedValue({
       candidate: { youtubeVideoId: 'accepted-id', title: 'Blinding Lights', channel: 'The Weeknd' },
       tier: 'youtube',
     });
     vi.mocked(validateCandidate).mockResolvedValue({ decision: 'accept', reason: 'Uploaded by a verified channel.' });
-    vi.mocked(grabYoutubeVideo).mockResolvedValue({ path: '/media/x.mp4' } as never);
+    vi.mocked(queueDirectVideo).mockResolvedValue({ queueId: 1 });
 
     const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Test Artist' });
     const video = await createMusicVideo(artist.id, { title: 'Blinding Lights' });
@@ -172,7 +172,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const outcome = await autoSearchAndGrab(video.id);
 
     expect(outcome.grabbed).toBe(true);
-    expect(vi.mocked(grabYoutubeVideo)).toHaveBeenCalledWith(video.id);
+    expect(vi.mocked(queueDirectVideo)).toHaveBeenCalledWith(video.id);
 
     const history = await prisma.history.findMany({ where: { musicVideoId: video.id } });
     expect(history).toHaveLength(0);
@@ -185,13 +185,13 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     // and its verdict is honored even for a VEVO-tier candidate.
     const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
     const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
     vi.mocked(findYoutubeMatch).mockResolvedValue({
       candidate: { youtubeVideoId: 'vevo-id', title: 'Blinding Lights', channel: 'TheWeekndVEVO' },
       tier: 'vevo',
     });
     vi.mocked(validateCandidate).mockResolvedValue({ decision: 'accept', reason: 'Uploaded by a verified channel.' });
-    vi.mocked(grabYoutubeVideo).mockResolvedValue({ path: '/media/x.mp4' } as never);
+    vi.mocked(queueDirectVideo).mockResolvedValue({ queueId: 1 });
 
     const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Test Artist' });
     const video = await createMusicVideo(artist.id, { title: 'Blinding Lights' });
@@ -206,7 +206,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
   it('rejects a VEVO-tier match whose title matches a reject pattern, same as any other tier', async () => {
     const { findYoutubeMatch } = await import('../src/pipeline/youtubeMatch.js');
     const { validateCandidate } = await import('../src/pipeline/youtubeValidation.js');
-    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const { queueDirectVideo } = await import('../src/pipeline/grab.js');
     vi.mocked(findYoutubeMatch).mockResolvedValue({
       candidate: { youtubeVideoId: 'vevo-lyric-id', title: 'Blinding Lights (Lyrics)', channel: 'TheWeekndVEVO' },
       tier: 'vevo',
@@ -220,7 +220,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
     const outcome = await autoSearchAndGrab(video.id);
 
     expect(outcome.grabbed).toBe(false);
-    expect(vi.mocked(grabYoutubeVideo)).not.toHaveBeenCalled();
+    expect(vi.mocked(queueDirectVideo)).not.toHaveBeenCalled();
 
     const history = await prisma.history.findMany({ where: { musicVideoId: video.id } });
     expect(history).toHaveLength(1);

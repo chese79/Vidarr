@@ -164,6 +164,14 @@ authority order: authoritative, verified, manual, then heuristic. Automatic sear
 accepted links before searching for a new candidate; newly discovered YouTube candidates still
 require validation.
 
+Acquisition requests enter a persistent first-in, first-out download queue. General Settings
+controls the simultaneous video limit (default three, from one to twenty), shared by direct
+transfers and Vidarr-submitted external-client jobs. A request acknowledges queue acceptance;
+completion and failure are reported by Queue and video status. The sidebar shows active transfer
+progress and the waiting count. Lowering the limit does not interrupt active transfers.
+Interrupted direct transfers resume after restart; external-client handles remain intact, and
+uncertain submissions retain a slot until reconciled so they are never submitted twice.
+
 ## Media-library delivery
 
 Completed downloads default to Move into an artist/video folder within the configured root with predictable names,

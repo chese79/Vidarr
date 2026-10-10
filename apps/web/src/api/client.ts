@@ -89,6 +89,7 @@ export interface QueueItem {
   sourceType: string;
   status: string;
   progress: number;
+  error?: string | null;
   quality: string | null;
   addedAt: string;
   musicVideo: { title: string; artist: { name: string } };

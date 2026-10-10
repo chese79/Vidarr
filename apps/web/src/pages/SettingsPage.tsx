@@ -348,6 +348,7 @@ export default function SettingsPage() {
   const [namingFormat, setNamingFormat] = useState('');
   const [transferMode, setTransferMode] = useState<TransferMode>('move');
   const [minFreeSpaceMb, setMinFreeSpaceMb] = useState(1024);
+  const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(3);
   const [imvdbApiKey, setImvdbApiKey] = useState('');
 
   useEffect(() => {
@@ -355,6 +356,7 @@ export default function SettingsPage() {
       setNamingFormat(settings.data.namingFormat);
       setTransferMode(settings.data.transferMode);
       setMinFreeSpaceMb(settings.data.minFreeSpaceMb);
+      setMaxConcurrentDownloads(settings.data.maxConcurrentDownloads ?? 3);
       setImvdbApiKey('');
     }
   }, [settings.data]);
@@ -378,6 +380,7 @@ export default function SettingsPage() {
             namingFormat,
             transferMode,
             minFreeSpaceMb,
+            maxConcurrentDownloads,
             ...(imvdbApiKey ? { imvdbApiKey } : {}),
           });
         }}
@@ -421,6 +424,12 @@ export default function SettingsPage() {
             value={minFreeSpaceMb}
             onChange={(e) => setMinFreeSpaceMb(Number(e.target.value))}
           />
+        </div>
+        <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <label htmlFor="max-concurrent-downloads">Simultaneous video downloads</label>
+          <input id="max-concurrent-downloads" type="number" min={1} max={20} required
+            value={maxConcurrentDownloads} onChange={e => setMaxConcurrentDownloads(Number(e.target.value))} />
+          <span className="empty-state" style={{ padding: '4px 0 0' }}>Default: 3. Additional videos wait in the queue.</span>
         </div>
         <button type="submit">Save</button>
         {update.isSuccess && (

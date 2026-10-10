@@ -49,12 +49,19 @@ export function channelVideosUrl(sourceUrl: string): string {
 
 const PROGRESS_LINE = /\[download\]\s+(\d+(?:\.\d+)?)%/;
 
+function ytDlpFailure(stderr: string, code: number): string {
+  const lines = stderr.split('\n').map(line => line.trim()).filter(Boolean);
+  const errors = lines.filter(line => /^ERROR:/i.test(line));
+  return (errors.length ? errors : lines).slice(-5).join(' ') || String(code);
+}
+
 function runYtDlp(
   args: string[],
   onProgress?: (fraction: number) => void,
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(YTDLP_PATH, args);
+    // Use the same supported Node runtime as Vidarr, including on native installs.
+    const child = spawn(YTDLP_PATH, ['--js-runtimes', `node:${process.execPath}`, ...args]);
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => {
@@ -75,7 +82,7 @@ export async function listChannelVideos(sourceUrl: string): Promise<YoutubeVideo
   const { stdout, stderr, code } = await runYtDlp(['--flat-playlist', '--dump-json', channelVideosUrl(sourceUrl)]);
   if (code !== 0) {
     if (channelHasNoVideosTab(stderr)) return [];
-    throw new Error(`yt-dlp listing failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+    throw new Error(`yt-dlp listing failed: ${ytDlpFailure(stderr, code)}`);
   }
   const publishedDates = await recentChannelPublishedDates(sourceUrl);
   return stdout
@@ -107,7 +114,7 @@ export interface YoutubeSearchCandidate {
 export async function listPlaylistVideos(url: string): Promise<YoutubeSearchCandidate[]> {
   const { stdout, stderr, code } = await runYtDlp(['--flat-playlist', '--dump-json', url]);
   if (code !== 0) {
-    throw new Error(`yt-dlp playlist listing failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+    throw new Error(`yt-dlp playlist listing failed: ${ytDlpFailure(stderr, code)}`);
   }
   return stdout
     .split('\n')
@@ -129,7 +136,7 @@ export async function searchYoutube(query: string): Promise<YoutubeSearchCandida
     `ytsearch${SEARCH_RESULT_COUNT}:${query}`,
   ]);
   if (code !== 0) {
-    throw new Error(`yt-dlp search failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+    throw new Error(`yt-dlp search failed: ${ytDlpFailure(stderr, code)}`);
   }
   return stdout
     .split('\n')
@@ -157,7 +164,7 @@ export async function getVideoMetadata(youtubeVideoId: string): Promise<YoutubeV
   const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
   const { stdout, stderr, code } = await runYtDlp(['--dump-json', '--skip-download', url]);
   if (code !== 0) {
-    throw new Error(`yt-dlp metadata fetch failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+    throw new Error(`yt-dlp metadata fetch failed: ${ytDlpFailure(stderr, code)}`);
   }
   const entry = JSON.parse(stdout.trim().split('\n')[0] || '{}');
   return {
@@ -201,7 +208,7 @@ export async function downloadSampleClip(youtubeVideoId: string, destDir: string
   args.push(url);
   const { stdout, stderr, code } = await runYtDlp(args);
   if (code !== 0) {
-    throw new Error(`yt-dlp sample download failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+    throw new Error(`yt-dlp sample download failed: ${ytDlpFailure(stderr, code)}`);
   }
   const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
   const filepath = lines[lines.length - 1];
@@ -224,6 +231,7 @@ export async function downloadVideo(
     '--merge-output-format',
     'mp4',
     '--newline', // one progress update per line — needed since stdout is piped, not a TTY
+    '--progress', // --print otherwise suppresses download progress
     '-P',
     destDir,
     '-o',
@@ -239,7 +247,7 @@ export async function downloadVideo(
   args.push(url);
   const { stdout, stderr, code } = await runYtDlp(args, onProgress);
   if (code !== 0) {
-    throw new Error(`yt-dlp download failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+    throw new Error(`yt-dlp download failed: ${ytDlpFailure(stderr, code)}`);
   }
   const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
   const filepath = lines[lines.length - 1];
@@ -260,6 +268,7 @@ export async function downloadDirectVideo(
     '-f', formatSelector,
     '--merge-output-format', 'mp4',
     '--newline',
+    '--progress',
     '-P', destDir,
     '-o', '%(id)s.%(ext)s',
     '--print', 'after_move:filepath',
@@ -267,7 +276,7 @@ export async function downloadDirectVideo(
   if (FFMPEG_PATH !== 'ffmpeg') args.push('--ffmpeg-location', path.dirname(FFMPEG_PATH));
   args.push(url);
   const { stdout, stderr, code } = await runYtDlp(args, onProgress);
-  if (code !== 0) throw new Error(`yt-dlp download failed: ${stderr.split('\n').slice(-5).join(' ') || code}`);
+  if (code !== 0) throw new Error(`yt-dlp download failed: ${ytDlpFailure(stderr, code)}`);
   const lines = stdout.split('\n').map((line) => line.trim()).filter(Boolean);
   const filepath = lines[lines.length - 1];
   if (!filepath) throw new Error('yt-dlp did not report an output file path');

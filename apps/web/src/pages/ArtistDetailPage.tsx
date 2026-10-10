@@ -436,10 +436,11 @@ export default function ArtistDetailPage() {
   }
 
   async function handleGrab(videoId: number): Promise<boolean> {
-    setGrabStatus((s) => ({ ...s, [videoId]: 'Downloading…' }));
+    setGrabStatus((s) => ({ ...s, [videoId]: 'Queuing…' }));
     try {
       const result = await api.musicVideos.grab(videoId);
-      setGrabStatus((s) => ({ ...s, [videoId]: result.ok ? 'Done' : `Failed: ${result.error}` }));
+      setGrabStatus((s) => ({ ...s, [videoId]: result.ok ? 'Queued' : `Failed: ${result.error}` }));
+      if (result.ok) queryClient.invalidateQueries({ queryKey: ['queue'] });
       if (result.ok) queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
       return result.ok;
     } catch (error) {
@@ -490,7 +491,7 @@ export default function ArtistDetailPage() {
     let completed = 0;
     let downloaded = 0;
     let next = 0;
-    setBulkMessage(`Downloading 0 of ${ids.length} selected videos…`);
+    setBulkMessage(`Queuing 0 of ${ids.length} selected videos…`);
     const worker = async () => {
       while (next < ids.length) {
         const id = ids[next++];
@@ -499,11 +500,11 @@ export default function ArtistDetailPage() {
           setSelected((current) => { const updated = new Set(current); updated.delete(id); return updated; });
         }
         completed++;
-        setBulkMessage(`Downloading ${completed} of ${ids.length} selected videos…`);
+        setBulkMessage(`Queuing ${completed} of ${ids.length} selected videos…`);
       }
     };
     await Promise.all(Array.from({ length: Math.min(2, ids.length) }, worker));
-    setBulkMessage(`${downloaded} downloaded, ${ids.length - downloaded} failed. Failed videos remain selected.`);
+    setBulkMessage(`${downloaded} queued, ${ids.length - downloaded} failed to queue. Failed videos remain selected.`);
     setBulkDownloading(false);
     queryClient.invalidateQueries({ queryKey: ['queue'] });
     if (returnTo && downloaded === ids.length) returnToDiscover(`${downloaded} downloads submitted.`);

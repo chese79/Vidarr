@@ -55,7 +55,11 @@ docker compose up --build
 - Configure Vidarr Root Folders using the container side of that mount (`/media` by default).
   Never enter a Windows host path such as `D:\media` into a Docker-hosted Vidarr. For a custom
   `D:\media:/mnt/d/media` mount, the Root Folder is `/mnt/d/media`.
-- `yt-dlp` and `ffmpeg` are installed into the image at build time — no host setup.
+- `yt-dlp[default]` (including its matching EJS challenge solver) and `ffmpeg` are installed
+  into the image at build time. Vidarr explicitly enables its Node 22 runtime for yt-dlp.
+  Native installations must also install `yt-dlp[default]` and run Vidarr under Node 22 or newer.
+  A private-video error means the source is inaccessible; use an accessible source or ask the
+  uploader to grant access. JavaScript runtime support does not change video permissions.
 - The container runs as a fixed non-root user (uid/gid 1000). If you bind-mount a host
   directory for `/media` instead of using a named volume, make sure it's writable by
   uid 1000: `sudo chown -R 1000:1000 ./media`.
@@ -89,7 +93,7 @@ git clone <your-vidarr-repo-url> /opt/vidarr
 cd /opt/vidarr
 sudo apt update
 sudo apt install -y ffmpeg python3 python3-pip
-pip3 install --break-system-packages yt-dlp
+pip3 install --break-system-packages 'yt-dlp[default]'
 ```
 (`ffprobe` ships with the `ffmpeg` apt package.)
 

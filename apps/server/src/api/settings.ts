@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { UpdateSettingsSchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
+import { wakeDownloadQueue } from '../pipeline/downloadDispatcher.js';
 
 export async function settingsRoutes(app: FastifyInstance) {
   app.get('/api/v1/config', async () => {
@@ -16,11 +17,13 @@ export async function settingsRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin video library' });
       }
     }
-    return serializeSettings(await prisma.settings.upsert({
+    const settings = await prisma.settings.upsert({
       where: { id: 1 },
       update: body,
       create: { id: 1, ...body },
-    }));
+    });
+    if (body.maxConcurrentDownloads != null) wakeDownloadQueue();
+    return serializeSettings(settings);
   });
 
   // Rotates vidarr's own API key. You have to already be authenticated to

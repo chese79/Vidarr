@@ -252,6 +252,7 @@ export const SettingsSchema = z.object({
   namingFormat: z.string(),
   transferMode: TransferMode,
   minFreeSpaceMb: z.number().int(),
+  maxConcurrentDownloads: z.number().int().min(1).max(20).default(3),
   imvdbApiKey: z.string().nullable(),
   hasImvdbApiKey: z.boolean(),
   // vidarr's own API key — read-only via this schema (UpdateSettingsSchema
@@ -602,6 +603,8 @@ export type YoutubeSourceSyncResult = z.infer<typeof YoutubeSourceSyncResultSche
 
 export const GrabResultSchema = z.object({
   ok: z.boolean(),
+  queued: z.boolean().optional(),
+  queueId: z.number().int().optional(),
   path: z.string().optional(),
   error: z.string().optional(),
 });

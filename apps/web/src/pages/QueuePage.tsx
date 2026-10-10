@@ -47,6 +47,7 @@ export default function QueuePage() {
               <th>Quality</th>
               <th>Status</th>
               <th>Progress</th>
+              <th>Error</th>
             </tr>
           </thead>
           <tbody>
@@ -58,6 +59,7 @@ export default function QueuePage() {
                 <td>{item.quality ?? '—'}</td>
                 <td>{item.status}</td>
                 <td>{Math.round(item.progress * 100)}%</td>
+                <td>{item.error ?? '—'}</td>
               </tr>
             ))}
           </tbody>
