@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — notify Jellyfin about new filesystem entries
+
+- Report changes to the selected library's physical media roots before requesting metadata refresh,
+  so newly created video folders are discovered rather than only refreshing previously known items.
+
 ### Fixed — separate server catalog entries for each video
 
 - Use an artist/video folder layout for the standard naming format, preventing Jellyfin from

@@ -263,6 +263,14 @@ export const jellyfinProvider: LibraryConnectorProvider = {
 
   async refreshVideoLibrary(config) {
     if (!config.videoLibraryId) throw new Error('Select a Jellyfin music-video library before requesting its scan.');
-    await jellyfinSend(config, 'POST', `/Items/${encodeURIComponent(config.videoLibraryId)}/Refresh?Recursive=true&MetadataRefreshMode=Default&ImageRefreshMode=Default&ReplaceAllMetadata=false&ReplaceAllImages=false`);
+    const folders = await jellyfinGet(config, '/Library/VirtualFolders');
+    const selected = folders.find((folder: { ItemId: string }) => folder.ItemId === config.videoLibraryId);
+    if (!Array.isArray(selected?.Locations) || !selected.Locations.length) throw new Error('Selected Jellyfin library has no accessible media roots.');
+    // Item refresh alone does not report new filesystem entries. Notify only
+    // this library's physical roots, then refresh metadata without replacing it.
+    await jellyfinSend(config, 'POST', '/Library/Media/Updated', {
+      Updates: selected.Locations.map((Path: string) => ({ Path, UpdateType: 'Created' })),
+    });
+    await jellyfinSend(config, 'POST', `/Items/${encodeURIComponent(config.videoLibraryId)}/Refresh?MetadataRefreshMode=Default&ImageRefreshMode=Default&ReplaceAllMetadata=false&ReplaceAllImages=false`);
   },
 };

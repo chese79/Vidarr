@@ -25,7 +25,8 @@ Only after the selected server confirms cataloging. Until then the video shows *
 cataloging**, even when its file is already safely in place. Vidarr retries scan notifications and
 checks pending imports every five minutes. It
 requires the server path to match the managed file below the root; an older copy elsewhere cannot
-complete a new delivery. Jellyfin scans are requested for the selected video library.
+complete a new delivery. Vidarr notifies Jellyfin of filesystem changes in the selected library's
+physical roots and requests metadata refresh so new video folders can be discovered.
 An unmapped root needs a target selected; disabled or
 unreachable servers and ambiguous matches leave delivery pending. Linking a target also queues
 existing managed files that lack confirmed ownership in that target library.

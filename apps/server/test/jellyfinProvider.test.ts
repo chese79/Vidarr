@@ -34,14 +34,19 @@ function jsonResponse(body: unknown, status = 200) {
 
 describe('jellyfinProvider', () => {
   it('refreshes only the selected video library and preserves existing metadata and images', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([
+      { ItemId: 'video library', Locations: ['/media/music-videos'] },
+      { ItemId: 'other', Locations: ['/media/movies'] },
+    ])).mockResolvedValue(jsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
     await jellyfinProvider.refreshVideoLibrary!(connector({ videoLibraryId: 'video library' }));
-    expect(fetchMock.mock.calls[0][0]).toContain('/Items/video%20library/Refresh?Recursive=true');
-    expect(fetchMock.mock.calls[0][0]).toContain('ReplaceAllMetadata=false');
-    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    expect(fetchMock.mock.calls[1][0]).toContain('/Library/Media/Updated');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ Updates: [{ Path: '/media/music-videos', UpdateType: 'Created' }] });
+    expect(fetchMock.mock.calls[2][0]).toContain('/Items/video%20library/Refresh?MetadataRefreshMode=Default');
+    expect(fetchMock.mock.calls[2][0]).toContain('ReplaceAllMetadata=false');
+    expect(fetchMock.mock.calls[2][1].method).toBe('POST');
     await expect(jellyfinProvider.refreshVideoLibrary!(connector({ videoLibraryId: null }))).rejects.toThrow('Select a Jellyfin');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
   afterEach(() => vi.unstubAllGlobals());
 
