@@ -10,6 +10,15 @@ the expandable preview continues to show only the three highest-scoring candidat
 
 ## Discover
 
+For the artist chosen in **Existing artists**, review the genre checkboxes, refresh them from sources
+or add a genre, then click **Confirm Genre & Add All**. This saves the selected genres as user
+overrides, collects the artist's sources, enables artist monitoring and monitors every catalog video.
+It also re-enables ignored catalog videos, reflecting the explicit request to acquire the whole catalog.
+Only missing acquisition targets are searched/downloaded; owned videos, pending imports, active
+downloads and inventory-only records are skipped. Individual failures remain monitored for retry and
+are reported on Discover. Unreviewed source candidates still require the normal Video Review decision.
+Returning from artist review preserves the chosen artist so this action is available there.
+
 Select an existing artist from the dropdown to review it, or search MusicBrainz by free text.
 Choose **Add to Library & Review** on the desired identity. Additions reuse the canonical MBID,
 preserve the artist's configuration, record discovery provenance and remain unmonitored by default.
@@ -18,17 +27,16 @@ This collection runs in the background; the review page polls for the resulting 
 Configured indexers and acquisition providers are searched when you use **Search Selected**.
 Adding an artist does not trigger downloads of its whole catalog.
 
-**Add New Artist**, the blue button beside Refresh Recommendations, accepts a name and checks
-MusicBrainz, Last.fm and IMVDb. An exact normalized name match from any source validates the name.
-Last.fm requires the saved application API key but does not require account linking or recommendation
-enablement. IMVDb uses the configured API when available and its public artist page as a fallback.
-Provider failures are reported and never treated as successful validation. Checks are cached for
-one minute, with at most 100 names retained. The server independently enforces validation at addition.
+**Add New Artist**, the blue button beside Refresh Recommendations, requires a unique matching
+MusicBrainz name or alias. Unmatched names, ambiguous names and provider failures are explained
+without creating an artist. For ambiguous names, use MusicBrainz search and choose the correct
+identity. Validation is cached for one minute, with at most 100 names retained, and the server
+independently enforces it at addition. Older clients cannot bypass validation with an unverified override.
 
-If no source validates the name, the form displays a warning and an explicit **Add unverified
-artist anyway** action. Only a unique MusicBrainz identity confirms a canonical Library artist.
-Last.fm-only, IMVDb-only, ambiguous and unverified additions are observations requiring identity
-confirmation in Artist Review. The artist page provides that confirmation workflow.
+Library's **Add Artist** form also searches MusicBrainz and requires selection of a returned identity.
+The Add manually option is removed. Last.fm and IMVDb remain metadata/video sources after canonical
+identity confirmation; they do not validate artist additions. Existing observations remain preserved
+for Artist Review. Confirmed additions collect all video sources in the background.
 
 Discover stores its filters, typed searches, artist selection and checked recommendations in URL
 parameters. Artist navigation carries a bounded Discover return URL and scroll position. A completed

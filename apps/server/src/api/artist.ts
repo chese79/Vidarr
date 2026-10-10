@@ -78,6 +78,42 @@ interface ArtistSummaryRow {
 }
 
 export async function artistRoutes(app: FastifyInstance) {
+  app.post('/api/v1/artist/:id/confirm-genres-download-all', async (req, reply) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const { genres } = z.object({ genres: z.array(z.string().trim().min(1).max(80)).min(1).max(30) }).parse(req.body);
+    const artist = await prisma.artist.findUnique({ where: { id } });
+    if (!artist) return reply.code(404).send({ error: 'Artist not found' });
+    if (artist.musicbrainzMatchStatus !== 'confirmed' || !artist.musicbrainzArtistId) {
+      return reply.code(409).send({ error: 'Confirm the MusicBrainz artist before downloading its videos' });
+    }
+    await setUserGenres(id, genres);
+    const sourceErrors: string[] = [];
+    try { sourceErrors.push(...(await collectArtistVideoInventory(id)).errors); }
+    catch (error) { sourceErrors.push('Source collection failed; using the existing catalog.'); await logActivity('warn', 'discover:download-all:sources', error); }
+    const [, monitored] = await prisma.$transaction([
+      prisma.artist.update({ where: { id }, data: { monitored: true } }),
+      prisma.musicVideo.updateMany({ where: { artistId: id }, data: { monitored: true, ignored: false } }),
+    ]);
+    const wanted = await prisma.musicVideo.findMany({ where: {
+      artistId: id, catalogKind: { not: 'inventory' }, hasFile: false, awaitingServerScanAt: null,
+      libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
+      queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
+    }, select: { id: true }, orderBy: { id: 'asc' } });
+    let grabbed = 0;
+    const failures: Array<{ musicVideoId: number; reason: string }> = [];
+    for (const video of wanted) {
+      try {
+        const result = await autoSearchAndGrab(video.id);
+        if (result.grabbed) grabbed++;
+        else failures.push({ musicVideoId: video.id, reason: result.reason });
+      } catch (error) {
+        failures.push({ musicVideoId: video.id, reason: 'Search/download failed; video remains monitored for retry.' });
+        await logActivity('warn', 'discover:download-all', error);
+      }
+    }
+    return { monitoredCount: monitored.count, searchedCount: wanted.length, grabbed, skipped: failures.length, failures, sourceErrors };
+  });
+
   app.post('/api/v1/artist/validate-new', async (req) => {
     const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
     return validateNewArtist(name);
@@ -87,7 +123,7 @@ export async function artistRoutes(app: FastifyInstance) {
     const [root, profile] = await Promise.all([prisma.rootFolder.findUnique({ where: { id: body.rootFolderId } }), prisma.qualityProfile.findUnique({ where: { id: body.qualityProfileId } })]);
     if (!root || !profile) return reply.code(400).send({ error: 'Select a root folder and quality profile first' });
     const validation = await validateNewArtist(body.name);
-    if (!validation.validated && !body.allowUnverified) return reply.code(409).send({ error: 'Artist could not be validated against Last.fm, MusicBrainz or IMVDb. Confirm adding an unverified artist.', validation });
+    if (!validation.validated || !validation.musicbrainzArtistId) return reply.code(409).send({ error: 'Select a validated MusicBrainz artist before adding it.', validation });
     const existing = validation.musicbrainzArtistId
       ? await prisma.artist.findUnique({ where: { musicbrainzArtistId: validation.musicbrainzArtistId } })
       : await prisma.artist.findFirst({ where: { name: body.name } });

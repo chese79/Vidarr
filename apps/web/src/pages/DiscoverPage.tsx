@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import ConfirmGenreDownloadAll from '../components/ConfirmGenreDownloadAll';
 
 const SOURCE_LABEL: Record<string, string> = { library: 'Your library', lastfm: 'Last.fm', spotify: 'Spotify', musicbrainz: 'MusicBrainz' };
 const LETTERS = ['#', ...Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index))];
@@ -34,7 +35,9 @@ export default function DiscoverPage() {
   const mbQuery = params.get('mbQuery') ?? '';
   const lookup = useQuery({ queryKey: ['discover-musicbrainz', mbQuery], queryFn: () => api.artists.searchMusicbrainz(mbQuery), enabled: Boolean(mbQuery) });
   function review(id: number, collectSources: boolean) {
-    navigate(`/artist/${id}`, { state: { discoverReturnTo: `/discover?${params}`, discoverScroll: window.scrollY, collectSources } });
+    const copy = new URLSearchParams(params);
+    copy.set('libraryArtist', String(id));
+    navigate(`/artist/${id}`, { state: { discoverReturnTo: `/discover?${copy}`, discoverScroll: window.scrollY, collectSources } });
   }
   const addReview = useMutation({
     mutationFn: (mbid: string) => {
@@ -56,7 +59,7 @@ export default function DiscoverPage() {
   const [validation, setValidation] = useState<{ name: string; validated: boolean; sources: string[]; warnings: string[] } | null>(null);
   const [validating, setValidating] = useState(false);
   const createNew = useMutation({
-    mutationFn: (data: { name: string; allowUnverified: boolean }) => {
+    mutationFn: (data: { name: string }) => {
       const root = rootFolders.data?.[0]; const profile = qualityProfiles.data?.[0];
       if (!root || !profile) throw new Error('Add a root folder and quality profile first.');
       return api.artists.addNew({ ...data, rootFolderId: root.id, qualityProfileId: profile.id });
@@ -70,7 +73,7 @@ export default function DiscoverPage() {
     try {
       const result = await api.artists.validateNew(name);
       setValidation({ name, ...result });
-      if (result.validated) await createNew.mutateAsync({ name, allowUnverified: false });
+      if (result.validated) await createNew.mutateAsync({ name });
     } catch (error) { setMessage(`Could not add artist: ${(error as Error).message}`); }
     finally { setValidating(false); }
   }
@@ -120,8 +123,8 @@ export default function DiscoverPage() {
     <div className="page-header"><h2>Discover</h2><div className="form-row" style={{ marginBottom: 0 }}><button onClick={refresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh Recommendations'}</button><button className="add-new-artist" onClick={() => update('addNew', value('addNew') ? '' : '1')}>Add New Artist</button></div></div>
     {value('addNew') && <form className="card" aria-label="Add New Artist" onSubmit={(e) => { e.preventDefault(); void validateAndAdd(); }}>
       <div className="form-row"><input aria-label="New artist name" placeholder="Artist name" maxLength={120} required value={value('newArtistName')} onChange={(e) => { update('newArtistName', e.target.value); setValidation(null); }} /><button disabled={!canAdd || validating || createNew.isPending}>{validating ? 'Checking sources…' : 'Validate & Add'}</button></div>
-      <p>Checks MusicBrainz, Last.fm and IMVDb. Artists remain unmonitored until you select wanted videos. An artist without a confirmed MusicBrainz identity stays in Artist Review.</p>
-      {validation && !validation.validated && validation.name === value('newArtistName').trim() && <div role="alert"><p>No source validated “{validation.name}”. Check the spelling, or add it as an unverified artist for review. {validation.warnings.join(' ')}</p><button type="button" disabled={createNew.isPending} onClick={() => createNew.mutate({ name: validation.name, allowUnverified: true })}>Add unverified artist anyway</button></div>}
+      <p>Validates the artist against MusicBrainz and collects its video sources. Artists remain unmonitored until you select wanted videos.</p>
+      {validation && !validation.validated && validation.name === value('newArtistName').trim() && <div role="alert"><p>MusicBrainz did not uniquely validate “{validation.name}”. {validation.warnings.join(' ')}</p></div>}
       {createNew.isError && <p role="alert">{(createNew.error as Error).message}</p>}
     </form>}
     <section className="card" aria-label="Find an artist to review">
@@ -129,6 +132,7 @@ export default function DiscoverPage() {
         <label>Existing artists <select aria-label="Existing artists" value={value('libraryArtist')} onChange={(e) => update('libraryArtist', e.target.value)}><option value="">Choose an artist</option>{artists.data?.map((artist) => <option key={artist.id} value={artist.id}>{artist.name}</option>)}</select></label>
         <button disabled={!value('libraryArtist')} onClick={() => review(Number(value('libraryArtist')), true)}>Review Artist</button>
       </div>
+      {artists.data?.some((artist) => artist.id === Number(value('libraryArtist'))) && <ConfirmGenreDownloadAll key={value('libraryArtist')} artistId={Number(value('libraryArtist'))} />}
       <form className="form-row" onSubmit={(e) => { e.preventDefault(); update('mbQuery', value('artistSearch').trim()); }}>
         <input aria-label="Search MusicBrainz artists" placeholder="Artist name" maxLength={120} value={value('artistSearch')} onChange={(e) => update('artistSearch', e.target.value)} />
         <button disabled={!value('artistSearch').trim() || lookup.isFetching}>Search MusicBrainz</button>
