@@ -291,7 +291,7 @@ export default function LibraryPage() {
   const letter = params.get('letter');
   const hasMissing = params.get('missing') === 'true';
   const completeness = (params.get('completeness') ?? '') as '' | 'complete' | 'unmatched' | 'activeDownloads';
-  const minKnownVideos = params.get('minKnownVideos') ?? '';
+  const minLocalVideos = params.get('minLocalVideos') ?? params.get('minKnownVideos') ?? '';
   const minPlayCount = params.get('minPlayCount') ?? '';
   const page = Number(params.get('page') ?? '1');
 
@@ -317,7 +317,7 @@ export default function LibraryPage() {
   }
 
   const summary = useQuery({
-    queryKey: ['artistSummary', search, genre, monitored, musicbrainzStatus, letter, hasMissing, completeness, minKnownVideos, minPlayCount, page],
+    queryKey: ['artistSummary', search, genre, monitored, musicbrainzStatus, letter, hasMissing, completeness, minLocalVideos, minPlayCount, page],
     queryFn: () =>
       api.artists.summary({
         search: search || undefined,
@@ -327,7 +327,7 @@ export default function LibraryPage() {
         letter: letter || undefined,
         hasMissing: hasMissing || undefined,
         completeness: completeness || undefined,
-        minKnownVideos: minKnownVideos ? Number(minKnownVideos) : undefined,
+        minLocalVideos: minLocalVideos ? Number(minLocalVideos) : undefined,
         minPlayCount: minPlayCount ? Number(minPlayCount) : undefined,
         page,
         pageSize: PAGE_SIZE,
@@ -337,7 +337,7 @@ export default function LibraryPage() {
   const items = summary.data?.items ?? [];
   const totalPages = summary.data ? Math.max(1, Math.ceil(summary.data.total / PAGE_SIZE)) : 1;
   const anyFilterActive = Boolean(
-    search || genre || monitored || musicbrainzStatus || letter || hasMissing || completeness || minKnownVideos || minPlayCount,
+    search || genre || monitored || musicbrainzStatus || letter || hasMissing || completeness || minLocalVideos || minPlayCount,
   );
   const allVisibleSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
 
@@ -513,13 +513,13 @@ export default function LibraryPage() {
               Has missing videos
             </label>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
-              Min known videos
+              Min local videos
               <input
                 type="number"
                 min={0}
-                aria-label="Minimum known video count"
-                value={minKnownVideos}
-                onChange={(e) => updateParams({ minKnownVideos: e.target.value || null, page: null })}
+                aria-label="Minimum local video count"
+                value={minLocalVideos}
+                onChange={(e) => updateParams({ minLocalVideos: e.target.value || null, minKnownVideos: null, page: null })}
                 style={{ width: 64 }}
               />
             </label>

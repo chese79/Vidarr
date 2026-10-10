@@ -46,7 +46,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <h1 className="brand"><img src="/vidarr-mark.png" alt="" /><span>VIDARR</span></h1>
+        <h1 className="brand"><img src="/vidarr-rune-mark.png" alt="" /><span>VID<span className="brand-arr">ARR</span></span></h1>
         <nav aria-label="Primary">
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {NAV_ITEMS.map((item) => (

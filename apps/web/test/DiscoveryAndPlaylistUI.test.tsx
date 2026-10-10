@@ -5,12 +5,20 @@ import { MemoryRouter } from 'react-router-dom';
 import DiscoverPage from '../src/pages/DiscoverPage';
 import PlaylistsPage from '../src/pages/PlaylistsPage';
 import AddArtistForm from '../src/components/AddArtistForm';
+import LibraryPage from '../src/pages/LibraryPage';
 
 function render(page: React.ReactNode, url: string, client = new QueryClient()) {
   return renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}>{page}</MemoryRouter></QueryClientProvider>);
 }
 
 describe('Discover and playlist controls', () => {
+  it('restores missing and minimum local-video filters from the Library URL', () => {
+    const html = render(<LibraryPage />, '/library?missing=true&minLocalVideos=3');
+    expect(html).toMatch(/type="checkbox" checked=""\/>Has missing videos/);
+    expect(html).toMatch(/aria-label="Minimum local video count"[^>]*value="3"/);
+    expect(html).toContain('Min local videos');
+    expect(html).not.toContain('Min known videos');
+  });
   it('uses MusicBrainz for Library additions and removes manual addition', () => {
     const html = render(<AddArtistForm onDone={() => {}} />, '/library');
     expect(html).toContain('Search MusicBrainz');

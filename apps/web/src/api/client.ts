@@ -75,6 +75,7 @@ export interface ArtistSummaryParams {
   musicbrainzStatus?: 'unmatched' | 'suggested' | 'ambiguous' | 'confirmed' | 'notFound' | 'failed';
   letter?: string;
   minKnownVideos?: number;
+  minLocalVideos?: number;
   minPlayCount?: number;
   hasMissing?: boolean;
   completeness?: 'complete' | 'unmatched' | 'activeDownloads';
@@ -232,6 +233,7 @@ export const api = {
       if (params.musicbrainzStatus) qs.set('musicbrainzStatus', params.musicbrainzStatus);
       if (params.letter) qs.set('letter', params.letter);
       if (params.minKnownVideos !== undefined) qs.set('minKnownVideos', String(params.minKnownVideos));
+      if (params.minLocalVideos !== undefined) qs.set('minLocalVideos', String(params.minLocalVideos));
       if (params.minPlayCount !== undefined) qs.set('minPlayCount', String(params.minPlayCount));
       if (params.hasMissing) qs.set('hasMissing', 'true');
       if (params.completeness) qs.set('completeness', params.completeness);
