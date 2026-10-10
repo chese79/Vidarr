@@ -3,10 +3,16 @@
 ## What happens after a download?
 
 New installations default to Move. Vidarr places the video and its video-specific metadata,
-artwork and subtitles in the configured root using the naming format (by default an artist folder
-and an artist/title/year/quality filename). It preserves supplied NFO and artwork and generates
+artwork and subtitles in the configured root using the naming format (by default an artist folder,
+a folder for each video, and an artist/title/year/quality filename). Separate video folders prevent
+Jellyfin from grouping different songs as versions of one item, following its
+[music-video organization guidance](https://jellyfin.org/docs/general/server/media/music-videos/).
+It retains supplied NFO details, aligns canonical artist/title/year/director, preserves artwork and generates
 missing metadata. The source is retained until import recording succeeds. Existing configured
 Copy or Hardlink preferences survive upgrades and remain available in Settings.
+The previous standard naming format upgrades to the separate-video layout; custom formats remain
+unchanged. A malformed NFO or an existing destination belonging to another video stops import
+without discarding the download.
 
 Select the root's target Plex or Jellyfin video library in Root Folders. Both Vidarr and the server
 must access the same files, even if Docker and the host use different path names. A server API
@@ -17,7 +23,10 @@ Plex metadata handling depends on its library agent.
 
 Only after the selected server confirms cataloging. Until then the video shows **Awaiting server
 cataloging**, even when its file is already safely in place. Vidarr retries scan notifications and
-checks pending imports every five minutes. An unmapped root needs a target selected; disabled or
+checks pending imports every five minutes. It
+requires the server path to match the managed file below the root; an older copy elsewhere cannot
+complete a new delivery. Jellyfin scans are requested for the selected video library.
+An unmapped root needs a target selected; disabled or
 unreachable servers and ambiguous matches leave delivery pending. Linking a target also queues
 existing managed files that lack confirmed ownership in that target library.
 

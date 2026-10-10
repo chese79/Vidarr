@@ -5,6 +5,7 @@ import { normalizeTitle } from './normalize.js';
 import { matchLibraryVideoIdentities, type CanonicalVideo, type MatchConfidence } from './reconciliation.js';
 import { artistNameHint } from './artistObservation.js';
 import { observedArtistName, videoIdentities, type VideoIdentity } from './videoIdentity.js';
+import { serverDeliveryPathMatches } from './deliveryPath.js';
 
 type CanonicalArtist = { id: number; name: string; musicbrainzMatchStatus: string };
 
@@ -253,8 +254,15 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       .map((p) => (p.match.matchConfidence === null ? p.match.musicVideoId : null))
       .filter((value): value is number => value != null);
     if (confirmedIds.length) {
+      const pending = await prisma.musicVideo.findMany({
+        where: { id: { in: confirmedIds }, awaitingServerScanAt: { not: null }, artist: { rootFolder: { targetConnectorId: connector.id } } },
+        include: { file: true, artist: { include: { rootFolder: true } } },
+      });
+      const deliveredIds = pending.filter(video => planned.some(item => item.match.musicVideoId === video.id
+        && item.match.matchConfidence === null
+        && serverDeliveryPathMatches(video.file?.path, video.artist.rootFolder.path, item.video.path))).map(video => video.id);
       await prisma.musicVideo.updateMany({
-        where: { id: { in: confirmedIds }, artist: { rootFolder: { targetConnectorId: connector.id } } },
+        where: { id: { in: deliveredIds } },
         data: { awaitingServerScanAt: null },
       });
       await prisma.artist.updateMany({

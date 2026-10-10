@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser';
 import { prisma } from '../db/client.js';
 
 function xmlEscape(value: string): string {
@@ -44,7 +45,23 @@ export async function writeLibraryMetadata(videoPath: string, meta: LibraryMetad
     .filter((line): line is string => line !== null)
     .join('\n');
   const exists = async (file: string) => fs.access(file).then(() => true, () => false);
-  if (!options.preserveExisting || !await exists(`${base}.nfo`)) await fs.writeFile(`${base}.nfo`, nfo, 'utf-8');
+  if (options.preserveExisting && await exists(`${base}.nfo`)) {
+    const original = await fs.readFile(`${base}.nfo`, 'utf8');
+    if (XMLValidator.validate(original) !== true) throw new Error('Supplied music-video NFO is invalid XML; retained for recovery.');
+    const parsed = new XMLParser({ preserveOrder: true, ignoreAttributes: false, parseTagValue: false }).parse(original);
+    const fields = parsed.find((node: Record<string, unknown>) => Array.isArray(node.musicvideo))?.musicvideo;
+    if (!fields) throw new Error('Supplied NFO has no musicvideo metadata; retained for recovery.');
+    // Canonical identity must agree with Vidarr; retain all other supplied
+    // metadata, including plots, artwork references and technical details.
+    for (const [tag, value] of Object.entries({ title: meta.title, artist: meta.artistName,
+      year: meta.year == null ? null : String(meta.year), director: meta.director })) {
+      if (value == null) continue;
+      const existing = fields.find((node: Record<string, unknown>) => tag in node);
+      if (existing) existing[tag] = [{ '#text': value }];
+      else fields.push({ [tag]: [{ '#text': value }] });
+    }
+    await fs.writeFile(`${base}.nfo`, new XMLBuilder({ preserveOrder: true, ignoreAttributes: false, format: true }).build(parsed), 'utf8');
+  } else await fs.writeFile(`${base}.nfo`, nfo, 'utf-8');
 
   if (meta.thumbnailUrl && (!options.preserveExisting || !await exists(`${base}-thumb.jpg`))) {
     try {

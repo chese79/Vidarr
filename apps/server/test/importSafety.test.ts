@@ -47,8 +47,9 @@ describe('quality upgrade import safety', () => {
   });
 
   it('moves video and its metadata together, preserves supplied NFO, and leaves unrelated files alone', async () => {
+    await prisma.musicVideo.update({ where: { id: videoId }, data: { releaseYear: 1996 } });
     await prisma.settings.update({ where: { id: 1 }, data: { transferMode: 'move' } });
-    await fs.writeFile(sourcePath.replace('.mp4', '.nfo'), '<musicvideo><title>Song</title></musicvideo>');
+    await fs.writeFile(sourcePath.replace('.mp4', '.nfo'), '<musicvideo><title>Wrong title</title><year>2009</year><plot>Keep this plot</plot></musicvideo>');
     await fs.writeFile(sourcePath.replace('.mp4', '-thumb.jpg'), 'artwork');
     await fs.writeFile(sourcePath.replace('.mp4', '.en.srt'), 'subtitles');
     await fs.writeFile(path.join(directory, 'other.nfo'), 'unrelated');
@@ -56,6 +57,8 @@ describe('quality upgrade import safety', () => {
     const result = await importDownloadedFile(videoId, sourcePath, '1080p');
     const base = result.path.replace('.mp4', '');
     await expect(fs.readFile(`${base}.nfo`, 'utf8')).resolves.toContain('<title>Song</title>');
+    await expect(fs.readFile(`${base}.nfo`, 'utf8')).resolves.toContain('<plot>Keep this plot</plot>');
+    await expect(fs.readFile(`${base}.nfo`, 'utf8')).resolves.toContain('<year>1996</year>');
     await expect(fs.readFile(`${base}-thumb.jpg`, 'utf8')).resolves.toBe('artwork');
     await expect(fs.readFile(`${base}.en.srt`, 'utf8')).resolves.toBe('subtitles');
     await expect(fs.access(sourcePath)).rejects.toThrow();
@@ -65,14 +68,26 @@ describe('quality upgrade import safety', () => {
     expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).not.toBeNull();
   });
 
+  it('does not overwrite another video or an untracked file at the computed destination', async () => {
+    await prisma.settings.update({ where: { id: 1 }, data: { namingFormat: 'collision' } });
+    const collision = path.join(path.dirname(oldPath), 'collision.mp4');
+    await fs.writeFile(collision, 'untracked video');
+    await expect(importDownloadedFile(videoId, sourcePath, '1080p')).rejects.toThrow('Destination already exists');
+    const other = await createMusicVideo((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).artistId, { title: 'Other' });
+    await createMusicVideoFile(other.id, { path: collision });
+    await expect(importDownloadedFile(videoId, sourcePath, '1080p')).rejects.toThrow('another video');
+    await expect(fs.readFile(collision, 'utf8')).resolves.toBe('untracked video');
+    await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('new video');
+  });
+
   it('restores metadata and retains a move source if database recording fails', async () => {
     await prisma.settings.update({ where: { id: 1 }, data: { namingFormat: 'old', transferMode: 'move' } });
     await fs.writeFile(oldPath.replace('.mp4', '.nfo'), 'previous metadata');
-    await fs.writeFile(sourcePath.replace('.mp4', '.nfo'), 'new metadata');
+    await fs.writeFile(sourcePath.replace('.mp4', '.nfo'), '<musicvideo><plot>new metadata</plot></musicvideo>');
     vi.spyOn(prisma, '$transaction').mockRejectedValueOnce(new Error('database unavailable'));
     await expect(importDownloadedFile(videoId, sourcePath, '1080p')).rejects.toThrow('database unavailable');
     await expect(fs.readFile(oldPath.replace('.mp4', '.nfo'), 'utf8')).resolves.toBe('previous metadata');
-    await expect(fs.readFile(sourcePath.replace('.mp4', '.nfo'), 'utf8')).resolves.toBe('new metadata');
+    await expect(fs.readFile(sourcePath.replace('.mp4', '.nfo'), 'utf8')).resolves.toBe('<musicvideo><plot>new metadata</plot></musicvideo>');
     await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('new video');
   });
 

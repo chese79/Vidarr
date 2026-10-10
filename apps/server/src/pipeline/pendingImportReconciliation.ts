@@ -1,11 +1,12 @@
 import { prisma, logActivity } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { normalizeTitle } from './normalize.js';
+import { serverDeliveryPathMatches } from './deliveryPath.js';
 
 export async function reconcilePendingImports(): Promise<{ checked: number; confirmed: number }> {
   const pending = await prisma.musicVideo.findMany({
     where: { awaitingServerScanAt: { not: null }, hasFile: true },
-    include: { artist: { include: { rootFolder: { include: { targetConnector: true } } } } },
+    include: { file: true, artist: { include: { rootFolder: { include: { targetConnector: true } } } } },
   });
   const byConnector = new Map<number, typeof pending>();
   for (const video of pending) {
@@ -30,6 +31,7 @@ export async function reconcilePendingImports(): Promise<{ checked: number; conf
       if (!serverVideos.length) continue;
       for (const video of videos) {
         const matches = serverVideos.filter((item) => normalizeTitle(item.artistName) === normalizeTitle(video.artist.name)
+          && serverDeliveryPathMatches(video.file?.path, video.artist.rootFolder.path, item.path)
           && normalizeTitle(item.title) === normalizeTitle(video.title)
           && (video.releaseYear == null || item.releaseYear == null || video.releaseYear === item.releaseYear)
           && (video.durationSeconds == null || item.durationSeconds == null

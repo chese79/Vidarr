@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { prisma } from '../src/db/client.js';
-import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist, createMusicVideo, createLibraryConnector } from './support/db.js';
+import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist, createMusicVideo, createMusicVideoFile, createLibraryConnector } from './support/db.js';
 
 const provider = vi.hoisted(() => ({ fetchVideos: vi.fn() }));
 vi.mock('../src/providers/library/index.js', async (importOriginal) => ({
@@ -51,11 +51,16 @@ describe('syncConnectorVideos identity parsing', () => {
   it('clears delivery pending only for the root folder target server', async () => {
     const { videos } = await catalog('Deftones', ['7 Words']);
     const videoId = videos[0].id;
+    const root = await prisma.rootFolder.findUniqueOrThrow({ where: { id: rootFolderId } });
+    await createMusicVideoFile(videoId, { path: `${root.path}/Deftones/7 Words.mp4` });
     await prisma.musicVideo.update({ where: { id: videoId }, data: { hasFile: true, awaitingServerScanAt: new Date() } });
     provider.fetchVideos.mockResolvedValue([server('a', '7 Words', 'Deftones', '/media/7 Words.mp4')]);
     await syncConnectorVideos(await connector());
     expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).not.toBeNull();
     await prisma.rootFolder.update({ where: { id: rootFolderId }, data: { targetConnectorId: connectorId } });
+    await syncConnectorVideos(await connector());
+    expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).not.toBeNull();
+    provider.fetchVideos.mockResolvedValue([server('a', '7 Words', 'Deftones', '/server/Deftones/7 Words.mp4')]);
     await syncConnectorVideos(await connector());
     expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).toBeNull();
   });

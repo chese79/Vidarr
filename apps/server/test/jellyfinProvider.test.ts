@@ -33,6 +33,16 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe('jellyfinProvider', () => {
+  it('refreshes only the selected video library and preserves existing metadata and images', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal('fetch', fetchMock);
+    await jellyfinProvider.refreshVideoLibrary!(connector({ videoLibraryId: 'video library' }));
+    expect(fetchMock.mock.calls[0][0]).toContain('/Items/video%20library/Refresh?Recursive=true');
+    expect(fetchMock.mock.calls[0][0]).toContain('ReplaceAllMetadata=false');
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    await expect(jellyfinProvider.refreshVideoLibrary!(connector({ videoLibraryId: null }))).rejects.toThrow('Select a Jellyfin');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it('resolves the Jellyfin user separately from the selected music library', async () => {

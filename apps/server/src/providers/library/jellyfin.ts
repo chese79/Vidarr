@@ -262,6 +262,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
   findLibraryItem,
 
   async refreshVideoLibrary(config) {
-    await jellyfinSend(config, 'POST', '/Library/Refresh');
+    if (!config.videoLibraryId) throw new Error('Select a Jellyfin music-video library before requesting its scan.');
+    await jellyfinSend(config, 'POST', `/Items/${encodeURIComponent(config.videoLibraryId)}/Refresh?Recursive=true&MetadataRefreshMode=Default&ImageRefreshMode=Default&ReplaceAllMetadata=false&ReplaceAllImages=false`);
   },
 };

@@ -283,7 +283,7 @@ model ScheduledTask {
 model Settings {
   defaultPlaybackConnectorId Int? // validated enabled Plex/Jellyfin video connector; stale defaults are ignored
   id             Int     @id @default(1)
-  namingFormat   String  @default("{Artist Name}/{Artist Name} - {Video Title} ({Year}) [{Quality}]")
+  namingFormat   String  @default("{Artist Name}/{Video Title} ({Year})/{Artist Name} - {Video Title} ({Year}) [{Quality}]")
   transferMode   String  @default("move") // "hardlink" | "copy" | "move"
   minFreeSpaceMb Int     @default(1024)
   imvdbApiKey    String?

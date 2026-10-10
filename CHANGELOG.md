@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — separate server catalog entries for each video
+
+- Use an artist/video folder layout for the standard naming format, preventing Jellyfin from
+  grouping different songs as alternate versions. Migrate the previous standard format while
+  preserving custom naming formats and transfer preferences.
+- Keep supplied NFO details while aligning artist, title, known release year and director with
+  Vidarr's canonical record. Refuse malformed NFOs and destination collisions without losing files.
+- Refresh the selected Jellyfin video library rather than starting a server-wide scan.
+- Require confirmation of the managed file's relative path, so an older server copy cannot
+  incorrectly complete delivery of a newly imported video.
+
 ### Fixed — video delivery and consistent status
 
 - Default new installations to Move, preserving existing transfer preferences on upgrade.

@@ -25,7 +25,7 @@ describe('settings routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/config', headers: authHeaders() });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
-      namingFormat: '{Artist Name}/{Artist Name} - {Video Title} ({Year}) [{Quality}]',
+      namingFormat: '{Artist Name}/{Video Title} ({Year})/{Artist Name} - {Video Title} ({Year}) [{Quality}]',
       transferMode: 'move',
       minFreeSpaceMb: 1024,
     });
