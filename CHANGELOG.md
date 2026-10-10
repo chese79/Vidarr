@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — authenticated YouTube downloads
+
+- Upload, replace or remove a YouTube cookie file in General Settings. A masked saved indicator
+  confirms configuration without returning session secrets to the browser.
+- Use the saved account session for YouTube searches, metadata, samples and downloads, including
+  private videos the account can watch. Other providers do not receive these cookies.
+- Store only YouTube cookies beside the database, outside the repository; concurrent yt-dlp
+  processes use private temporary copies. Expired sessions require a replacement cookie file.
+
 ### Added — download concurrency and sidebar progress
 
 - Configure simultaneous video downloads in General Settings (default 3). Additional direct and
@@ -18,8 +27,8 @@ under **Unreleased** in the same commit as the change.
 
 - Enable Vidarr's Node runtime for every yt-dlp operation and bundle the matching JavaScript
   challenge solver in Docker. Download failures show the extractor error ahead of warnings.
-- Private YouTube videos still require an accessible alternative source; runtime support does
-  not grant access to private uploads.
+- Private YouTube videos require account access and configured cookies, or an accessible
+  alternative source; runtime support does not grant access to private uploads.
 
 ### Fixed — notify Jellyfin about new filesystem entries
 

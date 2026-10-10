@@ -3,8 +3,24 @@ import type { FastifyInstance } from 'fastify';
 import { UpdateSettingsSchema } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 import { wakeDownloadQueue } from '../pipeline/downloadDispatcher.js';
+import { MAX_COOKIE_BYTES, youtubeCookiesConfigured, saveYoutubeCookies, removeYoutubeCookies } from '../providers/youtube/cookies.js';
 
 export async function settingsRoutes(app: FastifyInstance) {
+  app.get('/api/v1/config/youtube-cookies', async () => ({ configured: await youtubeCookiesConfigured() }));
+  app.put('/api/v1/config/youtube-cookies', { bodyLimit: MAX_COOKIE_BYTES * 2 }, async (req, reply) => {
+    const body = req.body as { cookies?: unknown } | null;
+    if (typeof body?.cookies !== 'string') return reply.code(400).send({ error: 'A cookie file is required' });
+    try { await saveYoutubeCookies(body.cookies); }
+    catch (error) {
+      if (!(error as NodeJS.ErrnoException).code) return reply.code(400).send({ error: (error as Error).message });
+      throw error;
+    }
+    return { configured: true };
+  });
+  app.delete('/api/v1/config/youtube-cookies', async () => {
+    await removeYoutubeCookies();
+    return { configured: false };
+  });
   app.get('/api/v1/config', async () => {
     return serializeSettings(await prisma.settings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } }));
   });

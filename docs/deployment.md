@@ -255,3 +255,29 @@ against the project's own release page before running it.
 
 See [`README.md`](../README.md) for feature documentation and
 [`docs/plan.md`](plan.md) for build history and design rationale.
+
+## YouTube account cookies
+
+In **Settings → General → YouTube account cookies**, upload a Netscape-format `.txt` cookie
+file (maximum 256 KB). Sign into an account that can watch the requested video, then export its
+YouTube cookies following [yt-dlp's YouTube cookie guidance](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies).
+For a durable exported session, follow that guide's separate private/incognito-session procedure.
+Desktop browser login alone does not authenticate the Docker container.
+
+The masked **Cookies configured** indicator confirms that a file was saved, not that YouTube
+has accepted the session. Retry the desired video in Queue/artist acquisition after uploading.
+If the account cannot view a private video, ask its owner for access or choose another source.
+Expired or rotated cookies must be replaced. Uploading a new file replaces the old session;
+**Remove cookies** disables authentication for future requests while active requests finish.
+
+Vidarr stores `youtube-cookies.txt` beside the SQLite database (`/config/youtube-cookies.txt`
+in Docker) with owner-only permissions on Linux. This persists across container updates and
+needs no database migration. Only `youtube.com` and its subdomain cookies are retained; unrelated
+browser sessions are discarded. Treat this file and configuration backups as account credentials.
+Do not commit them or share them in bug reports. Neither the status API nor the UI returns the
+saved cookie contents. Each YouTube yt-dlp process gets a temporary copy that is removed on exit;
+Vimeo and other direct providers continue without YouTube authentication.
+
+Authenticated API endpoints: `GET /api/v1/config/youtube-cookies` returns `{ configured }`,
+`PUT` accepts `{ cookies: "<Netscape file contents>" }`, and `DELETE` removes the saved file.
+All three use the same API-key/session authentication as other settings endpoints.

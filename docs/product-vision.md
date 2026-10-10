@@ -172,6 +172,14 @@ progress and the waiting count. Lowering the limit does not interrupt active tra
 Interrupted direct transfers resume after restart; external-client handles remain intact, and
 uncertain submissions retain a slot until reconciled so they are never submitted twice.
 
+General Settings accepts an optional Netscape-format YouTube cookie file for an account that
+can view the requested videos. The saved session applies only to YouTube search, listing,
+metadata, sample and download requests. It does not bypass private-video permissions or
+change source validation. The UI shows a masked configured indicator and allows replacement
+or removal without exposing stored cookies. Only YouTube-domain cookies are retained beside
+the database; each yt-dlp process uses a private temporary copy to avoid concurrent jar writes.
+New requests use the latest saved session; active requests finish with their existing copy.
+
 ## Media-library delivery
 
 Completed downloads default to Move into an artist/video folder within the configured root with predictable names,

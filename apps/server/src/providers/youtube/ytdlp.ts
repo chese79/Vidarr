@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { cookieSnapshot } from './cookies.js';
 
 // Configurable so the binary doesn't have to be on PATH — matches Sonarr/Radarr's
 // own "path to external tool" settings pattern. Defaults assume PATH (true in the
@@ -55,13 +56,15 @@ function ytDlpFailure(stderr: string, code: number): string {
   return (errors.length ? errors : lines).slice(-5).join(' ') || String(code);
 }
 
-function runYtDlp(
+async function runYtDlp(
   args: string[],
   onProgress?: (fraction: number) => void,
 ): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
+  const cookies = await cookieSnapshot(args);
+  try { return await new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
     // Use the same supported Node runtime as Vidarr, including on native installs.
-    const child = spawn(YTDLP_PATH, ['--js-runtimes', `node:${process.execPath}`, ...args]);
+    const child = spawn(YTDLP_PATH, ['--js-runtimes', `node:${process.execPath}`,
+      ...(cookies ? ['--cookies', cookies.path] : []), ...args]);
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => {
@@ -75,7 +78,7 @@ function runYtDlp(
     child.stderr.on('data', (d) => (stderr += d.toString()));
     child.on('error', reject);
     child.on('close', (code) => resolve({ stdout, stderr, code: code ?? -1 }));
-  });
+  }); } finally { await cookies?.cleanup(); }
 }
 
 export async function listChannelVideos(sourceUrl: string): Promise<YoutubeVideoListing[]> {
