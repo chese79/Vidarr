@@ -349,27 +349,30 @@ export async function artistRoutes(app: FastifyInstance) {
     const refineWhere = Prisma.join(refineConditions, ' AND ');
 
     const filteredCte = Prisma.sql`
-      WITH video_stats AS (
+      WITH library_stats AS (
+        SELECT lv."musicVideoId", MAX(lv."playCount") AS "playCount"
+        FROM "LibraryVideo" lv
+        JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
+        WHERE lv."musicVideoId" IS NOT NULL AND lv."available" = 1
+          AND lv."matchConfidence" IS NULL AND lc."enabled" = 1
+        GROUP BY lv."musicVideoId"
+      ),
+      queue_stats AS (
+        SELECT DISTINCT "musicVideoId" FROM "DownloadQueueItem"
+        WHERE "status" IN ('queued', 'downloading', 'submissionUnknown', 'importing')
+      ),
+      video_stats AS (
         SELECT
           mv."artistId" AS "artistId",
           mv."monitored" AS "isMonitored",
           CASE WHEN mv."hasFile" = 1 THEN 1 ELSE 0 END AS "isLocal",
-          CASE WHEN mv."hasFile" = 1 OR EXISTS (
-            SELECT 1 FROM "LibraryVideo" lv
-            JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
-            WHERE lv."musicVideoId" = mv."id" AND lv."available" = 1 AND lv."matchConfidence" IS NULL AND lc."enabled" = 1
-          ) THEN 1 ELSE 0 END AS "isAvailable",
-          CASE WHEN EXISTS (
-            SELECT 1 FROM "DownloadQueueItem" q
-            WHERE q."musicVideoId" = mv."id" AND q."status" IN ('queued', 'downloading', 'submissionUnknown', 'importing')
-          ) THEN 1 ELSE 0 END AS "isDownloading",
-          COALESCE(
-            (SELECT f."playCount" FROM "MusicVideoFile" f WHERE f."musicVideoId" = mv."id"),
-            (SELECT MAX(lv2."playCount") FROM "LibraryVideo" lv2
-             JOIN "LibraryConnector" lc2 ON lc2."id" = lv2."connectorId"
-             WHERE lv2."musicVideoId" = mv."id" AND lv2."available" = 1 AND lv2."matchConfidence" IS NULL AND lc2."enabled" = 1)
-          ) AS "playCount"
+          CASE WHEN mv."hasFile" = 1 OR ls."musicVideoId" IS NOT NULL THEN 1 ELSE 0 END AS "isAvailable",
+          CASE WHEN qs."musicVideoId" IS NOT NULL THEN 1 ELSE 0 END AS "isDownloading",
+          COALESCE(f."playCount", ls."playCount") AS "playCount"
         FROM "MusicVideo" mv
+        LEFT JOIN library_stats ls ON ls."musicVideoId" = mv."id"
+        LEFT JOIN queue_stats qs ON qs."musicVideoId" = mv."id"
+        LEFT JOIN "MusicVideoFile" f ON f."musicVideoId" = mv."id"
         -- Library counts describe the same preserved inventory as expanded rows.
         -- Catalog review status does not erase ownership or missing-video facts.
       ),

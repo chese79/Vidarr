@@ -14,6 +14,9 @@ expanded artist rows, including catalog-review entries. **Min local videos** cou
 with a local file, including supplementary inventory; server-only availability does not count.
 Both filters apply before pagination and may be combined. The old API `minKnownVideos` parameter
 remains supported, while old Library URLs with that threshold open the renamed local filter.
+Summary queries group enabled, available and confirmed server matches and active downloads before
+joining the video inventory. Multiple server copies or queue records cannot multiply video counts;
+play counts prefer a known local value and otherwise use the highest confirmed server value.
 
 ## Discover
 
