@@ -329,6 +329,9 @@ export const api = {
     remove: (id: number) => request<void>(`/rootfolder/${id}`, { method: 'DELETE' }),
   },
   settings: {
+    youtubeCookies: () => request<{ configured: boolean }>('/config/youtube-cookies'),
+    saveYoutubeCookies: (cookies: string) => request<{ configured: boolean }>('/config/youtube-cookies', { method: 'PUT', body: JSON.stringify({ cookies }) }),
+    removeYoutubeCookies: () => request<{ configured: boolean }>('/config/youtube-cookies', { method: 'DELETE' }),
     get: () => request<Settings>('/config'),
     update: (data: UpdateSettings) =>
       request<Settings>('/config', { method: 'PUT', body: JSON.stringify(data) }),

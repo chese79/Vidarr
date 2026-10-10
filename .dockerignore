@@ -12,3 +12,5 @@ apps/server/prisma/test.db-journal
 apps/server/prisma/test.db-wal
 apps/server/prisma/test.db-shm
 apps/server/.env
+**/youtube-cookies.txt
+**/youtube-cookies.txt.*.tmp

@@ -5,6 +5,8 @@ build/
 *.log
 .env
 .env.local
+youtube-cookies.txt
+youtube-cookies.txt.*.tmp
 apps/server/prisma/dev.db
 apps/server/prisma/dev.db-journal
 apps/server/prisma/test.db

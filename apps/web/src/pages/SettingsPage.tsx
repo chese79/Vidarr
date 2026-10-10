@@ -5,6 +5,7 @@ import { renderNamingFormat } from '@vidarr/shared-types';
 import type { RecommendationProviderConfig, TransferMode } from '@vidarr/shared-types';
 import { LastFmAccountSection } from '../components/LastFmAccountSection';
 import { credentialPlaceholder } from '../credentialFields';
+import { YoutubeCookiesSection } from '../components/YoutubeCookiesSection';
 
 function SecuritySection({ apiKey }: { apiKey: string | null }) {
   const queryClient = useQueryClient();
@@ -444,6 +445,7 @@ export default function SettingsPage() {
         )}
       </form>
 
+      <YoutubeCookiesSection />
       <SecuritySection apiKey={settings.data?.apiKey ?? null} />
       <LocalLoginSection adminUsername={settings.data?.adminUsername ?? null} />
       <GoogleSignOnSection

@@ -32,6 +32,15 @@ describe('settings routes', () => {
     });
   });
 
+  it('requires authentication for cookie status, uploads and removal', async () => {
+    for (const method of ['GET', 'PUT', 'DELETE'] as const) {
+      const res = await app.inject({ method, url: '/api/v1/config/youtube-cookies',
+        ...(method === 'PUT' ? { payload: { cookies: 'secret' } } : {}) });
+      expect(res.statusCode).toBe(401);
+      expect(res.body).not.toContain('secret');
+    }
+  });
+
   it('PUT /api/v1/config updates general settings', async () => {
     const res = await app.inject({
       method: 'PUT',
