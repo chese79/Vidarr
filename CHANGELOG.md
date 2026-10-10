@@ -5,6 +5,20 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — MusicBrainz validation for new artists
+
+- Require a unique MusicBrainz name or alias match for Discover additions; reject unverified
+  overrides and require identity selection for ambiguous names. Last.fm and IMVDb no longer validate additions.
+- Replace Library's IMVDb addition form with a MusicBrainz identity picker and remove Add manually.
+  Confirmed additions still collect all video sources automatically and remain unmonitored initially.
+
+### Added — confirm genres and acquire an artist's catalog from Discover
+
+- Review and select genres for the chosen Discover artist, then use **Confirm Genre & Add All**
+  to save them as user overrides, collect sources, and monitor the artist and all catalog videos.
+- Search/download missing catalog videos, skipping owned videos, pending imports and active downloads.
+  Re-enable previously ignored videos; report individual failures and retain monitoring for retries.
+
 ### Changed — Artist Review ordering
 
 - Sort Artist Review by the total number of suggested matches, descending, before pagination.

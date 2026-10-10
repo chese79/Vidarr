@@ -149,8 +149,9 @@ export const api = {
     stats: (smallThreshold = 1) => request<GenreStats>(`/genres/stats?smallThreshold=${smallThreshold}`),
   },
   artists: {
+    confirmGenresDownloadAll: (id: number, genres: string[]) => request<{ monitoredCount: number; searchedCount: number; grabbed: number; skipped: number; failures: Array<{ musicVideoId: number; reason: string }>; sourceErrors: string[] }>(`/artist/${id}/confirm-genres-download-all`, { method: 'POST', body: JSON.stringify({ genres }) }),
     validateNew: (name: string) => request<{ validated: boolean; sources: string[]; warnings: string[] }>('/artist/validate-new', { method: 'POST', body: JSON.stringify({ name }) }),
-    addNew: (data: { name: string; rootFolderId: number; qualityProfileId: number; allowUnverified: boolean }) => request<{ artist: Artist }>('/artist/add-new', { method: 'POST', body: JSON.stringify(data) }),
+    addNew: (data: { name: string; rootFolderId: number; qualityProfileId: number }) => request<{ artist: Artist }>('/artist/add-new', { method: 'POST', body: JSON.stringify(data) }),
     searchMusicbrainz: (q: string) => request<Array<{ id: string; name: string; sortName: string; type: string | null; country: string | null; disambiguation: string | null }>>(`/artist/musicbrainz/search?q=${encodeURIComponent(q)}`),
     addMusicbrainz: (data: { musicbrainzArtistId: string; rootFolderId: number; qualityProfileId: number }) => request<Artist>('/artist/musicbrainz/add', { method: 'POST', body: JSON.stringify(data) }),
     list: () => request<Artist[]>('/artist'),
