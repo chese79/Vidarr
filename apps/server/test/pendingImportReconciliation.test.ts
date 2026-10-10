@@ -21,6 +21,7 @@ describe('pending import reconciliation', () => {
     const video = await createMusicVideo(artist.id, { title: 'New Video', hasFile: true });
     videoId = video.id;
     await prisma.musicVideo.update({ where: { id: videoId }, data: { awaitingServerScanAt: new Date() } });
+    vi.spyOn(jellyfinProvider, 'refreshVideoLibrary').mockResolvedValue(undefined);
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -38,6 +39,16 @@ describe('pending import reconciliation', () => {
     });
     expect(inventory).toMatchObject({ musicVideoId: videoId, available: true, matchConfidence: null });
     expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).toBeNull();
+  });
+
+  it('retries a failed refresh and still checks for catalog confirmation', async () => {
+    vi.mocked(jellyfinProvider.refreshVideoLibrary!).mockRejectedValueOnce(new Error('server busy'));
+    vi.spyOn(jellyfinProvider, 'fetchVideos').mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { externalId: 'server-video', title: 'New Video', artistName: 'Test Artist' },
+    ]);
+    expect((await reconcilePendingImports()).confirmed).toBe(0);
+    expect((await reconcilePendingImports()).confirmed).toBe(1);
+    expect(jellyfinProvider.refreshVideoLibrary).toHaveBeenCalledTimes(2);
   });
 
   it('does not confirm ambiguous or previously rejected server matches', async () => {

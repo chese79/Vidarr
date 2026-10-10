@@ -5,6 +5,20 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — video delivery and consistent status
+
+- Default new installations to Move, preserving existing transfer preferences on upgrade.
+  Import video, supplied metadata, artwork and subtitles as one recoverable bundle; retain the
+  download until metadata and database recording succeed. Generate missing NFO/artwork.
+- Keep delivery pending until the root's target server confirms cataloging, including unmapped
+  roots. Retry scan notifications every five minutes; linking an enabled Plex/Jellyfin video
+  library also queues existing managed files for reconciliation.
+- Respect artist/video monitoring for automatic quality upgrades and block ignored videos in
+  direct manual downloads. Historical failures no longer mark an owned video as failed.
+- Separate supplementary and inventory counts, label available versus known totals explicitly,
+  and use local play counts (including zero), then the maximum confirmed server count consistently.
+
+
 ### Fixed — Library summary responsiveness
 
 - Aggregate confirmed server ownership, play counts and active downloads once before joining

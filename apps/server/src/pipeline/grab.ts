@@ -23,6 +23,7 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     },
   });
   const directSource = preferredDirectSource(musicVideo.acquisitionSources);
+  if (musicVideo.ignored) throw new Error('Video is ignored; unignore it before downloading.');
   const source = directSource ?? (musicVideo.youtubeVideoId
     ? {
       provider: 'youtube',
@@ -83,7 +84,8 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
     await prisma.downloadQueueItem.delete({ where: { id: queueItem.id } });
     return result;
   } catch (err) {
-    if (downloadedPath) await fs.unlink(downloadedPath).catch(() => {});
+    // A failed import retains the downloaded bundle for recovery; never
+    // discard its only copy merely because recording or metadata failed.
     await prisma.downloadQueueItem.update({
       where: { id: queueItem.id },
       data: { status: 'failed' },
@@ -92,7 +94,7 @@ export async function grabYoutubeVideo(musicVideoId: number): Promise<ImportResu
       data: {
         musicVideoId,
         eventType: 'downloadFailed',
-        data: JSON.stringify({ error: (err as Error).message }),
+        data: JSON.stringify({ error: (err as Error).message, downloadedPath }),
       },
     });
     throw err;
@@ -108,6 +110,8 @@ export async function grabFromIndexer(
   downloadUrl: string,
   quality: string,
 ): Promise<void> {
+  const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: musicVideoId } });
+  if (video.ignored) throw new Error('Video is ignored; unignore it before downloading.');
   // Checked before contacting the download client at all — no point handing
   // it a redundant job we're about to reject.
   if (await hasActiveDownload(musicVideoId)) {

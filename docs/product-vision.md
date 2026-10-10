@@ -166,20 +166,39 @@ require validation.
 
 ## Media-library delivery
 
-Completed downloads are organized into the configured root folder with predictable names,
-metadata sidecars, and artwork. Each root folder should be explicitly associated with the target
-Plex or Jellyfin music-video library when possible. Connector sync preserves this inventory as
+Completed downloads default to Move into the configured root folder with predictable names,
+metadata sidecars, artwork and supplied subtitles. Existing configured Copy/Hardlink preferences
+remain supported and survive upgrades. Video-specific supplied sidecars are renamed with the video;
+unrelated files and symbolic links are not imported. Supplied NFO/artwork is preserved and missing
+metadata is generated. Staging keeps the source intact and backs up replaced files until metadata
+and database recording succeed; a failure restores the previous bundle.
+Each root folder must be associated with an enabled target Plex or Jellyfin music-video library
+to complete delivery, and that server must be able to access the same destination files.
+Unmapped roots may accept files but retain pending delivery, with a configuration warning.
+Connector sync preserves this inventory as
 provenance-aware records and presents each item in Library with media-server artwork and basic
 metadata; availability there remains distinct from Vidarr's local-file ownership state.
 
 After import, Vidarr should request a media-server library refresh, wait for or later reconcile the
 new server item, and surface whether the file is merely on disk or fully available in the player.
 Pending imports are checked against the root folder's selected playback connector every five
-minutes. Only a unique exact artist/title match clears the pending state; empty scans, duplicate
+minutes, retrying scan notifications even after a previous notification failed. Only confirmation
+from that root's target connector clears delivery pending; another server's copy does not complete
+delivery. Linking a root queues existing managed files without confirmed target ownership.
+Only a unique exact artist/title match clears the pending state; empty scans, duplicate
 matches, conflicting year or duration, and previously rejected matches leave it pending for later
 review or retry.
 Existing files and media-server records must never be deleted merely because a connector sync
 temporarily fails.
+
+Known is the number of preserved canonical video records. Available means a managed local file or
+a confirmed available copy on an enabled server. Missing means neither. Supplementary and inventory
+counts are separate, and catalog-review records remain visible and counted. Monitoring controls
+automatic missing-video searches and quality upgrades at both artist and video levels; ignored
+blocks automatic and manual acquisition. Active acquisition takes precedence over history, pending
+server cataloging remains explicit, and historical failed attempts do not label an owned video
+failed. Library and artist detail prefer each local file's known play count, including zero, then
+the maximum confirmed server count; copies are never summed. See [Video status FAQ](video-status-faq.md).
 During a quality upgrade, the previous file remains in place until the replacement is recorded
 successfully; cleanup never removes a prior path outside the configured root folder.
 When the replacement uses the same path, a backup of the previous file survives until metadata

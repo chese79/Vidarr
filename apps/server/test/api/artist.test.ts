@@ -531,8 +531,24 @@ describe('artist routes', () => {
       await prisma.downloadQueueItem.create({ data: { musicVideoId: video.id, sourceType: 'youtube', sourceRef: 'queue-b', status: 'failed' } });
       const get = () => app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() });
       expect((await get()).json().items[0]).toMatchObject({ knownVideoCount: 1, localVideoCount: 1, availableVideoCount: 1, downloadingVideoCount: 1, aggregatePlayCount: 0 });
+      const detail = () => app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}`, headers: authHeaders() });
+      expect((await detail()).json().summary.aggregatePlayCount).toBe(0);
+      const rows = () => app.inject({ method: 'GET', url: `/api/v1/artist/${artist.id}/videos`, headers: authHeaders() });
+      expect((await rows()).json()[0].effectivePlayCount).toBe(0);
       await prisma.musicVideoFile.deleteMany({ where: { musicVideoId: video.id } });
       expect((await get()).json().items[0].aggregatePlayCount).toBe(12);
+      expect((await detail()).json().summary.aggregatePlayCount).toBe(12);
+      expect((await rows()).json()[0].effectivePlayCount).toBe(12);
+    });
+
+    it('counts supplementary and inventory videos separately without changing known totals', async () => {
+      const artist = await createArtist(rootFolderId, qualityProfileId);
+      const extra = await createMusicVideo(artist.id, { title: 'Extra' });
+      const inventory = await createMusicVideo(artist.id, { title: 'Inventory' });
+      await prisma.musicVideo.update({ where: { id: extra.id }, data: { catalogKind: 'supplementary' } });
+      await prisma.musicVideo.update({ where: { id: inventory.id }, data: { catalogKind: 'inventory' } });
+      const result = await app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() });
+      expect(result.json().items[0]).toMatchObject({ knownVideoCount: 2, supplementaryVideoCount: 1, inventoryVideoCount: 1 });
     });
 
     it('counts a media-server-matched video with no local file as available, and uses its play count', async () => {

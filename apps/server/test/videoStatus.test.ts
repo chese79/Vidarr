@@ -14,6 +14,11 @@ function baseInput(overrides: Partial<VideoStatusInput> = {}): VideoStatusInput 
 }
 
 describe('computeVideoStatus', () => {
+  it('does not show historical failure after a successful local or server import', () => {
+    expect(computeVideoStatus(baseInput({ hasFile: true, queueItems: [{ status: 'failed' }] })).acquisition).toBeNull();
+    expect(computeVideoStatus(baseInput({ libraryVideos: [{ available: true, matchConfidence: null }], queueItems: [{ status: 'failed' }] })).acquisition).toBeNull();
+    expect(computeVideoStatus(baseInput({ queueItems: [{ status: 'completed' }, { status: 'failed' }] })).acquisition).toBeNull();
+  });
   it('ownership: none when there is no file and no available library match', () => {
     expect(computeVideoStatus(baseInput()).ownership).toBe('none');
   });

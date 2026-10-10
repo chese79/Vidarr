@@ -223,6 +223,9 @@ stop Vidarr before copying its database file, so recent writes are included.
 
 ## Security
 
+For ownership labels, monitoring rules, metadata transfers and server scan confirmation, see the
+[Video status and server delivery FAQ](docs/video-status-faq.md).
+
 - Every `/api/v1/*` route requires an API key (see "First run" above) — there is no unauthenticated
   access to any data or action.
 - **Don't expose vidarr directly to the internet.** Like Sonarr/Radarr/Lidarr, it's designed to be

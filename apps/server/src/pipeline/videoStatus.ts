@@ -3,6 +3,13 @@ import type { VideoStatus } from '@vidarr/shared-types';
 
 const ACTIVE_STATUSES = new Set(['queued', 'downloading', 'submissionUnknown', 'importing']);
 
+export function effectivePlayCount(file: { playCount: number | null } | null, videos: { available: boolean; matchConfidence: string | null; playCount: number | null }[]): number | null {
+  if (file?.playCount != null) return file.playCount;
+  const counts = videos.filter(video => video.available && video.matchConfidence == null)
+    .map(video => video.playCount).filter((count): count is number => count != null);
+  return counts.length ? Math.max(...counts) : null;
+}
+
 export interface VideoStatusInput {
   hasFile: boolean;
   monitored: boolean;
@@ -41,7 +48,7 @@ export function computeVideoStatus(input: VideoStatusInput): VideoStatus {
     ? active.status as 'queued' | 'downloading' | 'submissionUnknown' | 'importing'
     : input.awaitingServerScanAt
       ? 'awaitingServerScan'
-      : input.queueItems.some((q) => q.status === 'failed')
+      : ownership === 'none' && input.queueItems[0]?.status === 'failed'
         ? 'failed'
         : null;
 

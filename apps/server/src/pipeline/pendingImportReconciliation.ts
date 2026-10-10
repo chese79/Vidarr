@@ -21,6 +21,10 @@ export async function reconcilePendingImports(): Promise<{ checked: number; conf
     const connector = videos[0].artist.rootFolder.targetConnector!;
     const provider = getLibraryConnectorProvider(connector.type);
     if (!provider.fetchVideos) continue;
+    // Retry notification independently: a refresh failure must not prevent
+    // confirmation from an automatic scan, or permanently strand the import.
+    try { await provider.refreshVideoLibrary?.(connector); }
+    catch (err) { await logActivity('warn', 'media-server-refresh', err); }
     try {
       const serverVideos = await provider.fetchVideos(connector);
       if (!serverVideos.length) continue;

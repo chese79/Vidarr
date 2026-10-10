@@ -284,7 +284,7 @@ model Settings {
   defaultPlaybackConnectorId Int? // validated enabled Plex/Jellyfin video connector; stale defaults are ignored
   id             Int     @id @default(1)
   namingFormat   String  @default("{Artist Name}/{Artist Name} - {Video Title} ({Year}) [{Quality}]")
-  transferMode   String  @default("hardlink") // "hardlink" | "copy" | "move"
+  transferMode   String  @default("move") // "hardlink" | "copy" | "move"
   minFreeSpaceMb Int     @default(1024)
   imvdbApiKey    String?
   apiKey         String? // vidarr's own API key — required on every /api/v1/* request except /health. Generated on first boot (see pipeline/auth.ts); matches Sonarr/Radarr's own single-user API-key model.

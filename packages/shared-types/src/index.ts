@@ -117,6 +117,7 @@ export const ArtistSummarySchema = z.object({
   monitoredVideoCount: z.number().int(),
   unmatchedVideoCount: z.number().int(),
   supplementaryVideoCount: z.number().int(),
+  inventoryVideoCount: z.number().int().default(0),
   // Distinct from 0 — an artist with videos but no known play-count data
   // anywhere is `null`, not "played zero times".
   aggregatePlayCount: z.number().int().nullable(),
@@ -184,6 +185,7 @@ export const MusicVideoSchema = z.object({
   hasFile: z.boolean(),
   thumbnailUrl: z.string().nullable(),
   catalogStatus: z.string(),
+  catalogKind: z.enum(['official', 'supplementary', 'inventory']).optional(),
   awaitingServerScanAt: z.string().nullable(),
   addedAt: z.string(),
 });

@@ -4,12 +4,18 @@ import { prisma } from '../db/client.js';
 import { InvalidRootFolderPathError, normalizeRootFolderPath } from '../pipeline/rootFolderPath.js';
 
 export async function rootFolderRoutes(app: FastifyInstance) {
+  async function validTarget(id: number | null | undefined) {
+    return id == null || !!await prisma.libraryConnector.findFirst({ where: {
+      id, enabled: true, type: { in: ['plex', 'jellyfin'] }, videoLibraryId: { not: null },
+    } });
+  }
   app.get('/api/v1/rootfolder', async () => {
     return prisma.rootFolder.findMany();
   });
 
   app.post('/api/v1/rootfolder', async (req, reply) => {
     const body = CreateRootFolderSchema.parse(req.body);
+    if (!await validTarget(body.targetConnectorId)) return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin video library.' });
     try {
       body.path = normalizeRootFolderPath(body.path);
     } catch (err) {
@@ -24,6 +30,7 @@ export async function rootFolderRoutes(app: FastifyInstance) {
   app.put('/api/v1/rootfolder/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const body = CreateRootFolderSchema.partial().parse(req.body);
+    if (!await validTarget(body.targetConnectorId)) return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin video library.' });
     if (body.path !== undefined) {
       try {
         body.path = normalizeRootFolderPath(body.path);
@@ -32,7 +39,14 @@ export async function rootFolderRoutes(app: FastifyInstance) {
         throw err;
       }
     }
-    return prisma.rootFolder.update({ where: { id }, data: body });
+    const folder = await prisma.rootFolder.update({ where: { id }, data: body });
+    if (body.targetConnectorId != null) {
+      await prisma.musicVideo.updateMany({ where: {
+        artist: { rootFolderId: id }, hasFile: true,
+        libraryVideos: { none: { connectorId: body.targetConnectorId, available: true, matchConfidence: null } },
+      }, data: { awaitingServerScanAt: new Date() } });
+    }
+    return folder;
   });
 
   app.delete('/api/v1/rootfolder/:id', async (req, reply) => {

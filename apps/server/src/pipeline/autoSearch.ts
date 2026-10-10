@@ -256,6 +256,7 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
 // floor for the initial grab).
 export async function runQualityUpgradeSearch(): Promise<{ upgraded: number; skipped: number }> {
   const filesBelowCutoff = await prisma.musicVideoFile.findMany({
+    where: { musicVideo: { monitored: true, ignored: false, artist: { monitored: true } } },
     include: {
       quality: true,
       musicVideo: {

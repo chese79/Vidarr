@@ -34,6 +34,24 @@ vi.mock('../src/pipeline/grab.js', () => ({
 }));
 
 describe('autoSearchAndGrab — YouTube candidate validation', () => {
+  it('does not automatically upgrade an unmonitored artist, an unmonitored video, or an ignored video', async () => {
+    const { runQualityUpgradeSearch } = await import('../src/pipeline/autoSearch.js');
+    const { grabYoutubeVideo } = await import('../src/pipeline/grab.js');
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id, { youtubeVideoId: 'verified' });
+    const low = await createQuality({ name: 'Low', weight: 0 });
+    await prisma.musicVideoFile.create({ data: { musicVideoId: video.id, path: '/media/song.mp4', originalFilename: 'song.mp4', sizeBytes: 10n, qualityId: low.id } });
+    for (const flag of ['artist', 'video', 'ignored']) {
+      await prisma.artist.update({ where: { id: artist.id }, data: { monitored: flag !== 'artist' } });
+      await prisma.musicVideo.update({ where: { id: video.id }, data: { monitored: flag !== 'video', ignored: flag === 'ignored' } });
+      expect((await runQualityUpgradeSearch()).upgraded).toBe(0);
+    }
+    expect(grabYoutubeVideo).not.toHaveBeenCalled();
+    await prisma.artist.update({ where: { id: artist.id }, data: { monitored: true } });
+    await prisma.musicVideo.update({ where: { id: video.id }, data: { monitored: true, ignored: false } });
+    vi.mocked(grabYoutubeVideo).mockResolvedValue({ path: '/media/song.mp4', sizeBytes: 10n });
+    expect((await runQualityUpgradeSearch()).upgraded).toBe(1);
+  });
   let rootFolderId: number;
   let qualityProfileId: number;
 

@@ -29,7 +29,7 @@ export interface LibraryMetadata {
 // Plex's own Personal Media agent does not read this NFO format — the local
 // thumbnail written alongside is what it (and Jellyfin/Kodi) picks up for
 // artwork instead.
-export async function writeLibraryMetadata(videoPath: string, meta: LibraryMetadata): Promise<void> {
+export async function writeLibraryMetadata(videoPath: string, meta: LibraryMetadata, options: { preserveExisting?: boolean } = {}): Promise<void> {
   const base = videoPath.slice(0, -path.extname(videoPath).length);
   const nfo = [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -43,9 +43,10 @@ export async function writeLibraryMetadata(videoPath: string, meta: LibraryMetad
   ]
     .filter((line): line is string => line !== null)
     .join('\n');
-  await fs.writeFile(`${base}.nfo`, nfo, 'utf-8');
+  const exists = async (file: string) => fs.access(file).then(() => true, () => false);
+  if (!options.preserveExisting || !await exists(`${base}.nfo`)) await fs.writeFile(`${base}.nfo`, nfo, 'utf-8');
 
-  if (meta.thumbnailUrl) {
+  if (meta.thumbnailUrl && (!options.preserveExisting || !await exists(`${base}-thumb.jpg`))) {
     try {
       const res = await fetch(meta.thumbnailUrl);
       if (res.ok) {
