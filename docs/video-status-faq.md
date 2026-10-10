@@ -86,3 +86,17 @@ ownership or download progress.
 Library and artist detail use the managed file's known play count first, including zero. Otherwise
 they use the highest count among confirmed available server copies. Multiple copies are not added
 together. Unknown remains unknown, rather than becoming zero.
+
+## Queue results and persistent progress
+
+The left menu stays visible while the main panel scrolls. Its navigation can scroll independently
+when the screen is short or Settings is expanded; the download panel remains below it. When many
+downloads are active, the progress panel itself can scroll. It updates every three seconds, so a
+very short download can finish between polls.
+
+Queue lists waiting, downloading, importing and uncertain submissions. Failed attempts leave that
+display but remain recorded. Below the queue are the three most recent completed imports, followed
+by the three most recent failures. **View all completed** and **View all failures** open paginated
+lists of every retained matching History event. Completed results include manual imports and quality
+upgrades; repeated attempts remain separate so an earlier failure survives a later success. Dates
+are the completion/failure timestamps, with quality or error details alongside them.

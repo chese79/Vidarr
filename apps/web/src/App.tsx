@@ -18,6 +18,9 @@ import HistoryPage from './pages/HistoryPage';
 import SystemTasksPage from './pages/SystemTasksPage';
 import GenresPage from './pages/GenresPage';
 import DownloadProgress from './components/DownloadProgress';
+import { useEffect } from 'react';
+import { scrollContentTo } from './contentScroll';
+import { QueueResultsPage } from './components/QueueResults';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
@@ -44,6 +47,7 @@ const SETTINGS_NAV_ITEMS = [
 
 export default function App() {
   const location = useLocation();
+  useEffect(() => { scrollContentTo(0); }, [location.pathname]);
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -71,7 +75,7 @@ export default function App() {
         </nav>
         <DownloadProgress />
       </aside>
-      <main className="content">
+      <main className="content" id="main-content">
         <Routes>
           <Route path="/" element={<LibraryPage />} />
           <Route path="/artist/:id" element={<ArtistDetailPage />} />
@@ -87,6 +91,8 @@ export default function App() {
           <Route path="/indexers" element={<IndexersPage />} />
           <Route path="/download-clients" element={<DownloadClientsPage />} />
           <Route path="/queue" element={<QueuePage />} />
+          <Route path="/queue/completed" element={<QueueResultsPage section="completed" />} />
+          <Route path="/queue/failures" element={<QueueResultsPage section="failures" />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/system" element={<SystemTasksPage />} />

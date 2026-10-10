@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — persistent sidebar and queue results
+
+- Keep the left menu visible while the main panel scrolls. Navigation scrolls independently
+  on short screens; active download progress stays anchored below it.
+- Remove failed attempts from the active queue display. Show the three latest completed videos,
+  then the three latest failures below it, with links to paginated complete result lists.
+- Retain completed imports and failure attempts in existing History with their event timestamps,
+  quality or error details. Preserve Discover's return position within the scrolling main panel.
+
 ### Added — authenticated YouTube downloads
 
 - Upload, replace or remove a YouTube cookie file in General Settings. A masked saved indicator

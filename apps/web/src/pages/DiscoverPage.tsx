@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import ConfirmGenreDownloadAll from '../components/ConfirmGenreDownloadAll';
+import { contentScrollTop, scrollContentTo } from '../contentScroll';
 
 const SOURCE_LABEL: Record<string, string> = { library: 'Your library', lastfm: 'Last.fm', spotify: 'Spotify', musicbrainz: 'MusicBrainz' };
 const LETTERS = ['#', ...Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index))];
@@ -17,7 +18,7 @@ export default function DiscoverPage() {
   const location = useLocation();
   useEffect(() => {
     if (typeof location.state?.discoverScroll === "number") {
-      const frame = requestAnimationFrame(() => window.scrollTo(0, location.state.discoverScroll));
+      const frame = requestAnimationFrame(() => scrollContentTo(location.state.discoverScroll));
       return () => cancelAnimationFrame(frame);
     }
   }, [location.state]);
@@ -37,7 +38,7 @@ export default function DiscoverPage() {
   function review(id: number, collectSources: boolean) {
     const copy = new URLSearchParams(params);
     copy.set('libraryArtist', String(id));
-    navigate(`/artist/${id}`, { state: { discoverReturnTo: `/discover?${copy}`, discoverScroll: window.scrollY, collectSources } });
+    navigate(`/artist/${id}`, { state: { discoverReturnTo: `/discover?${copy}`, discoverScroll: contentScrollTop(), collectSources } });
   }
   const addReview = useMutation({
     mutationFn: (mbid: string) => {
@@ -50,7 +51,7 @@ export default function DiscoverPage() {
   const recommendations = useQuery({ queryKey: ['recommendations'], queryFn: api.recommendations.list });
   useEffect(() => {
     if (recommendations.isSuccess && typeof location.state?.discoverScroll === 'number') {
-      const frame = requestAnimationFrame(() => window.scrollTo(0, location.state.discoverScroll));
+      const frame = requestAnimationFrame(() => scrollContentTo(location.state.discoverScroll));
       return () => cancelAnimationFrame(frame);
     }
   }, [recommendations.isSuccess, location.state]);

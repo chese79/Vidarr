@@ -169,6 +169,12 @@ controls the simultaneous video limit (default three, from one to twenty), share
 transfers and Vidarr-submitted external-client jobs. A request acknowledges queue acceptance;
 completion and failure are reported by Queue and video status. The sidebar shows active transfer
 progress and the waiting count. Lowering the limit does not interrupt active transfers.
+The sidebar stays within the viewport while the main content scrolls independently. Navigation
+can scroll separately on short screens, leaving download progress accessible below it.
+Queue shows active requests, followed by the three latest completed imports and then the three
+latest failed attempts. Each result section links to a paginated full list drawn from History;
+failed queue records and history are retained rather than deleted. Results use event timestamps
+and retain repeated attempts and upgrades, including completion after an earlier failure.
 Interrupted direct transfers resume after restart; external-client handles remain intact, and
 uncertain submissions retain a slot until reconciled so they are never submitted twice.
 
