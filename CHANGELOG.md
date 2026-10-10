@@ -5,6 +5,13 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — Library missing and local-video filters
+
+- Count the same preserved videos in Library summaries and expanded rows, including catalog-review
+  entries, so Missing Videos no longer incorrectly returns an empty library.
+- Replace Min known videos with Min local videos, using local-file ownership across the artist's
+  inventory. Server-only ownership does not count as local; filtering applies before pagination.
+
 ### Changed — MusicBrainz validation for new artists
 
 - Require a unique MusicBrainz name or alias match for Discover additions; reject unverified

@@ -460,6 +460,32 @@ describe('artist routes', () => {
       expect(names).toEqual(['Complete', 'Incomplete']);
     });
 
+    it('filters missing and local videos from the same preserved inventory shown in Library rows', async () => {
+      const local = await createArtist(rootFolderId, qualityProfileId, { name: 'Local' });
+      const localVideo = await createMusicVideo(local.id, { title: 'Local review', hasFile: true });
+      await prisma.musicVideo.update({ where: { id: localVideo.id }, data: { catalogStatus: 'removedReview' } });
+      const missing = await createMusicVideo(local.id, { title: 'Missing review' });
+      await prisma.musicVideo.update({ where: { id: missing.id }, data: { catalogStatus: 'removedReview' } });
+      const server = await createArtist(rootFolderId, qualityProfileId, { name: 'Server' });
+      const serverVideo = await createMusicVideo(server.id);
+      await createLibraryVideo((await createLibraryConnector()).id, { musicVideoId: serverVideo.id });
+      const supplementary = await createArtist(rootFolderId, qualityProfileId, { name: 'Supplementary' });
+      const extra = await createMusicVideo(supplementary.id, { hasFile: true });
+      await prisma.musicVideo.update({ where: { id: extra.id }, data: { catalogKind: 'inventory' } });
+      const get = (query: string) => app.inject({ method: 'GET', url: '/api/v1/artist/summary?' + query, headers: authHeaders() });
+      const missingResult = (await get('hasMissing=true')).json();
+      expect(missingResult.items.map((row: { name: string }) => row.name)).toEqual(['Local']);
+      expect(missingResult.items[0]).toMatchObject({ knownVideoCount: 2, localVideoCount: 1, missingVideoCount: 1 });
+      const localResult = (await get('minLocalVideos=1&pageSize=1')).json();
+      expect(localResult.total).toBe(2);
+      expect(localResult.items[0].name).toBe('Local');
+      expect((await get('minLocalVideos=1&page=2&pageSize=1')).json().items[0].name).toBe('Supplementary');
+      expect((await get('minLocalVideos=2')).json().total).toBe(0);
+      expect((await get('minLocalVideos=1&hasMissing=true')).json().items.map((row: { name: string }) => row.name)).toEqual(['Local']);
+      expect((await get('minLocalVideos=0')).json().total).toBe(3);
+      expect((await get('minLocalVideos=-1')).statusCode).toBe(400);
+    });
+
     it('paginates and reports a total independent of the current page size', async () => {
       for (let i = 0; i < 5; i += 1) {
         await createArtist(rootFolderId, qualityProfileId, { name: `Artist ${i}`, sortName: `Artist ${i}` });

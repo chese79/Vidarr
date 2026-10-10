@@ -65,8 +65,13 @@ MusicBrainz recording credits can support artist matching, but audio recordings 
 music-video catalog entries. Artist channel links are discovery hints, not proof that an individual
 upload is an official video.
 
-The selected music-video library also establishes the owned-video inventory. Vidarr should know
-which canonical videos already exist in each media server, even when Vidarr did not originally
+The selected music-video library also establishes the owned-video inventory.
+Library summary and missing filters cover the same preserved video records as expanded rows,
+including entries pending catalog review. Min local videos counts local-file ownership only,
+independently of server availability or catalog review status. IMVDb completeness remains a
+separate catalog fact.
+
+Vidarr should know which canonical videos already exist in each media server, even when Vidarr did not originally
 download them. Local file ownership and availability in a connected server are related but
 distinct states. A local video matching the artist but not an IMVDb video remains visible as
 inventory alongside the official catalog and is not silently discarded or counted as expected.

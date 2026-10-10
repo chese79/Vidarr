@@ -67,6 +67,7 @@ interface ArtistSummaryRow {
   musicbrainzCandidateScore: number | null;
   posterUrl: string | null;
   knownVideoCount: number;
+  localVideoCount: number;
   availableVideoCount: number;
   missingVideoCount: number;
   downloadingVideoCount: number;
@@ -335,6 +336,9 @@ export async function artistRoutes(app: FastifyInstance) {
     if (query.minKnownVideos != null) {
       refineConditions.push(Prisma.sql`"knownVideoCount" >= ${query.minKnownVideos}`);
     }
+    if (query.minLocalVideos != null) {
+      refineConditions.push(Prisma.sql`"localVideoCount" >= ${query.minLocalVideos}`);
+    }
     if (query.minPlayCount != null) {
       refineConditions.push(Prisma.sql`COALESCE("aggregatePlayCount", 0) >= ${query.minPlayCount}`);
     }
@@ -349,6 +353,7 @@ export async function artistRoutes(app: FastifyInstance) {
         SELECT
           mv."artistId" AS "artistId",
           mv."monitored" AS "isMonitored",
+          CASE WHEN mv."hasFile" = 1 THEN 1 ELSE 0 END AS "isLocal",
           CASE WHEN mv."hasFile" = 1 OR EXISTS (
             SELECT 1 FROM "LibraryVideo" lv
             JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
@@ -365,12 +370,14 @@ export async function artistRoutes(app: FastifyInstance) {
              WHERE lv2."musicVideoId" = mv."id" AND lv2."available" = 1 AND lv2."matchConfidence" IS NULL AND lc2."enabled" = 1)
           ) AS "playCount"
         FROM "MusicVideo" mv
-        WHERE mv."catalogKind" = 'official' AND mv."catalogStatus" = 'active'
+        -- Library counts describe the same preserved inventory as expanded rows.
+        -- Catalog review status does not erase ownership or missing-video facts.
       ),
       artist_stats AS (
         SELECT
           "artistId",
           COUNT(*) AS "known",
+          SUM("isLocal") AS "local",
           SUM("isAvailable") AS "available",
           SUM("isDownloading") AS "downloading",
           SUM("isMonitored") AS "monitored",
@@ -393,6 +400,7 @@ export async function artistRoutes(app: FastifyInstance) {
           (SELECT c."score" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = a."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateScore",
           a."posterUrl" AS "posterUrl",
           COALESCE(s."known", 0) AS "knownVideoCount",
+          COALESCE(s."local", 0) AS "localVideoCount",
           COALESCE(s."available", 0) AS "availableVideoCount",
           COALESCE(s."known", 0) - COALESCE(s."available", 0) AS "missingVideoCount",
           COALESCE(s."downloading", 0) AS "downloadingVideoCount",
@@ -461,6 +469,7 @@ export async function artistRoutes(app: FastifyInstance) {
       musicbrainzCandidateScore: row.musicbrainzCandidateScore,
       hasImage: Boolean(row.posterUrl) || imageableNameSet.has(normalizeTitle(row.name)),
       knownVideoCount: Number(row.knownVideoCount),
+      localVideoCount: Number(row.localVideoCount),
       availableVideoCount: Number(row.availableVideoCount),
       missingVideoCount: Number(row.missingVideoCount),
       downloadingVideoCount: Number(row.downloadingVideoCount),

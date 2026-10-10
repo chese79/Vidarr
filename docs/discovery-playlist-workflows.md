@@ -8,7 +8,15 @@ Artist Review lists artists with the most suggested matches first. Sorting appli
 and within search results, with name and ID breaking ties. Counts include all suggested matches;
 the expandable preview continues to show only the three highest-scoring candidates.
 
+## Library filters
+Library's **Has missing videos** filter uses ownership across the preserved videos displayed in
+expanded artist rows, including catalog-review entries. **Min local videos** counts only records
+with a local file, including supplementary inventory; server-only availability does not count.
+Both filters apply before pagination and may be combined. The old API `minKnownVideos` parameter
+remains supported, while old Library URLs with that threshold open the renamed local filter.
+
 ## Discover
+
 
 For the artist chosen in **Existing artists**, review the genre checkboxes, refresh them from sources
 or add a genre, then click **Confirm Genre & Add All**. This saves the selected genres as user
