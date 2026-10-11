@@ -13,10 +13,13 @@ function details(item: HistoryEntry): string {
 }
 
 export function QueueResultsTable({ items, failed }: { items: HistoryEntry[]; failed: boolean }) {
-  return <table><thead><tr><th>Date</th><th>Artist</th><th>Video</th><th>{failed ? 'Error' : 'Quality'}</th></tr></thead>
+  return <table><thead><tr><th>Date</th><th>Artist</th><th>Video</th><th>{failed ? 'Error' : 'Quality'}</th><th>{failed ? 'Next step' : 'Current delivery'}</th></tr></thead>
     <tbody>{items.map(item => <tr key={item.id}>
       <td>{new Date(item.date).toLocaleString()}</td><td>{item.musicVideo.artist.name}</td>
       <td>{item.musicVideo.title}</td><td>{details(item)}</td>
+      <td>{failed ? <Link to={item.musicVideo.artist.id ? `/artist/${item.musicVideo.artist.id}` : '/library'}>Review sources / retry</Link> :
+        item.deliveryStatus === 'readyToPlay' ? 'Ready to play on target server' :
+          item.deliveryStatus === 'awaitingServerCataloging' ? 'Imported · awaiting server cataloging' : 'Imported · server readiness unconfirmed'}</td>
     </tr>)}</tbody></table>;
 }
 
@@ -26,6 +29,7 @@ export function RecentQueueResults({ section }: { section: 'completed' | 'failur
   return <section aria-label={section === 'completed' ? 'Recently completed' : 'Recent failures'} style={{ marginTop: 32 }}>
     <div className="page-header"><h3>{section === 'completed' ? 'Recently completed' : 'Recent failures'}</h3>
       <Link to={`/queue/${section}`}>View all {section}</Link></div>
+    {section === 'completed' && <p className="empty-state">Completed downloads are successful imports. Server cataloging is confirmed separately; delivery below shows the video's current state.</p>}
     {results.isPending ? <p role="status">Loading…</p> : results.isError ? <p role="alert">Could not load {section}.</p> :
       results.data.items.length ? <QueueResultsTable items={results.data.items} failed={section === 'failures'} /> :
         <p className="empty-state">{section === 'completed' ? 'No completed videos yet.' : 'No failures.'}</p>}

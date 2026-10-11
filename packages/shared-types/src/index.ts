@@ -99,6 +99,10 @@ export type UpdateArtist = z.infer<typeof UpdateArtistSchema>;
 
 export const ArtistSummarySchema = z.object({
   id: z.number().int(),
+  addedAt: z.string().optional(),
+  videoInventoryStatus: z.string().optional(),
+  videoInventoryError: z.string().nullable().optional(),
+  pendingVideoReviewCount: z.number().int().default(0),
   name: z.string(),
   sortName: z.string(),
   genre: z.string().nullable(),
@@ -137,6 +141,7 @@ export const ArtistSummaryListSchema = z.object({
 export type ArtistSummaryList = z.infer<typeof ArtistSummaryListSchema>;
 
 export const ArtistSummaryQuerySchema = z.object({
+  hideWithoutVideos: z.enum(['true', 'false']).optional(),
   search: z.string().optional(),
   genre: z.string().optional(),
   monitored: z.enum(['true', 'false']).optional(),
@@ -731,12 +736,13 @@ export const ActivityLogEntrySchema = z.object({
 export type ActivityLogEntry = z.infer<typeof ActivityLogEntrySchema>;
 
 export const HistoryEntrySchema = z.object({
+  deliveryStatus: z.enum(['awaitingServerCataloging', 'readyToPlay', 'localOnly']).optional(),
   id: z.number().int(),
   musicVideoId: z.number().int(),
   eventType: z.string(),
   date: z.string(),
   data: z.string().nullable(),
-  musicVideo: z.object({ title: z.string(), artist: z.object({ name: z.string() }) }),
+  musicVideo: z.object({ title: z.string(), artist: z.object({ id: z.number().int().optional(), name: z.string() }) }),
 });
 export type HistoryEntry = z.infer<typeof HistoryEntrySchema>;
 

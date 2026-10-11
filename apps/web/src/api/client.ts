@@ -69,6 +69,7 @@ import type {
 } from '@vidarr/shared-types';
 
 export interface ArtistSummaryParams {
+  hideWithoutVideos?: boolean;
   search?: string;
   genre?: string;
   monitored?: boolean;
@@ -92,7 +93,7 @@ export interface QueueItem {
   error?: string | null;
   quality: string | null;
   addedAt: string;
-  musicVideo: { title: string; artist: { name: string } };
+  musicVideo: { title: string; artist: { id: number; name: string } };
 }
 
 const API_KEY_STORAGE_KEY = 'vidarr_api_key';
@@ -224,12 +225,16 @@ export const api = {
       channels: Array<{ id: number; url: string; lastPolledAt: string | null }>;
       checkedAt: string | null;
       error: string | null;
+      status: string;
+      attemptedAt: string | null;
+      completedAt: string | null;
     }>(`/artist/${id}/video-inventory/summary`),
     collectVideoInventory: (id: number) => request<{
       official: number; approvedOther: number; pendingYoutube: number; pendingLocal: number; errors: string[];
     }>(`/artist/${id}/video-inventory/collect`, { method: 'POST' }),
     summary: (params: ArtistSummaryParams = {}) => {
       const qs = new URLSearchParams();
+      if (params.hideWithoutVideos !== undefined) qs.set('hideWithoutVideos', String(params.hideWithoutVideos));
       if (params.search) qs.set('search', params.search);
       if (params.genre) qs.set('genre', params.genre);
       if (params.monitored !== undefined) qs.set('monitored', String(params.monitored));
@@ -491,6 +496,8 @@ export const api = {
       }),
   },
   queue: {
+    reconcile: (id: number, body: { action: 'attach'; externalRef: string; verified: true } | { action: 'notSubmitted'; verified: true }) =>
+      request<{ ok: boolean }>(`/queue/${id}/reconcile`, { method: 'POST', body: JSON.stringify(body) }),
     list: () => request<QueueItem[]>('/queue?activeOnly=true'),
     results: (section: 'completed' | 'failures', page = 1, pageSize = 50) =>
       request<{ total: number; page: number; pageSize: number; items: HistoryEntry[] }>(`/queue/${section}?page=${page}&pageSize=${pageSize}`),

@@ -8,6 +8,12 @@ catalog and the playback destinations for the finished collection.
 
 ## Canonical catalog
 
+Workflow changes must preserve each required outcome and expose the next step. See
+[process flows](process-flows.md) for the complete sequences and the shortcut-check rule.
+Library hides empty artists by default only when available, known and unmatched counts are all zero;
+the highlighted checkbox can reveal them. Addition explicitly reveals the artist before collection
+finishes, and a New badge lasts seven days from its original added date.
+
 Vidarr first observes artists from configured audio libraries, video libraries, manual additions,
 and discovery services. An observation is not itself a canonical identity. The preferred identity
 pipeline is:
@@ -150,9 +156,14 @@ Metadata refresh matches a known IMVDb identity before considering a title. It a
 legacy record only when that incoming title is unique, and never reassigns a known IMVDb identity
 by title. Same-title collisions receive stable `Version N` display labels, preserving the existing
 artist/title database key and giving each version a separate import filename.
+Source checks persist progress and attempt/success times separately. Partial and failed runs retain
+existing records and retry after ten minutes; interrupted runs become eligible after the same cooldown.
+Other source checks continue after identity enrichment fails. Manual retries share an already-running
+collection, and source logs identify the artist, collection run and provider stage.
+
 Connector-confirmed artists enter a persistent source-check queue as soon as the connector sync
 finishes. The scheduler checks new artists first in bounded batches, continuing while work remains, and also backfills confirmed
-artists from older catalogs. One local-file scan when the queue drains covers all confirmed artists; each
+artists from older catalogs. A shared local-file scan per bounded batch covers all confirmed artists; each
 artist records the latest check time and any provider error so an empty catalog can be
 distinguished from a scan that has not run.
 

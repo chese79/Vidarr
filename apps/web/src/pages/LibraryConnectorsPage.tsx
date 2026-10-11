@@ -443,9 +443,11 @@ export default function LibraryConnectorsPage() {
 
   async function handleTest(id: number) {
     setStatus((s) => ({ ...s, [id]: 'Testing…' }));
-    const result = await api.libraryConnectors.test(id);
-    setStatus((s) => ({ ...s, [id]: result.ok ? 'Connection OK' : `Failed: ${result.message}` }));
-    invalidate();
+    try {
+      const result = await api.libraryConnectors.test(id);
+      setStatus((s) => ({ ...s, [id]: result.ok ? 'Connection OK. Select libraries, map a root folder and Sync to load inventory.' : `Failed: ${result.message}` }));
+    } catch (err) { setStatus((s) => ({ ...s, [id]: `Connection test failed: ${(err as Error).message}` })); }
+    finally { invalidate(); }
   }
 
   async function handleSync(id: number) {
@@ -454,7 +456,7 @@ export default function LibraryConnectorsPage() {
       const result = await api.libraryConnectors.sync(id);
       setStatus((s) => ({
         ...s,
-        [id]: `Synced ${result.artistCount} artists, ${result.recordingCount} audio recordings, ${result.videoCount} videos; ${result.recommendationCount} recommendations`,
+        [id]: `Synced ${result.artistCount} artists, ${result.recordingCount} audio recordings, ${result.videoCount} videos; ${result.recommendationCount} recommendations. Next: review uncertain artists and videos.`,
       }));
       queryClient.invalidateQueries({ queryKey: ['libraryVideos'] });
       queryClient.invalidateQueries({ queryKey: ['recommendations'] });
@@ -512,6 +514,7 @@ export default function LibraryConnectorsPage() {
       <div className="page-header">
         <h2>Library Connectors</h2>
       </div>
+      <p className="empty-state">Test connection → select music/video libraries → map a root folder → Sync and review uncertain inventory. A successful connection test does not load the library.</p>
 
       <form className="card" onSubmit={handleSubmit}>
         <div className="form-row">

@@ -27,6 +27,7 @@ export function LastFmAccountSection() {
       <p>Playback from <strong>all users</strong> in every enabled Jellyfin or Plex connector’s selected
         music-video library goes to this one account. Other libraries and historical play counts are excluded.</p>
       {account?.linked && <p>Linked to <strong>{account.username}</strong>.</p>}
+      {account?.linked && !account.scrobblingEnabled && <p role="status">Account linked. Next: enable playback reporting below when you want to send scrobbles.</p>}
       <div className="form-row">
         <button type="button" disabled={busy} onClick={() => start.mutate()}>
           {start.isPending ? 'Starting…' : account?.linked ? 'Link another account' : 'Link account'}

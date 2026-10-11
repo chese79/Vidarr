@@ -35,6 +35,20 @@ describe('Discover artist addition and validation', () => {
   });
   const post = (path: string, payload: object) => app.inject({ method: 'POST', url: `/api/v1/artist/${path}`, headers: authHeaders(), payload });
 
+  it('saves a visible zero-video artist before background collection finishes and revalidates existing identity', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof collectArtistVideoInventory>>) => void;
+    vi.mocked(collectArtistVideoInventory).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const added = await post('musicbrainz/add', { musicbrainzArtistId: metadata.id, rootFolderId, qualityProfileId });
+    expect(added.statusCode).toBe(200);
+    const summary = await app.inject({ url: '/api/v1/artist/summary?search=Example&hideWithoutVideos=false', headers: authHeaders() });
+    expect(summary.json()).toMatchObject({ total: 1, items: [{ id: added.json().id, knownVideoCount: 0 }] });
+    expect(collectArtistVideoInventory).toHaveBeenCalledWith(added.json().id, { enrichIdentity: true, metadata });
+    finish({ official: 0, approvedOther: 0, pendingYoutube: 0, pendingLocal: 0, errors: [] });
+    await prisma.artist.update({ where: { id: added.json().id }, data: { musicbrainzMatchStatus: 'failed', monitored: true } });
+    const reused = await post('musicbrainz/add', { musicbrainzArtistId: metadata.id, rootFolderId, qualityProfileId });
+    expect(reused.json()).toMatchObject({ id: added.json().id, monitored: true, musicbrainzMatchStatus: 'confirmed' });
+  });
+
   it('confirms genres and monitors the full collected catalog while skipping owned, pending and active videos', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId, { monitored: false });
     await prisma.artist.update({ where: { id: artist.id }, data: { musicbrainzArtistId: metadata.id, musicbrainzMatchStatus: 'confirmed' } });

@@ -2,6 +2,14 @@ import { mkdir, readFile, writeFile, rename, rm, mkdtemp } from 'node:fs/promise
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { rememberSecrets } from '../../security/redact.js';
+
+function rememberCookieValues(content: string) {
+  for (const line of content.split('\n')) {
+    const fields = line.split('\t');
+    if (fields.length === 7) rememberSecrets({ sessionKey: fields[6] });
+  }
+}
 
 export const MAX_COOKIE_BYTES = 256 * 1024;
 
@@ -42,6 +50,7 @@ export async function youtubeCookiesConfigured(): Promise<boolean> {
 
 export async function saveYoutubeCookies(input: string): Promise<void> {
   const content = validateYoutubeCookies(input);
+  rememberCookieValues(content);
   const target = cookiePath();
   await mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.${randomUUID()}.tmp`;
@@ -70,6 +79,7 @@ export async function cookieSnapshot(args: string[]): Promise<{ path: string; cl
   let content: string;
   try { content = await readFile(cookiePath(), 'utf8'); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+  rememberCookieValues(content);
   // yt-dlp writes its cookie jar on exit. Each concurrent process gets its own
   // private copy so it cannot corrupt the saved secret or another transfer.
   const directory = await mkdtemp(path.join(os.tmpdir(), 'vidarr-youtube-'));

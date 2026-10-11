@@ -15,3 +15,11 @@ it('shows active progress and waiting count while excluding failed downloads', (
   expect(html).toContain('value="0.45"'); expect(html).toContain('aria-label="Artist — Song"');
   expect(html).not.toContain('20%');
 });
+
+it('keeps unresolved submissions visible even when no transfer is active', () => {
+  const client = new QueryClient();
+  client.setQueryData(['queue'], [{ id: 1, status: 'submissionUnknown', progress: 0 }]);
+  const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
+  expect(html).toContain('1 submission need reconciliation');
+  expect(html).toContain('href="/queue"');
+});

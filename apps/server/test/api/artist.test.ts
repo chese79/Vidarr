@@ -59,6 +59,22 @@ describe('artist routes', () => {
   let rootFolderId: number;
   let qualityProfileId: number;
 
+  it('hides only artists with zero available, known and unmatched videos before paging and letter counts', async () => {
+    const empty = await createArtist(rootFolderId, qualityProfileId, { name: 'Empty', sortName: 'Empty' });
+    const known = await createArtist(rootFolderId, qualityProfileId, { name: 'Known', sortName: 'Known' });
+    const unmatched = await createArtist(rootFolderId, qualityProfileId, { name: 'Unmatched', sortName: 'Unmatched' });
+    await createMusicVideo(known.id, { hasFile: false });
+    await createLibraryVideo((await createLibraryConnector()).id, { normalizedArtistName: 'unmatched', musicVideoId: null });
+    const get = (query: string) => app.inject({ url: '/api/v1/artist/summary?' + query, headers: authHeaders() });
+    const first = (await get('hideWithoutVideos=true&pageSize=1')).json();
+    expect(first).toMatchObject({ total: 2, items: [{ id: known.id, knownVideoCount: 1, availableVideoCount: 0 }] });
+    expect(first.availableLetters).toEqual(['K', 'U']);
+    expect((await get('hideWithoutVideos=true&pageSize=1&page=2')).json().items[0]).toMatchObject({ id: unmatched.id, knownVideoCount: 0, unmatchedVideoCount: 1 });
+    expect((await get('hideWithoutVideos=false')).json().total).toBe(3);
+    expect((await get('search=Empty')).json().items[0]).toMatchObject({ id: empty.id, knownVideoCount: 0, videoInventoryStatus: 'pending', pendingVideoReviewCount: 0 });
+    expect((await get('hideWithoutVideos=invalid')).statusCode).toBe(400);
+  });
+
   it('paginates and searches unmatched artist observations', async () => {
     const first = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Alpha' });
     await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Beta' });

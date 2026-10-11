@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import VideoThumb from '../components/VideoThumb';
 import GenreEditor from '../components/GenreEditor';
+import { NewArtistBadge, sourceCheckLabel } from '../components/ArtistProgress';
 import { downloadableSelectedIds } from './downloadSelection';
 import type {
   YoutubeSourceType,
@@ -299,12 +300,13 @@ export default function ArtistDetailPage() {
   const artist = useQuery({
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
-    refetchInterval: returnTo ? 5000 : false,
+    refetchInterval: 5000,
   });
   const videoInventory = useQuery({
     queryKey: ['artist-video-inventory', artistId],
     queryFn: () => api.artists.videoInventory(artistId),
     enabled: artist.data?.musicbrainzMatchStatus === 'confirmed',
+    refetchInterval: 5000,
   });
   const collectVideoInventory = useMutation({
     mutationFn: () => api.artists.collectVideoInventory(artistId),
@@ -517,7 +519,7 @@ export default function ArtistDetailPage() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <ArtistHeaderImage artistId={artistId} name={artist.data.name} />
           <div>
-            <h2>{artist.data.name}</h2>
+            <h2>{artist.data.name} <NewArtistBadge addedAt={artist.data.addedAt} /></h2>
             <div className="artist-meta">
               {artist.data.musicbrainzArtistId ? `MusicBrainz: ${artist.data.musicbrainzArtistId}` : `MusicBrainz: ${artist.data.musicbrainzMatchStatus}`} ·{' '}
               {artist.data.imvdbArtistId ? `IMVDb: ${artist.data.imvdbArtistId}` : 'No IMVDb match'} ·{' '}
@@ -555,7 +557,7 @@ export default function ArtistDetailPage() {
         {videoInventory.isPending && <p>Loading source record…</p>}
         {videoInventory.isError && <p role="alert">Could not load the source record.</p>}
         {videoInventory.data && <>
-          <p className="empty-state">{videoInventory.data.checkedAt ? `Sources checked ${new Date(videoInventory.data.checkedAt).toLocaleString()}` : 'Source check queued'}</p>
+          <p className="empty-state" role="status">{sourceCheckLabel(videoInventory.data.status)}{videoInventory.data.checkedAt ? ` · Last check ${new Date(videoInventory.data.checkedAt).toLocaleString()}` : ''}</p>
           {videoInventory.data.error && <p role="alert">Source check issue: {videoInventory.data.error}</p>}
           <p>{videoInventory.data.official} official videos · {videoInventory.data.approvedOther} approved from other sources · {videoInventory.data.pendingYoutube} YouTube candidates · {videoInventory.data.pendingLocal} local candidates</p>
           {videoInventory.data.channels.map((channel) => <p key={channel.id} className="empty-state">YouTube: <a href={channel.url} target="_blank" rel="noopener noreferrer">{channel.url}</a> · {channel.lastPolledAt ? 'scanned' : 'not scanned'}</p>)}

@@ -1,7 +1,33 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { RecentQueueResults } from '../components/QueueResults';
+
+function ReconcileSubmission({ id, onDone }: { id: number; onDone: (message: string) => void }) {
+  const [verified, setVerified] = useState(false);
+  const [externalRef, setExternalRef] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function resolve(action: 'attach' | 'notSubmitted') {
+    setBusy(true); setError('');
+    try {
+      await api.queue.reconcile(id, action === 'attach' ? { action, externalRef: externalRef.trim(), verified: true } : { action, verified: true });
+      onDone(action === 'attach' ? 'Linked to the existing client job. Queue monitoring will continue.' : 'Reservation released. Review the video to retry if wanted.');
+    } catch (err) { setError((err as Error).message); }
+    finally { setBusy(false); }
+  }
+  return <details><summary>Resolve submission</summary>
+    <p>Check the download client's queue and history for this exact video before resolving it.</p>
+    <label><input type="checkbox" checked={verified} disabled={busy} onChange={e => setVerified(e.target.checked)} /> I checked the client's queue and history</label>
+    <input aria-label="Existing client job ID or torrent hash" placeholder="Job ID / torrent hash" value={externalRef} disabled={busy} onChange={e => setExternalRef(e.target.value)} />
+    <div className="form-row">
+      <button disabled={!verified || !externalRef.trim() || busy} onClick={() => resolve('attach')}>Link existing job</button>
+      <button className="secondary" disabled={!verified || busy} onClick={() => resolve('notSubmitted')}>Verified not submitted · release slot</button>
+    </div>
+    {error && <p role="alert">{error}</p>}
+  </details>;
+}
 
 export default function QueuePage() {
   const queryClient = useQueryClient();
@@ -14,7 +40,7 @@ export default function QueuePage() {
   async function handleRefresh() {
     setRefreshing(true);
     try { const result = await api.queue.refresh();
-    setSummary(`${result.completed} completed, ${result.failed} failed, ${result.pending} still downloading`);
+    setSummary(`${result.completed} imported, ${result.failed} failed, ${result.pending} still downloading`);
     queryClient.invalidateQueries({ queryKey: ['queue'] });
     queryClient.invalidateQueries({ queryKey: ['queueResults'] });
     queryClient.invalidateQueries({ queryKey: ['artist'] });
@@ -52,6 +78,7 @@ export default function QueuePage() {
               <th>Status</th>
               <th>Progress</th>
               <th>Error</th>
+              <th>Next step</th>
             </tr>
           </thead>
           <tbody>
@@ -64,6 +91,9 @@ export default function QueuePage() {
                 <td>{item.status}</td>
                 <td>{Math.round(item.progress * 100)}%</td>
                 <td>{item.error ?? '—'}</td>
+                <td>{item.status === 'submissionUnknown' ? <ReconcileSubmission id={item.id} onDone={message => {
+                  setSummary(message); queryClient.invalidateQueries({ queryKey: ['queue'] }); queryClient.invalidateQueries({ queryKey: ['queueResults'] });
+                }} /> : <Link to={`/artist/${item.musicVideo.artist.id}`}>Video details</Link>}</td>
               </tr>
             ))}
           </tbody>

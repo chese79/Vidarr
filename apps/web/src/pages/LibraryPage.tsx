@@ -1,4 +1,5 @@
 import AddArtistForm from '../components/AddArtistForm';
+import { ArtistProgress, NewArtistBadge } from '../components/ArtistProgress';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -215,6 +216,8 @@ function ArtistRow({
           <Link to={`/artist/${artist.id}`} className="artist-name">
             {artist.name}
           </Link>
+          <NewArtistBadge addedAt={artist.addedAt} />
+          <ArtistProgress id={artist.id} status={artist.videoInventoryStatus} pending={artist.pendingVideoReviewCount ?? 0} error={artist.videoInventoryError} />
           <span className="artist-meta">{artist.genre ?? 'Unknown genre'}</span>
           <span className="artist-meta">MusicBrainz: {artist.musicbrainzMatchStatus}</span>
           {artist.musicbrainzCandidateId && <span className="artist-meta">
@@ -291,6 +294,7 @@ export default function LibraryPage() {
   const musicbrainzStatus = params.get('musicbrainzStatus') as 'unmatched' | 'suggested' | 'ambiguous' | 'confirmed' | 'notFound' | 'failed' | null;
   const letter = params.get('letter');
   const hasMissing = params.get('missing') === 'true';
+  const hideWithoutVideos = params.get('hideWithoutVideos') !== 'false';
   const completeness = (params.get('completeness') ?? '') as '' | 'complete' | 'unmatched' | 'activeDownloads';
   const minLocalVideos = params.get('minLocalVideos') ?? params.get('minKnownVideos') ?? '';
   const minPlayCount = params.get('minPlayCount') ?? '';
@@ -318,9 +322,11 @@ export default function LibraryPage() {
   }
 
   const summary = useQuery({
-    queryKey: ['artistSummary', search, genre, monitored, musicbrainzStatus, letter, hasMissing, completeness, minLocalVideos, minPlayCount, page],
+    queryKey: ['artistSummary', search, genre, monitored, musicbrainzStatus, letter, hasMissing, completeness, minLocalVideos, minPlayCount, page, hideWithoutVideos],
+    refetchInterval: 5000,
     queryFn: () =>
       api.artists.summary({
+        hideWithoutVideos,
         search: search || undefined,
         genre: genre || undefined,
         monitored: monitored === 'true' ? true : monitored === 'false' ? false : undefined,
@@ -338,7 +344,7 @@ export default function LibraryPage() {
   const items = summary.data?.items ?? [];
   const totalPages = summary.data ? Math.max(1, Math.ceil(summary.data.total / PAGE_SIZE)) : 1;
   const anyFilterActive = Boolean(
-    search || genre || monitored || musicbrainzStatus || letter || hasMissing || completeness || minLocalVideos || minPlayCount,
+    search || genre || monitored || musicbrainzStatus || letter || hasMissing || completeness || minLocalVideos || minPlayCount || hideWithoutVideos,
   );
   const allVisibleSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
 
@@ -416,13 +422,20 @@ export default function LibraryPage() {
 
   function clearAllFilters() {
     setSearchInput('');
-    setParams(new URLSearchParams(), { replace: true });
+    setParams(new URLSearchParams({ hideWithoutVideos: 'false' }), { replace: true });
   }
 
   return (
     <div>
       <div className="page-header">
-        <h2>Library</h2>
+        <div className="form-row" style={{ alignItems: 'center' }}>
+          <h2>Library</h2>
+          <span className="library-result-count">{summary.isLoading ? 'Loading…' : `${summary.data?.total ?? 0} artist(s)`}</span>
+          <label className={`hide-empty-artists${hideWithoutVideos ? ' enabled' : ''}`} title="Hide artists with 0 available, 0 known and 0 unmatched videos">
+            <input type="checkbox" checked={hideWithoutVideos} onChange={(e) => updateParams({ hideWithoutVideos: String(e.target.checked), page: null })} />
+            Hide Artists w/o Videos
+          </label>
+        </div>
         <div className="form-row">
           <button className="secondary" onClick={() => searchAll.mutate()} disabled={searchAll.isPending}>Search all eligible</button>
           <button onClick={() => setShowAdd((v) => !v)} disabled={!canAdd}>Add Artist</button>
@@ -436,7 +449,12 @@ export default function LibraryPage() {
         </p>
       )}
 
-      {showAdd && <AddArtistForm onDone={() => setShowAdd(false)} />}
+      {showAdd && <AddArtistForm onDone={(artist) => {
+        setShowAdd(false);
+        setSearchInput(artist.name);
+        setParams(new URLSearchParams({ q: artist.name, hideWithoutVideos: 'false' }), { replace: true });
+        setBulkMessage(`Added ${artist.name}. Sources are collected automatically; uncertain videos will need review. Empty-artist hiding is off in this view so you can see the artist immediately.`);
+      }} />}
 
       {bulkMessage && (
         <p className="empty-state" role="status">
@@ -540,9 +558,6 @@ export default function LibraryPage() {
                 Clear all
               </button>
             )}
-            <span className="library-result-count">
-              {summary.isLoading ? 'Loading…' : `${summary.data?.total ?? 0} artist(s)`}
-            </span>
           </div>
 
           {selectedIds.size > 0 && (

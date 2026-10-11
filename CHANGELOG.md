@@ -5,6 +5,29 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — artist visibility and workflow recovery
+
+- Add the default-on Library header filter **Hide Artists w/o Videos**, with a fuchsia border
+  while enabled. Hide only zero available/known/unmatched counts, before pagination and letters.
+- Show **New** for seven days from the original added date. Reveal an added artist immediately
+  by name, clearing previous filters and turning empty-artist hiding off for that view.
+- Show source-check progress and pending review. Persist attempts and successful completion;
+  retry partial, failed and interrupted collections after ten minutes, retaining existing data.
+  Reuse validated MusicBrainz metadata, continue other providers after failures, coalesce duplicate
+  collections and share one local traversal per backfill batch. Log artist/run/provider outcomes.
+- Add guarded Queue reconciliation for uncertain external submissions. Link a verified existing
+  job or release a verified absent submission; failed lookup retains the reservation.
+- Show importing and distinguish successful imports from target-server readiness. Add review/retry
+  links, sidebar reconciliation notices and explicit playlist publication guidance.
+- Redact configured secrets and credential-bearing URLs/headers in stored diagnostics and
+  request/error logging, preserving operational credentials and source URLs.
+
+### Documentation — process consistency review
+
+- Record complete user workflows, their completion conditions and current recovery gaps.
+- Require workflow changes to identify skipped required stages and confirm intentional omissions
+  with the user. This review does not change application behavior.
+
 ### Changed — persistent sidebar and queue results
 
 - Keep the left menu visible while the main panel scrolls. Navigation scrolls independently

@@ -4,6 +4,8 @@ import { prisma, logActivity } from '../db/client.js';
 let runner: (item: DownloadQueueItem) => Promise<void>;
 let draining: Promise<void> | null = null;
 let requested = false;
+const runningItems = new Set<number>();
+export function isDownloadRunnerActive(id: number): boolean { return runningItems.has(id); }
 
 export function registerDownloadRunner(callback: typeof runner) { runner = callback; }
 
@@ -30,8 +32,9 @@ export function drainDownloadQueue(): Promise<void> {
           return claimed.count ? { ...next, status: 'downloading' } : null;
         });
         if (!item) break;
+        runningItems.add(item.id);
         void runner(item).catch(err => logActivity('warn', 'download-queue', err))
-          .finally(() => { void drainDownloadQueue().catch(err => logActivity('warn', 'download-queue', err)); });
+          .finally(() => { runningItems.delete(item.id); void drainDownloadQueue().catch(err => logActivity('warn', 'download-queue', err)); });
       }
     } while (requested);
   })().finally(() => { draining = null; });

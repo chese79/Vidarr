@@ -16,6 +16,17 @@ import {
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
 import { prisma } from '../../src/db/client.js';
 
+// Editing tests seed their inventory directly. Do not contact jellyfin.local
+// during generation: connector refresh is covered by playlistSync.test.ts.
+// An empty scan preserves the seeded inventory, while push/delete stay real
+// provider calls against stubJellyfin below.
+vi.mock('../../src/providers/library/index.js', async (original) => {
+  const providers = await original<typeof import('../../src/providers/library/index.js')>();
+  return { ...providers, getLibraryConnectorProvider: (type: Parameters<typeof providers.getLibraryConnectorProvider>[0]) => ({
+    ...providers.getLibraryConnectorProvider(type), fetchVideos: vi.fn().mockResolvedValue([]),
+  }) };
+});
+
 // A stand-in Jellyfin server: records every request, hands out playlist ids,
 // answers per-item lookups (the "verify the reconciled id" step of a push), and
 // can be told to fail deletes or report an item/playlist as already gone.

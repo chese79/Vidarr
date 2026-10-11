@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../src/db/client.js';
 import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist } from './support/db.js';
 import { listChannelVideos } from '../src/providers/youtube/ytdlp.js';
+import { lookupMusicBrainzArtist } from '../src/providers/metadata/musicbrainz.js';
 
 vi.mock('../src/providers/metadata/musicbrainz.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/providers/metadata/musicbrainz.js')>()),
@@ -30,6 +31,57 @@ describe('automatic video inventory backfill', () => {
     rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'vidarr-video-backfill-'));
   });
   afterEach(async () => { await fs.rm(rootPath, { recursive: true, force: true }); });
+
+  async function confirmedArtist() {
+    const root = await createRootFolder({ path: rootPath });
+    const profile = await createQualityProfile((await createQuality()).id);
+    const artist = await createArtist(root.id, profile.id);
+    return prisma.artist.update({ where: { id: artist.id }, data: {
+      musicbrainzArtistId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', musicbrainzMatchStatus: 'confirmed',
+    } });
+  }
+
+  it('retries partial checks after cooldown without erasing earlier candidates or success timestamps', async () => {
+    const artist = await confirmedArtist();
+    const { backfillArtistVideoInventories } = await import('../src/pipeline/artistVideoBackfill.js');
+    await backfillArtistVideoInventories();
+    const successful = await prisma.artist.findUniqueOrThrow({ where: { id: artist.id } });
+    vi.mocked(listChannelVideos).mockRejectedValueOnce(new Error('YouTube temporarily unavailable'));
+    const { collectArtistVideoInventory } = await import('../src/pipeline/artistVideoInventory.js');
+    await collectArtistVideoInventory(artist.id);
+    expect(await prisma.artist.findUnique({ where: { id: artist.id } })).toMatchObject({ videoInventoryStatus: 'partial', videoInventoryCompletedAt: successful.videoInventoryCompletedAt });
+    expect(await prisma.videoReviewCandidate.count({ where: { artistId: artist.id } })).toBe(1);
+    expect((await backfillArtistVideoInventories()).attempted).toBe(0);
+    await prisma.artist.update({ where: { id: artist.id }, data: { videoInventoryAttemptedAt: new Date(Date.now() - 11 * 60_000) } });
+    expect((await backfillArtistVideoInventories()).attempted).toBe(1);
+    expect(await prisma.artist.findUnique({ where: { id: artist.id } })).toMatchObject({ videoInventoryStatus: 'complete', videoInventoryError: null });
+    expect(await prisma.videoReviewCandidate.count({ where: { artistId: artist.id } })).toBe(1);
+  });
+
+  it('continues existing channels when identity enrichment fails and retries an interrupted collection', async () => {
+    const artist = await confirmedArtist();
+    await prisma.youtubeSource.create({ data: { artistId: artist.id, url: 'https://www.youtube.com/@testartist', type: 'channel' } });
+    vi.mocked(lookupMusicBrainzArtist).mockRejectedValueOnce(new Error('MusicBrainz offline'));
+    const { collectArtistVideoInventory } = await import('../src/pipeline/artistVideoInventory.js');
+    const first = collectArtistVideoInventory(artist.id, { enrichIdentity: true });
+    expect(collectArtistVideoInventory(artist.id)).toBe(first);
+    expect(await first).toMatchObject({ pendingYoutube: 1, errors: ['MusicBrainz: MusicBrainz offline'] });
+    await prisma.artist.update({ where: { id: artist.id }, data: { videoInventoryStatus: 'running', videoInventoryAttemptedAt: new Date(Date.now() - 11 * 60_000) } });
+    const { backfillArtistVideoInventories } = await import('../src/pipeline/artistVideoBackfill.js');
+    expect((await backfillArtistVideoInventories()).attempted).toBe(1);
+    expect(await prisma.artist.findUnique({ where: { id: artist.id } })).toMatchObject({ videoInventoryStatus: 'complete' });
+  });
+
+  it('uses already validated addition metadata without a second MusicBrainz request', async () => {
+    const artist = await confirmedArtist();
+    const metadata = await lookupMusicBrainzArtist(artist.musicbrainzArtistId!);
+    vi.mocked(lookupMusicBrainzArtist).mockClear();
+    const { collectArtistVideoInventory } = await import('../src/pipeline/artistVideoInventory.js');
+    await collectArtistVideoInventory(artist.id, { enrichIdentity: true, metadata });
+    expect(lookupMusicBrainzArtist).not.toHaveBeenCalled();
+    expect(await prisma.youtubeSource.count({ where: { artistId: artist.id } })).toBe(1);
+    expect(await prisma.artist.findUnique({ where: { id: artist.id } })).toMatchObject({ videoInventoryStatus: 'complete' });
+  });
 
   it('collects sources once for a confirmed artist and records completion', async () => {
     const root = await createRootFolder({ path: rootPath });
