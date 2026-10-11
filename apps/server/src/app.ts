@@ -32,6 +32,7 @@ import { setupRoutes } from './api/setup.js';
 import { googleAuthRoutes } from './api/googleAuth.js';
 import { localAuthRoutes } from './api/localAuth.js';
 import { videoReviewRoutes } from './api/videoReview.js';
+import { redactMessage } from './security/redact.js';
 
 // Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
 // MusicVideoFile.sizeBytes); JSON.stringify can't serialize BigInt natively.
@@ -47,7 +48,17 @@ import { videoReviewRoutes } from './api/videoReview.js';
 // main.ts's job. Split out so tests can exercise real routes via .inject()
 // without booting the whole process.
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
+  // Populate the shared redactor before routes or background work can log provider errors.
+  await Promise.all([prisma.settings.findMany(), prisma.libraryConnector.findMany(),
+    prisma.recommendationProviderConfig.findMany(), prisma.downloadClient.findMany(),
+    prisma.indexer.findMany(), prisma.lastFmAccount.findMany()]);
+  const app = Fastify({ logger: process.env.NODE_ENV === 'test' ? false : {
+    redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-api-key"]'],
+    serializers: {
+      req: (req) => ({ method: req.method, url: redactMessage(req.url) }),
+      err: (err) => ({ type: err.name, message: redactMessage(err.message), stack: redactMessage(err.stack) }),
+    },
+  } });
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ZodError) {

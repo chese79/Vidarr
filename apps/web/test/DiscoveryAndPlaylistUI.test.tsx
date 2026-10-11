@@ -6,15 +6,23 @@ import DiscoverPage from '../src/pages/DiscoverPage';
 import PlaylistsPage from '../src/pages/PlaylistsPage';
 import AddArtistForm from '../src/components/AddArtistForm';
 import LibraryPage from '../src/pages/LibraryPage';
+import LibraryConnectorsPage from '../src/pages/LibraryConnectorsPage';
 
 function render(page: React.ReactNode, url: string, client = new QueryClient()) {
   return renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}>{page}</MemoryRouter></QueryClientProvider>);
 }
 
 describe('Discover and playlist controls', () => {
+  it('identifies the steps after a successful connector test and playlist generation', () => {
+    const connector = render(<LibraryConnectorsPage />, '/library-connectors');
+    expect(connector).toContain('A successful connection test does not load the library.');
+    const playlists = render(<PlaylistsPage />, '/playlists');
+    expect(playlists).toContain('Generate saves the playlist in Vidarr.');
+    expect(playlists).toContain('Push to your playback library to publish it.');
+  });
   it('distinguishes available, known, supplementary and inventory counts in Library', () => {
     const client = new QueryClient();
-    client.setQueryData(['artistSummary', '', '', null, null, null, false, '', '', '', 1], {
+    client.setQueryData(['artistSummary', '', '', null, null, null, false, '', '', '', 1, true], {
       items: [{ id: 1, name: 'Example Artist', sortName: 'Example Artist', monitored: true,
         hasImage: false, musicbrainzMatchStatus: 'confirmed', knownVideoCount: 3, availableVideoCount: 1,
         localVideoCount: 1, missingVideoCount: 2, downloadingVideoCount: 0, monitoredVideoCount: 3,

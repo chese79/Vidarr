@@ -33,3 +33,17 @@ it('provides pagination beyond the first 50 retained results', () => {
   expect(html).toContain('51 results'); expect(html).toContain('Next');
   expect(html).toContain('Private video');
 });
+
+it('provides guarded reconciliation for uncertain submissions and separates import from server readiness', () => {
+  const client = new QueryClient();
+  client.setQueryData(['queue'], [{ id: 9, status: 'submissionUnknown', progress: 0,
+    musicVideo: { title: 'Uncertain', artist: { id: 1, name: 'Artist' } } }]);
+  client.setQueryData(['queueResults', 'completed', 1, 3], { total: 2, items: [
+    { ...result(1, 'downloadFolderImported'), deliveryStatus: 'awaitingServerCataloging' },
+    { ...result(2, 'downloadFolderImported'), deliveryStatus: 'readyToPlay' },
+  ] });
+  const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><QueuePage /></MemoryRouter></QueryClientProvider>);
+  expect(html).toContain('Resolve submission'); expect(html).toContain('client&#x27;s queue and history');
+  expect(html).toMatch(/<button disabled="">Link existing job/);
+  expect(html).toContain('awaiting server cataloging'); expect(html).toContain('Ready to play on target server');
+});

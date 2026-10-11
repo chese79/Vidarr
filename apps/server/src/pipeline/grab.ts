@@ -103,7 +103,7 @@ async function runDirectDownload(queueItem: DownloadQueueItem): Promise<ImportRe
         .update({ where: { id: queueItem.id }, data: { progress: fraction } })
         .catch(() => {});
     });
-    await prisma.downloadQueueItem.update({ where: { id: queueItem.id }, data: { progress: 1 } });
+    await prisma.downloadQueueItem.update({ where: { id: queueItem.id }, data: { progress: 1, status: 'importing' } });
     await assertIsRealMusicVideo(downloadedPath);
     const result = await importDownloadedFile(musicVideoId, downloadedPath, 'YouTube');
     await fs.unlink(downloadedPath).catch(() => {});
@@ -248,12 +248,20 @@ registerDownloadRunner(async item => {
 // an uncertain submission is never sent again automatically.
 export async function resumeDownloadQueue(): Promise<void> {
   await prisma.downloadQueueItem.updateMany({ where: {
-    sourceType: { not: 'indexer' }, status: 'downloading',
+    sourceType: { not: 'indexer' }, status: { in: ['downloading', 'importing'] },
   }, data: { status: 'queued', progress: 0 } });
+  await prisma.downloadQueueItem.updateMany({ where: { sourceType: 'indexer', status: 'importing' }, data: { status: 'downloading' } });
   await drainDownloadQueue();
 }
 
-export async function refreshQueue(): Promise<{ completed: number; failed: number; pending: number }> {
+let refreshing: Promise<{ completed: number; failed: number; pending: number }> | null = null;
+export function refreshQueue(): Promise<{ completed: number; failed: number; pending: number }> {
+  if (refreshing) return refreshing;
+  refreshing = refreshQueueOnce().finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+async function refreshQueueOnce(): Promise<{ completed: number; failed: number; pending: number }> {
   const items = await prisma.downloadQueueItem.findMany({
     where: { sourceType: 'indexer', status: 'downloading' },
     include: { downloadClient: true },
@@ -281,6 +289,7 @@ export async function refreshQueue(): Promise<{ completed: number; failed: numbe
 
       if (status.status === 'completed' && status.contentPath) {
         try {
+          await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'importing', progress: 1 } });
           const videoPath = await locateVideoFile(status.contentPath);
           await assertIsRealMusicVideo(videoPath);
           await importDownloadedFile(item.musicVideoId, videoPath, item.quality ?? 'SD');

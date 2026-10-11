@@ -1,7 +1,8 @@
 # Discover review and playlist creation
 
 The main menu starts with Library, Playlists, Discover, Artist Review and Video Review.
-Artist Review retains `/match-review` for existing links. All visible UI borders use `#FFFFC5`;
+Artist Review retains `/match-review` for existing links. UI borders use `#FFFFC5`, except the
+active empty-artist filter's fuchsia highlight;
 thumbnail and gradient backgrounds retain a separate dark surface token.
 
 Artist Review lists artists with the most suggested matches first. Sorting applies before paging
@@ -9,6 +10,18 @@ and within search results, with name and ID breaking ties. Counts include all su
 the expandable preview continues to show only the three highest-scoring candidates.
 
 ## Library filters
+The header's **Hide Artists w/o Videos** checkbox is on by default, with a fuchsia border while
+enabled. It hides an artist only when available, known and unmatched inventory counts are all zero.
+The rule applies before pagination and letter availability. Pending YouTube/local review candidates
+are separate from unmatched server inventory. Disable the checkbox to see empty artists. The URL
+stores the choice; **Clear all** disables it for that view.
+
+Artists have a **New** badge for seven days from their original added date, with the added time in
+a tooltip. Re-adding an identity does not reset the date or overwrite root/profile/monitoring.
+After addition, Library searches for the saved name, clears prior filters/page and explicitly turns
+empty-artist hiding off to reveal the artist immediately. Source progress and pending review links
+appear in its row; Library and artist detail refresh as background work changes.
+
 Library's **Has missing videos** filter uses ownership across the preserved videos displayed in
 expanded artist rows, including catalog-review entries. **Min local videos** counts only records
 with a local file, including supplementary inventory; server-only availability does not count.
@@ -19,6 +32,15 @@ joining the video inventory. Multiple server copies or queue records cannot mult
 play counts prefer a known local value and otherwise use the highest confirmed server value.
 
 ## Discover
+
+Source collection persists queued/running/complete/partial/failed state, last attempt, last check
+and last successful completion separately. Provider errors preserve existing data and review decisions,
+continue other providers and retry after ten minutes. Interrupted running checks use the same cooldown.
+Manual **Refresh all sources** retries enrichment and collection immediately; overlapping requests share
+the current run. Validated addition metadata is reused for first enrichment. Backfill shares one local
+root traversal per bounded batch, recording local failures on each artist for retry. Uncertain candidates
+still require Video Review.
+
 
 
 For the artist chosen in **Existing artists**, review the genre checkboxes, refresh them from sources

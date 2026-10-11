@@ -30,7 +30,7 @@ export default function VideoReviewPage() {
   });
   const approve = useMutation({
     mutationFn: ({ id, artistId, title }: { id: number; artistId: number; title: string }) => api.videoReview.approve(id, artistId, title),
-    onSuccess: () => { client.invalidateQueries({ queryKey: ['video-review-page'] }); client.invalidateQueries({ queryKey: ['artistSummary'] }); setMessage('Music video added to Library.'); },
+    onSuccess: () => { client.invalidateQueries({ queryKey: ['video-review-page'] }); client.invalidateQueries({ queryKey: ['artistSummary'] }); client.invalidateQueries({ queryKey: ['artist'] }); client.invalidateQueries({ queryKey: ['artist-video-inventory'] }); setMessage('Music video added to Library. Review the artist catalog to monitor or download it.'); },
     onError: (error: Error) => setMessage(error.message),
   });
   const reject = useMutation({

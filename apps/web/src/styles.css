@@ -687,3 +687,6 @@ button.add-new-artist { background: #2563eb; border: 1px solid var(--border); }
 .download-progress-item { margin-bottom: .75rem; }
 .download-progress-item > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; }
 .download-progress-item progress { display: block; width: 100%; accent-color: #2196f3; margin: .25rem 0; }
+.hide-empty-artists { display: inline-flex; align-items: center; gap: .5rem; padding: .4rem .65rem; border: 2px solid var(--border); border-radius: 6px; font-size: .9rem; cursor: pointer; }
+.hide-empty-artists.enabled { border-color: #ff2eaa !important; }
+.new-artist { margin-left: .5rem; color: #ff71c6; }

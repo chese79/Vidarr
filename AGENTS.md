@@ -5,6 +5,13 @@ canonical artist catalog, media-server integration, download-source priority, an
 
 ## Required workflow
 
+- Read `docs/process-flows.md` when changing a user workflow. Compare the requested change with
+  the complete established flow, including validation, review, delivery and confirmation.
+- If a requested shortcut would omit a required stage, explain the missing stages and prompt
+  the user before implementing that omission. Preserve required stages unless the user explicitly
+  changes the workflow. Automating a stage is allowed when its checks and outcomes are preserved;
+  a four-stage process need not require four user clicks.
+- Update the affected flow documentation when its stages, completion conditions or recovery change.
 - Preserve user data and backward compatibility. Database changes require a Prisma migration.
 - Add or update automated tests for behavior changes.
 - Run the relevant build and tests before committing. The supported runtime is Node 22; use the

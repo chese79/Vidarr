@@ -22,7 +22,6 @@ import { autoSearchAndGrab, runBacklogSearch } from '../pipeline/autoSearch.js';
 import { confirmArtistIdentity, discoverArtistIdentityCandidates } from '../pipeline/artistIdentity.js';
 import { collectArtistVideoInventory } from '../pipeline/artistVideoInventory.js';
 import { lookupMusicBrainzArtist, searchMusicBrainzArtists } from '../providers/metadata/musicbrainz.js';
-import { enrichConfirmedArtist } from '../pipeline/artistIdentity.js';
 import { validateNewArtist } from '../pipeline/newArtistValidation.js';
 
 // Escapes SQLite LIKE's own wildcards so a search term containing "%" or "_"
@@ -56,6 +55,10 @@ async function loadArtistReview(search?: string, offset = 0, limit?: number) {
 
 interface ArtistSummaryRow {
   id: number;
+  addedAt: Date;
+  videoInventoryStatus: string;
+  videoInventoryError: string | null;
+  pendingVideoReviewCount: number;
   name: string;
   sortName: string;
   genre: string | null;
@@ -138,7 +141,7 @@ export async function artistRoutes(app: FastifyInstance) {
     } });
     await prisma.artistSource.upsert({ where: { artistId_provider_origin: { artistId: artist.id, provider: 'manual', origin: 'discover-add' } }, update: { lastSeenAt: new Date() }, create: { artistId: artist.id, provider: 'manual', origin: 'discover-add' } });
     if (artist.musicbrainzArtistId) {
-      void (async () => { await enrichConfirmedArtist(artist.id, artist.musicbrainzArtistId!); await collectArtistVideoInventory(artist.id); })().catch((error) => logActivity('warn', 'discover:add', error));
+      void collectArtistVideoInventory(artist.id, { enrichIdentity: true }).catch((error) => logActivity('warn', 'discover:add', error));
     }
     return { artist, validation };
   });
@@ -160,7 +163,7 @@ export async function artistRoutes(app: FastifyInstance) {
     try {
       const metadata = await lookupMusicBrainzArtist(mbid);
       const artist = await prisma.artist.upsert({
-        where: { musicbrainzArtistId: mbid }, update: {},
+        where: { musicbrainzArtistId: mbid }, update: { musicbrainzMatchStatus: 'confirmed', musicbrainzMatchConfidence: 1 },
         create: { name: metadata.name, sortName: metadata.sortName, musicbrainzArtistId: mbid,
           musicbrainzMatchStatus: 'confirmed', musicbrainzMatchConfidence: 1, monitored: false,
           rootFolderId: body.rootFolderId, qualityProfileId: body.qualityProfileId },
@@ -172,10 +175,7 @@ export async function artistRoutes(app: FastifyInstance) {
       });
       // Return the identity promptly; collect every catalog source in the background.
       // The persistent confirmed-artist backfill also retries unfinished collections.
-      void (async () => {
-        await enrichConfirmedArtist(artist.id, mbid);
-        await collectArtistVideoInventory(artist.id);
-      })().catch((error) => logActivity('warn', 'discover:review', error));
+      void collectArtistVideoInventory(artist.id, { enrichIdentity: true, metadata }).catch((error) => logActivity('warn', 'discover:review', error));
       return artist;
     } catch (error) { return reply.code(502).send({ error: (error as Error).message }); }
   });
@@ -238,6 +238,7 @@ export async function artistRoutes(app: FastifyInstance) {
     const id = Number((req.params as { id: string }).id);
     const artist = await prisma.artist.findUnique({ where: { id }, select: {
       id: true, musicbrainzMatchStatus: true, videoInventoryCheckedAt: true, videoInventoryError: true,
+      videoInventoryStatus: true, videoInventoryAttemptedAt: true, videoInventoryCompletedAt: true,
     } });
     if (!artist) return reply.code(404).send({ error: 'Artist not found' });
     if (artist.musicbrainzMatchStatus !== 'confirmed') return reply.code(409).send({ error: 'Artist needs MusicBrainz confirmation' });
@@ -251,13 +252,15 @@ export async function artistRoutes(app: FastifyInstance) {
       }, orderBy: [{ source: 'asc' }, { title: 'asc' }] }),
       prisma.youtubeSource.findMany({ where: { artistId: id }, select: { id: true, url: true, lastPolledAt: true } }),
     ]);
-    return { catalog, candidates, channels, checkedAt: artist.videoInventoryCheckedAt, error: artist.videoInventoryError };
+    return { catalog, candidates, channels, checkedAt: artist.videoInventoryCheckedAt, error: artist.videoInventoryError,
+      status: artist.videoInventoryStatus, attemptedAt: artist.videoInventoryAttemptedAt, completedAt: artist.videoInventoryCompletedAt };
   });
 
   app.get('/api/v1/artist/:id/video-inventory/summary', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const artist = await prisma.artist.findUnique({ where: { id }, select: {
       musicbrainzMatchStatus: true, videoInventoryCheckedAt: true, videoInventoryError: true,
+      videoInventoryStatus: true, videoInventoryAttemptedAt: true, videoInventoryCompletedAt: true,
     } });
     if (!artist) return reply.code(404).send({ error: 'Artist not found' });
     if (artist.musicbrainzMatchStatus !== 'confirmed') return reply.code(409).send({ error: 'Artist needs MusicBrainz confirmation' });
@@ -269,7 +272,8 @@ export async function artistRoutes(app: FastifyInstance) {
       prisma.youtubeSource.findMany({ where: { artistId: id }, select: { id: true, url: true, lastPolledAt: true } }),
     ]);
     return { official, approvedOther, pendingYoutube, pendingLocal, channels,
-      checkedAt: artist.videoInventoryCheckedAt, error: artist.videoInventoryError };
+      checkedAt: artist.videoInventoryCheckedAt, error: artist.videoInventoryError,
+      status: artist.videoInventoryStatus, attemptedAt: artist.videoInventoryAttemptedAt, completedAt: artist.videoInventoryCompletedAt };
   });
 
   app.post('/api/v1/artist/:id/video-inventory/collect', async (req, reply) => {
@@ -277,7 +281,7 @@ export async function artistRoutes(app: FastifyInstance) {
     if (!await prisma.artist.findUnique({ where: { id }, select: { id: true } })) {
       return reply.code(404).send({ error: 'Artist not found' });
     }
-    try { return await collectArtistVideoInventory(id); }
+    try { return await collectArtistVideoInventory(id, { enrichIdentity: true }); }
     catch (error) { return reply.code(409).send({ error: (error as Error).message }); }
   });
 
@@ -333,6 +337,8 @@ export async function artistRoutes(app: FastifyInstance) {
     const baseWhere = Prisma.join(baseConditions, ' AND ');
 
     const refineConditions: Prisma.Sql[] = [Prisma.sql`1=1`];
+    const videoPresence = Prisma.sql`("availableVideoCount" > 0 OR "knownVideoCount" > 0 OR "unmatchedVideoCount" > 0)`;
+    if (query.hideWithoutVideos === 'true') refineConditions.push(videoPresence);
     if (query.letter) refineConditions.push(Prisma.sql`"letter" = ${query.letter.toUpperCase()}`);
     if (query.minKnownVideos != null) {
       refineConditions.push(Prisma.sql`"knownVideoCount" >= ${query.minKnownVideos}`);
@@ -393,6 +399,10 @@ export async function artistRoutes(app: FastifyInstance) {
       filtered AS (
         SELECT
           a."id" AS "id",
+          a."addedAt" AS "addedAt",
+          a."videoInventoryStatus" AS "videoInventoryStatus",
+          a."videoInventoryError" AS "videoInventoryError",
+          (SELECT COUNT(*) FROM "VideoReviewCandidate" vrc WHERE vrc."artistId" = a."id" AND vrc."decision" = 'pending') AS "pendingVideoReviewCount",
           a."name" AS "name",
           a."sortName" AS "sortName",
           a."genre" AS "genre",
@@ -449,7 +459,7 @@ export async function artistRoutes(app: FastifyInstance) {
       // showing every letter reachable from the *current* base filters.
       prisma.$queryRaw<{ letter: string }[]>(Prisma.sql`
         ${filteredCte}
-        SELECT DISTINCT "letter" FROM filtered
+        SELECT DISTINCT "letter" FROM filtered WHERE ${query.hideWithoutVideos === 'true' ? videoPresence : Prisma.sql`1=1`}
       `),
       // Cheap existence hint for whether the image proxy has anything to try
       // — avoids every row firing a request that will just 404. A name match
@@ -465,6 +475,10 @@ export async function artistRoutes(app: FastifyInstance) {
 
     const items = page.map((row) => ({
       id: row.id,
+      addedAt: new Date(row.addedAt).toISOString(),
+      videoInventoryStatus: row.videoInventoryStatus,
+      videoInventoryError: row.videoInventoryError,
+      pendingVideoReviewCount: Number(row.pendingVideoReviewCount),
       name: row.name,
       sortName: row.sortName,
       genre: row.genre,

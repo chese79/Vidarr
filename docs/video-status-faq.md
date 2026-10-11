@@ -1,5 +1,26 @@
 # Video status and server delivery FAQ
 
+## How do Queue completion and server readiness differ?
+
+Completed history records successful imports. **Current delivery** shows the video's current
+state: imported and awaiting server cataloging, ready to play on the configured target server,
+or server readiness unconfirmed. It is not a snapshot of the historical import; older successful
+attempts remain after upgrades. The importing stage covers validation and file/metadata import.
+Target notification and exact-path reconciliation follow; another server's copy does not complete delivery.
+
+## How do I resolve an uncertain external submission?
+
+Open **Resolve submission**, check the configured download client's queue and history for the exact
+video and confirm that check. Enter the existing job ID/torrent hash and **Link existing job**.
+Vidarr checks that the job exists and has not failed, and a known magnet hash must match. For clients
+without a stable request identity, verifying the job belongs to this video is the operator's responsibility.
+A failed lookup retains the slot. A provider submission still running cannot be reconciled yet.
+
+If you verified no job was submitted, choose **Verified not submitted · release slot**. Vidarr
+retains a failed attempt and releases the reservation without submitting a replacement as part of
+reconciliation. Normal manual or monitored acquisition can retry afterward. Uncertain submissions
+also appear in the sidebar, including when no transfer is running.
+
 ## How many videos download at once?
 
 General Settings → Simultaneous video downloads defaults to **3** (configurable from 1 to 20).

@@ -4,7 +4,7 @@ import { api } from '../api/client';
 
 type Match = Awaited<ReturnType<typeof api.artists.searchMusicbrainz>>[number];
 
-export default function AddArtistForm({ onDone }: { onDone: () => void }) {
+export default function AddArtistForm({ onDone }: { onDone: (artist: Awaited<ReturnType<typeof api.artists.addMusicbrainz>>) => void }) {
   const client = useQueryClient();
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<Match[] | null>(null);
@@ -19,7 +19,7 @@ export default function AddArtistForm({ onDone }: { onDone: () => void }) {
   });
   const add = useMutation({
     mutationFn: () => api.artists.addMusicbrainz({ musicbrainzArtistId: selected!.id, rootFolderId: Number(rootFolderId), qualityProfileId: Number(qualityProfileId) }),
-    onSuccess: () => { client.invalidateQueries({ queryKey: ['artists'] }); client.invalidateQueries({ queryKey: ['artistSummary'] }); onDone(); },
+    onSuccess: (artist) => { client.invalidateQueries({ queryKey: ['artists'] }); client.invalidateQueries({ queryKey: ['artistSummary'] }); onDone(artist); },
   });
   return <div className="card">
     <h3>Search MusicBrainz</h3>

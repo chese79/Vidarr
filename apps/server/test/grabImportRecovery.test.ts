@@ -5,6 +5,7 @@ import path from 'node:path';
 import { prisma } from '../src/db/client.js';
 import { grabYoutubeVideo } from '../src/pipeline/grab.js';
 import { downloadDirectVideo } from '../src/providers/youtube/ytdlp.js';
+import { importDownloadedFile } from '../src/pipeline/import.js';
 import { createArtist, createMusicVideo, createQuality, createQualityProfile, createRootFolder, resetDb } from './support/db.js';
 
 vi.mock('../src/providers/youtube/ytdlp.js', () => ({ downloadDirectVideo: vi.fn() }));
@@ -27,6 +28,10 @@ it('retains a downloaded video and metadata when import fails, and records its r
   const profile = await createQualityProfile((await createQuality()).id);
   const artist = await createArtist(root.id, profile.id);
   const video = await createMusicVideo(artist.id, { youtubeVideoId: 'download' });
+  vi.mocked(importDownloadedFile).mockImplementationOnce(async () => {
+    expect((await prisma.downloadQueueItem.findFirstOrThrow()).status).toBe('importing');
+    throw new Error('recording failed');
+  });
   await expect(grabYoutubeVideo(video.id)).rejects.toThrow('recording failed');
   await expect(fs.readFile(source, 'utf8')).resolves.toBe('video');
   await expect(fs.readFile(path.join(directory, 'download.nfo'), 'utf8')).resolves.toBe('metadata');

@@ -1,5 +1,7 @@
 import { prisma, logActivity } from '../db/client.js';
 import { JOBS } from './jobs.js';
+import { sourceCollectionDue } from '../pipeline/artistVideoBackfill.js';
+import { redactMessage } from '../security/redact.js';
 
 const running = new Set<string>();
 
@@ -16,16 +18,14 @@ async function runJob(job: (typeof JOBS)[number]): Promise<void> {
   } catch (err) {
     await prisma.scheduledTask.update({
       where: { name: job.name },
-      data: { lastRunAt: new Date(), lastResult: 'failed', lastError: (err as Error).message },
+      data: { lastRunAt: new Date(), lastResult: 'failed', lastError: redactMessage(err) },
     });
     await logActivity('error', `job:${job.name}`, err);
   } finally {
     running.delete(job.name);
     if (job.rerun?.() && process.env.NODE_ENV === 'production') setTimeout(() => void runJob(job), 1_000);
     if (job.name === 'Artist Video Inventory Backfill' && process.env.NODE_ENV === 'production') {
-      const remaining = await prisma.artist.count({ where: {
-        musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null }, videoInventoryCheckedAt: null,
-      } });
+      const remaining = await prisma.artist.count({ where: sourceCollectionDue() });
       if (remaining > 0) setTimeout(() => void runJob(job), 1_000);
     }
   }

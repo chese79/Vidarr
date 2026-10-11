@@ -6,7 +6,8 @@ export default function DownloadProgress() {
   const queue = useQuery({ queryKey: ['queue'], queryFn: api.queue.list, refetchInterval: 3000 });
   const active = queue.data?.filter(item => ['downloading', 'importing'].includes(item.status)) ?? [];
   const waiting = queue.data?.filter(item => item.status === 'queued').length ?? 0;
-  if (!active.length && !waiting) return null;
+  const unresolved = queue.data?.filter(item => item.status === 'submissionUnknown').length ?? 0;
+  if (!active.length && !waiting && !unresolved) return null;
   return <section className="download-progress" aria-label="Active downloads">
     <Link to="/queue">Downloads · {active.length} active</Link>
     {active.map(item => {
@@ -19,6 +20,7 @@ export default function DownloadProgress() {
       </div>;
     })}
     {waiting > 0 && <small>{waiting} video{waiting === 1 ? '' : 's'} waiting</small>}
+    {unresolved > 0 && <Link to="/queue">{unresolved} submission{unresolved === 1 ? '' : 's'} need reconciliation</Link>}
     {queue.isError && <small role="status">Download updates unavailable</small>}
   </section>;
 }

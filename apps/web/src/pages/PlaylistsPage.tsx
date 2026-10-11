@@ -83,7 +83,7 @@ function GeneratePlaylistPanel() {
       maxVideos: maxVideos || 20,
     }),
     onSuccess: (r) => {
-      setResult([`Created "${name}" with ${r.matchedCount} video(s).`, describeSync(r.sync)].filter(Boolean).join(' '));
+      setResult([`Created "${name}" with ${r.matchedCount} video(s). Next: open the playlist and Push to your playback library to publish it.`, describeSync(r.sync)].filter(Boolean).join(' '));
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
       setName('');
     },
@@ -144,7 +144,7 @@ function GeneratePlaylistPanel() {
         <label><input type="checkbox" checked={smart} onChange={(e) => setSmart(e.target.checked)} /> Save as smart playlist</label>
         {smart && <ScheduleSelect value={regenerateIntervalMinutes} onChange={setRegenerateIntervalMinutes} />}
       </div>
-      {smart && <p className="empty-state">Push this playlist once to publish it. Later membership changes republish to that library automatically.</p>}
+      <p className="empty-state">Generate saves the playlist in Vidarr. Open it and Push to your playback library to publish it.{smart && ' Later membership changes republish to that library automatically.'}</p>
 
       <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix="generate" />
 

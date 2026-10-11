@@ -32,8 +32,8 @@ async function searchObservedArtist(name: string): Promise<MusicBrainzArtist[]> 
   return [...results.values()];
 }
 
-export async function enrichConfirmedArtist(artistId: number, mbid: string, observedGenre?: string | null) {
-  const metadata = await lookupMusicBrainzArtist(mbid);
+export async function enrichConfirmedArtist(artistId: number, mbid: string, observedGenre?: string | null, validatedMetadata?: MusicBrainzArtist) {
+  const metadata = validatedMetadata ?? await lookupMusicBrainzArtist(mbid);
   const current = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
   const imvdbSlug = current.imvdbArtistId ?? metadata.imvdbSlug
     ?? await findPublicArtistSlug(metadata.name).catch(() => null);

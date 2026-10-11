@@ -42,6 +42,9 @@ model Artist {
   genresRefreshAttemptedAt DateTime?
   metadataRefreshedAt DateTime?
   videoInventoryCheckedAt DateTime?
+  videoInventoryAttemptedAt DateTime?
+  videoInventoryCompletedAt DateTime?
+  videoInventoryStatus String @default("pending") // pending | running | complete | partial | failed
   videoInventoryError String?
   reconciledAt     DateTime?
   addedAt          DateTime     @default(now())
