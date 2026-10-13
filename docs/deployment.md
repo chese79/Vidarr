@@ -1,5 +1,34 @@
 # Deployment
 
+### Download resource limits and recovery
+
+Full-file motion validation uses one shared worker and one decode/filter thread. The configured
+concurrent-video limit still includes transfers and validation/import, preventing an unbounded
+backlog of downloaded files. Required source/content validation and target-server confirmation remain intact.
+
+Optional container environment overrides are `DOWNLOAD_TIMEOUT_MS` (default 1800000),
+`EXTRACTOR_TIMEOUT_MS` (600000), `VALIDATION_TIMEOUT_MS` (900000), and `PROBE_TIMEOUT_MS` (30000).
+Values must be positive milliseconds; invalid values use the defaults. Hung child processes receive
+graceful termination followed by forced termination after five seconds. Existing
+`PROVIDER_TIMEOUT_MS` (15000) also bounds download-client and indexer requests; thumbnail requests
+have a fifteen-second deadline. Transport failures during external submission remain unresolved
+until verified, since a timeout does not prove that the client rejected the job.
+
+Successful imports schedule a per-connector refresh outside the acquisition slot. Notifications
+are batched over five seconds and spaced at least thirty seconds apart. Pending-import
+reconciliation retries interrupted/failed notifications and confirms exact target-server ownership.
+Move imports link same-filesystem video bytes during staging, retaining the source until commit;
+cross-device/unsupported links copy safely. Rollback and supplied metadata preservation remain unchanged.
+
+When recreating a container with active acquisitions, preserve its `STAGING_DIR` (default
+`/tmp/vidarr-staging`) as well as configuration and media mounts. Restore partial downloads and
+completed staging bundles with their original ownership before starting the replacement; yt-dlp
+can reuse these files when the persistent queue resumes. Retain the previous container and a
+database backup for rollback. A persistent staging mount is recommended for routine deployments.
+Docker copies generated application/Prisma assets with the non-root runtime owner. Installed
+dependencies remain readable without a recursive ownership pass; `/config` and `/media` retain
+their runtime owner. Existing bind-mount permissions remain the administrator's responsibility.
+
 Four ways to run vidarr, in order of how much setup they require. Pick one.
 
 - [Docker](#docker) — recommended; bundles `yt-dlp`/`ffmpeg`, no host setup.

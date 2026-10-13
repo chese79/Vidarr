@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { processDeadline, positiveTimeout } from './processDeadline.js';
+import { withValidationWorker } from './validationWorker.js';
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH ?? 'ffmpeg';
 // ffprobe ships alongside ffmpeg in every distribution vidarr documents
@@ -32,6 +34,7 @@ export async function assertHasVideoStream(filePath: string): Promise<void> {
 
   const output = await new Promise<string>((resolve, reject) => {
     const child = spawn(FFPROBE_PATH, args);
+    processDeadline(child, positiveTimeout(process.env.PROBE_TIMEOUT_MS, 30_000), 'ffprobe', reject);
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d.toString()));
@@ -66,6 +69,7 @@ async function getDurationSeconds(filePath: string): Promise<number> {
       'json',
       filePath,
     ]);
+    processDeadline(child, positiveTimeout(process.env.PROBE_TIMEOUT_MS, 30_000), 'ffprobe', reject);
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d.toString()));
@@ -90,11 +94,17 @@ export const MAX_STATIC_FRACTION = 0.8; // >80% frozen ⇒ treat as a still imag
 // Returns null (rather than 0) when duration can't be determined, so a
 // caller can tell "couldn't check" apart from "checked, found no freezing."
 export async function computeFrozenFraction(filePath: string): Promise<number | null> {
+  return withValidationWorker(() => computeFrozenFractionOnce(filePath));
+}
+
+async function computeFrozenFractionOnce(filePath: string): Promise<number | null> {
   const duration = await getDurationSeconds(filePath);
   if (!duration) return null;
 
   const stderr = await new Promise<string>((resolve, reject) => {
     const child = spawn(FFMPEG_PATH, [
+      '-threads', '1',
+      '-filter_threads', '1',
       '-i',
       filePath,
       '-an',
@@ -104,6 +114,7 @@ export async function computeFrozenFraction(filePath: string): Promise<number | 
       'null',
       '-',
     ]);
+    processDeadline(child, positiveTimeout(process.env.VALIDATION_TIMEOUT_MS, 15 * 60_000), 'Video validation', reject);
     let stderrBuf = '';
     child.stderr.on('data', (d) => (stderrBuf += d.toString()));
     child.on('error', reject);

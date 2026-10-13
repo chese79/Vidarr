@@ -4,6 +4,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import DownloadProgress from '../src/components/DownloadProgress';
 
+it('shows a loading indicator instead of disappearing before the first queue response', () => {
+  const client = new QueryClient();
+  const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
+  expect(html).toContain('Loading download updates');
+});
+
+it('shows unavailable updates when the first queue request fails', async () => {
+  const client = new QueryClient();
+  await client.prefetchQuery({ queryKey: ['queue'], queryFn: async () => { throw new Error('offline'); }, retry: false });
+  const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
+  expect(html).toContain('Download updates unavailable');
+});
+
 it('shows active progress and waiting count while excluding failed downloads', () => {
   const client = new QueryClient();
   client.setQueryData(['queue'], [

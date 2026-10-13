@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — download efficiency (2026-10-12)
+
+- Bound CPU-intensive motion validation to one worker and one decode/filter thread, retaining full-video validation.
+- Add process deadlines (downloads 30 minutes, extraction 10 minutes, validation 15 minutes and probes 30 seconds), bounded thumbnail/provider requests, and termination escalation for hung subprocesses.
+- Claim FIFO download slots atomically with a queue index and bounded lock retries; retain unknown-submission reservations.
+- Parse split and batched progress lines from either output stream, serialize/coalesce progress writes, and expose sidebar loading and unavailable-update states.
+- Batch server scan notifications per connector outside download slots, with persistent delivery reconciliation as recovery.
+- Stage same-filesystem Move imports using a hardlink while preserving source/rollback; copy safely across filesystems.
+- Report the complete direct/external queue in monitor logs, separating this-pass external results from current queue stages.
+- Avoid recursively changing installed dependency ownership during Docker rebuilds; copy generated assets with their runtime owner and retain non-root execution.
+
 ### Fixed — artist visibility and workflow recovery
 
 - Add the default-on Library header filter **Hide Artists w/o Videos**, with a fuchsia border

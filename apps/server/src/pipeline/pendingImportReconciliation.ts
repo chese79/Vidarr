@@ -2,6 +2,7 @@ import { prisma, logActivity } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { normalizeTitle } from './normalize.js';
 import { serverDeliveryPathMatches } from './deliveryPath.js';
+import { refreshServerLibrary } from './serverRefresh.js';
 
 export async function reconcilePendingImports(): Promise<{ checked: number; confirmed: number }> {
   const pending = await prisma.musicVideo.findMany({
@@ -24,7 +25,7 @@ export async function reconcilePendingImports(): Promise<{ checked: number; conf
     if (!provider.fetchVideos) continue;
     // Retry notification independently: a refresh failure must not prevent
     // confirmation from an automatic scan, or permanently strand the import.
-    try { await provider.refreshVideoLibrary?.(connector); }
+    try { await refreshServerLibrary(connector); }
     catch (err) { await logActivity('warn', 'media-server-refresh', err); }
     try {
       const serverVideos = await provider.fetchVideos(connector);

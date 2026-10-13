@@ -182,6 +182,10 @@ completion and failure are reported by Queue and video status. The sidebar shows
 progress and the waiting count. Lowering the limit does not interrupt active transfers.
 The sidebar stays within the viewport while the main content scrolls independently. Navigation
 can scroll separately on short screens, leaving download progress accessible below it.
+Motion validation shares one CPU worker and one decode/filter thread; full-video checks remain required.
+Process deadlines and provider timeouts prevent stalled operations from indefinitely holding slots.
+Server scan notifications are batched outside acquisition slots after import, while persisted pending
+delivery and the reconciliation job retain notification recovery and target-server confirmation.
 Queue shows active requests, followed by the three latest completed imports and then the three
 latest failed attempts. Each result section links to a paginated full list drawn from History;
 failed queue records and history are retained rather than deleted. Results use event timestamps

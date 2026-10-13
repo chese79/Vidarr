@@ -1,6 +1,7 @@
 import type { DownloadClient } from '@prisma/client';
 import type { DownloadClientProvider, DownloadStatus, GrabHandle } from './types.js';
 import { withRetry } from '../../pipeline/retry.js';
+import { providerRequestSignal } from '../library/util.js';
 
 function baseUrl(client: DownloadClient): string {
   return `http://${client.host}:${client.port}`;
@@ -10,6 +11,7 @@ async function login(client: DownloadClient): Promise<string> {
   return withRetry(async () => {
     const res = await fetch(`${baseUrl(client)}/api/v2/auth/login`, {
       method: 'POST',
+      signal: providerRequestSignal(),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         username: client.username ?? '',
@@ -59,6 +61,7 @@ export const qbittorrentProvider: DownloadClientProvider = {
     form.set('urls', downloadUrl);
     form.set('category', category);
     const res = await fetch(`${baseUrl(client)}/api/v2/torrents/add`, {
+      signal: providerRequestSignal(),
       method: 'POST',
       headers: { Cookie: cookie },
       body: form,
@@ -72,6 +75,7 @@ export const qbittorrentProvider: DownloadClientProvider = {
     const torrents = await withRetry(async () => {
       const cookie = await login(client);
       const res = await fetch(`${baseUrl(client)}/api/v2/torrents/info?hashes=${externalRef}`, {
+        signal: providerRequestSignal(),
         headers: { Cookie: cookie },
       });
       if (!res.ok) throw new Error(`qBittorrent status check failed: ${res.status}`);

@@ -5,7 +5,7 @@ import { renderNamingFormat } from '@vidarr/shared-types';
 import { type TransferMode } from './transfer.js';
 import { stageImportBundle } from './importBundle.js';
 import { isPathWithinRoot } from './pathContainment.js';
-import { getLibraryConnectorProvider } from '../providers/library/index.js';
+import { requestServerRefresh } from './serverRefresh.js';
 import { normalizeRootFolderPath } from './rootFolderPath.js';
 
 export interface ImportResult {
@@ -123,12 +123,7 @@ export async function importDownloadedFile(
   }
 
   if (rootFolder.targetConnector?.enabled && rootFolder.targetConnector.videoLibraryId) {
-    try {
-      const provider = getLibraryConnectorProvider(rootFolder.targetConnector.type);
-      if (provider.refreshVideoLibrary) await provider.refreshVideoLibrary(rootFolder.targetConnector);
-    } catch (err) {
-      await logActivity('warn', 'media-server-refresh', err);
-    }
+    requestServerRefresh(rootFolder.targetConnector.id);
   }
 
   return { path: destPath, sizeBytes: BigInt(stat.size) };
