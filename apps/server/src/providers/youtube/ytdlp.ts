@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { cookieSnapshot } from './cookies.js';
+import { processDeadline, positiveTimeout } from '../../pipeline/processDeadline.js';
 
 // Configurable so the binary doesn't have to be on PATH — matches Sonarr/Radarr's
 // own "path to external tool" settings pattern. Defaults assume PATH (true in the
@@ -50,6 +51,21 @@ export function channelVideosUrl(sourceUrl: string): string {
 
 const PROGRESS_LINE = /\[download\]\s+(\d+(?:\.\d+)?)%/;
 
+export function progressLines(onProgress?: (fraction: number) => void) {
+  let pending = '';
+  return (chunk: string, final = false) => {
+    pending += chunk;
+    const lines = pending.split(/[\r\n]/);
+    pending = final ? '' : lines.pop() ?? '';
+    for (const line of lines) {
+      const match = PROGRESS_LINE.exec(line);
+      if (match) onProgress?.(Math.max(0, Math.min(1, Number(match[1]) / 100)));
+    }
+    // Diagnostics need not be held indefinitely when a provider omits newlines.
+    if (pending.length > 64_000) pending = pending.slice(-1024);
+  };
+}
+
 function ytDlpFailure(stderr: string, code: number): string {
   const lines = stderr.split('\n').map(line => line.trim()).filter(Boolean);
   const errors = lines.filter(line => /^ERROR:/i.test(line));
@@ -65,19 +81,21 @@ async function runYtDlp(
     // Use the same supported Node runtime as Vidarr, including on native installs.
     const child = spawn(YTDLP_PATH, ['--js-runtimes', `node:${process.execPath}`,
       ...(cookies ? ['--cookies', cookies.path] : []), ...args]);
+    processDeadline(child, args.includes('--merge-output-format')
+      ? positiveTimeout(process.env.DOWNLOAD_TIMEOUT_MS, 30 * 60_000)
+      : positiveTimeout(process.env.EXTRACTOR_TIMEOUT_MS, 10 * 60_000), 'yt-dlp', reject);
     let stdout = '';
     let stderr = '';
+    const stdoutProgress = progressLines(onProgress);
+    const stderrProgress = progressLines(onProgress);
     child.stdout.on('data', (d) => {
       const chunk = d.toString();
       stdout += chunk;
-      if (onProgress) {
-        const match = PROGRESS_LINE.exec(chunk);
-        if (match) onProgress(Number(match[1]) / 100);
-      }
+      stdoutProgress(chunk);
     });
-    child.stderr.on('data', (d) => (stderr += d.toString()));
+    child.stderr.on('data', (d) => { const chunk = d.toString(); stderr += chunk; stderrProgress(chunk); });
     child.on('error', reject);
-    child.on('close', (code) => resolve({ stdout, stderr, code: code ?? -1 }));
+    child.on('close', (code) => { stdoutProgress('', true); stderrProgress('', true); resolve({ stdout, stderr, code: code ?? -1 }); });
   }); } finally { await cookies?.cleanup(); }
 }
 

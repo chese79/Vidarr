@@ -1,6 +1,7 @@
 import type { DownloadClient } from '@prisma/client';
 import type { DownloadClientProvider, DownloadStatus, GrabHandle } from './types.js';
 import { withRetry } from '../../pipeline/retry.js';
+import { providerRequestSignal } from '../library/util.js';
 
 function apiUrl(client: DownloadClient, params: Record<string, string>): string {
   const url = new URL(`http://${client.host}:${client.port}/api`);
@@ -13,7 +14,7 @@ function apiUrl(client: DownloadClient, params: Record<string, string>): string 
 export const sabnzbdProvider: DownloadClientProvider = {
   async testConnection(client) {
     try {
-      const res = await fetch(apiUrl(client, { mode: 'version' }));
+      const res = await fetch(apiUrl(client, { mode: 'version' }), { signal: providerRequestSignal() });
       if (!res.ok) return { ok: false, message: `${res.status} ${res.statusText}` };
       return { ok: true };
     } catch (err) {
@@ -24,6 +25,7 @@ export const sabnzbdProvider: DownloadClientProvider = {
   async addDownload(client, downloadUrl, category): Promise<GrabHandle> {
     const res = await fetch(
       apiUrl(client, { mode: 'addurl', name: downloadUrl, cat: category }),
+      { signal: providerRequestSignal() },
     );
     if (!res.ok) throw new Error(`SABnzbd add failed: ${res.status} ${res.statusText}`);
     const body = await res.json();
@@ -35,7 +37,7 @@ export const sabnzbdProvider: DownloadClientProvider = {
 
   async getStatus(client, externalRef): Promise<DownloadStatus> {
     const queue = await withRetry(async () => {
-      const res = await fetch(apiUrl(client, { mode: 'queue' }));
+      const res = await fetch(apiUrl(client, { mode: 'queue' }), { signal: providerRequestSignal() });
       if (!res.ok) throw new Error(`SABnzbd queue check failed: ${res.status}`);
       return res.json();
     });
@@ -45,7 +47,7 @@ export const sabnzbdProvider: DownloadClientProvider = {
     }
 
     const history = await withRetry(async () => {
-      const res = await fetch(apiUrl(client, { mode: 'history' }));
+      const res = await fetch(apiUrl(client, { mode: 'history' }), { signal: providerRequestSignal() });
       if (!res.ok) throw new Error(`SABnzbd history check failed: ${res.status}`);
       return res.json();
     });

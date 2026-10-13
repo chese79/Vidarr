@@ -47,6 +47,9 @@ it('starts only three concurrent transfers, reports progress, and advances FIFO 
   await waitFor(() => expect(transfers).toHaveLength(3));
   await waitFor(async () => expect(await prisma.downloadQueueItem.count({ where: { status: 'downloading', progress: 0.25 } })).toBe(3));
   expect(await prisma.downloadQueueItem.count({ where: { status: 'queued' } })).toBe(2);
+  const snapshot = await refreshQueue();
+  expect(snapshot.pending).toBe(5);
+  expect(snapshot.queueCounts).toMatchObject({ queued: 2, downloading: 3, importing: 0 });
   transfers[0].resolve('/tmp/nonexistent-test-download.mp4');
   await waitFor(() => expect(transfers).toHaveLength(4));
   expect(vi.mocked(downloadDirectVideo).mock.calls[3][0]).toContain('Song3');

@@ -24,7 +24,14 @@ export async function stageImportBundle(source: string, destination: string, mod
   try {
     const stagedVideo = path.join(staging, path.basename(destination));
     // A move keeps its source intact until metadata and DB recording succeed.
-    await placeFile(source, stagedVideo, mode === 'move' ? 'copy' : mode);
+    if (mode === 'move') {
+      // Retain the source for rollback without copying same-filesystem bytes.
+      try { await fs.link(source, stagedVideo); }
+      catch (error) {
+        if (!['EXDEV', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+        await placeFile(source, stagedVideo, 'copy');
+      }
+    } else await placeFile(source, stagedVideo, mode);
     for (const entry of await fs.readdir(path.dirname(source), { withFileTypes: true })) {
       const suffix = entry.name.slice(sourceBase.length);
       if (!entry.isFile() || !entry.name.startsWith(sourceBase)

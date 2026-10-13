@@ -65,7 +65,7 @@ export async function writeLibraryMetadata(videoPath: string, meta: LibraryMetad
 
   if (meta.thumbnailUrl && (!options.preserveExisting || !await exists(`${base}-thumb.jpg`))) {
     try {
-      const res = await fetch(meta.thumbnailUrl);
+      const res = await fetch(meta.thumbnailUrl, { signal: AbortSignal.timeout(15_000) });
       if (res.ok) {
         const buffer = Buffer.from(await res.arrayBuffer());
         await fs.writeFile(`${base}-thumb.jpg`, buffer);

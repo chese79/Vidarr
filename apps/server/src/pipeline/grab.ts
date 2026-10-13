@@ -92,6 +92,9 @@ async function enqueueDirectDownload(musicVideoId: number): Promise<DownloadQueu
 async function runDirectDownload(queueItem: DownloadQueueItem): Promise<ImportResult> {
   const musicVideoId = queueItem.musicVideoId;
   let downloadedPath: string | undefined;
+  let progressWrites = Promise.resolve();
+  let writingProgress = false;
+  let pendingProgress: number | undefined;
   try {
     await fs.mkdir(STAGING_DIR, { recursive: true });
     let lastProgressWrite = 0;
@@ -99,10 +102,19 @@ async function runDirectDownload(queueItem: DownloadQueueItem): Promise<ImportRe
       const now = Date.now();
       if (now - lastProgressWrite < 1000) return; // throttle DB writes
       lastProgressWrite = now;
-      prisma.downloadQueueItem
-        .update({ where: { id: queueItem.id }, data: { progress: fraction } })
-        .catch(() => {});
+      pendingProgress = fraction;
+      if (writingProgress) return;
+      writingProgress = true;
+      progressWrites = (async () => {
+        while (pendingProgress !== undefined) {
+          const progress = pendingProgress;
+          pendingProgress = undefined;
+          try { await prisma.downloadQueueItem.updateMany({ where: { id: queueItem.id, status: 'downloading' }, data: { progress } }); }
+          catch (error) { await logActivity('warn', 'download-progress', error).catch(() => {}); }
+        }
+      })().finally(() => { writingProgress = false; });
     });
+    await progressWrites;
     await prisma.downloadQueueItem.update({ where: { id: queueItem.id }, data: { progress: 1, status: 'importing' } });
     await assertIsRealMusicVideo(downloadedPath);
     const result = await importDownloadedFile(musicVideoId, downloadedPath, 'YouTube');
@@ -110,6 +122,7 @@ async function runDirectDownload(queueItem: DownloadQueueItem): Promise<ImportRe
     await prisma.downloadQueueItem.delete({ where: { id: queueItem.id } });
     return result;
   } catch (err) {
+    await progressWrites;
     // A failed import retains the downloaded bundle for recovery; never
     // discard its only copy merely because recording or metadata failed.
     await prisma.downloadQueueItem.update({
@@ -254,14 +267,14 @@ export async function resumeDownloadQueue(): Promise<void> {
   await drainDownloadQueue();
 }
 
-let refreshing: Promise<{ completed: number; failed: number; pending: number }> | null = null;
-export function refreshQueue(): Promise<{ completed: number; failed: number; pending: number }> {
+let refreshing: ReturnType<typeof refreshQueueOnce> | null = null;
+export function refreshQueue(): ReturnType<typeof refreshQueueOnce> {
   if (refreshing) return refreshing;
   refreshing = refreshQueueOnce().finally(() => { refreshing = null; });
   return refreshing;
 }
 
-async function refreshQueueOnce(): Promise<{ completed: number; failed: number; pending: number }> {
+async function refreshQueueOnce() {
   const items = await prisma.downloadQueueItem.findMany({
     where: { sourceType: 'indexer', status: 'downloading' },
     include: { downloadClient: true },
@@ -318,5 +331,10 @@ async function refreshQueueOnce(): Promise<{ completed: number; failed: number; 
   }
 
   await drainDownloadQueue();
-  return { completed, failed, pending };
+  const groups = await prisma.downloadQueueItem.groupBy({ by: ['status'], _count: true });
+  const count = (status: string) => groups.find(group => group.status === status)?._count ?? 0;
+  const queueCounts = { queued: count('queued'), downloading: count('downloading'), importing: count('importing'),
+    submissionUnknown: count('submissionUnknown'), failedRecords: count('failed') };
+  pending = queueCounts.queued + queueCounts.downloading + queueCounts.importing + queueCounts.submissionUnknown;
+  return { completed, failed, pending, queueCounts };
 }

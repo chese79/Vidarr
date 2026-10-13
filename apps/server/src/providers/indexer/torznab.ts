@@ -2,6 +2,7 @@ import { XMLParser } from 'fast-xml-parser';
 import type { Indexer } from '@prisma/client';
 import type { IndexerSearchResult } from './types.js';
 import { parseQualityFromTitle } from '../../pipeline/qualityParser.js';
+import { providerRequestSignal } from '../library/util.js';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
 
@@ -43,7 +44,7 @@ export async function searchIndexer(
   const categories = configuredCategories.length ? configuredCategories : [MUSIC_VIDEO_CATEGORY];
   url.searchParams.set('cat', categories.join(','));
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: providerRequestSignal() });
   if (!res.ok) {
     throw new Error(`Indexer request failed: ${res.status} ${res.statusText}`);
   }

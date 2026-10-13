@@ -110,12 +110,12 @@ RUN --mount=type=cache,target=/root/.npm \
 # initialize yet" until `prisma generate` has run against schema.prisma) —
 # overwrite it with the real client (including its native query-engine
 # binary) already generated in the base stage, rather than regenerating.
-COPY --from=base /app/node_modules/.prisma/client node_modules/.prisma/client
+COPY --chown=node:node --from=base /app/node_modules/.prisma/client node_modules/.prisma/client
 
-COPY --from=base /app/packages/shared-types/dist packages/shared-types/dist
-COPY --from=build-server /app/apps/server/dist apps/server/dist
-COPY --from=base /app/apps/server/prisma apps/server/prisma
-COPY --from=build-web /app/apps/web/dist apps/web/dist
+COPY --chown=node:node --from=base /app/packages/shared-types/dist packages/shared-types/dist
+COPY --chown=node:node --from=build-server /app/apps/server/dist apps/server/dist
+COPY --chown=node:node --from=base /app/apps/server/prisma apps/server/prisma
+COPY --chown=node:node --from=build-web /app/apps/web/dist apps/web/dist
 
 ENV NODE_ENV=production
 ENV PORT=3434
@@ -130,7 +130,7 @@ ENV WEB_DIST_PATH=/app/apps/web/dist
 # that host directory is writable by uid 1000 (e.g. `chown -R 1000:1000
 # ./media`), since a bind mount keeps the host's ownership rather than the
 # image's.
-RUN mkdir -p /config /media && chown -R node:node /config /media /app
+RUN mkdir -p /config /media && chown node:node /config /media
 
 USER node
 WORKDIR /app/apps/server

@@ -1,5 +1,29 @@
 # Process flows and consistency review
 
+## Download efficiency update (2026-10-12)
+
+The acquisition sequence still requires source acceptance, eligibility checks, bounded download,
+full-video validation and atomic import. CPU-intensive motion validation shares one worker across
+downloads and discovery samples, with one decode/filter thread. Waiting for validation retains the
+existing acquisition slot, so the configured limit continues to bound in-flight work and disk usage.
+Subprocess and network deadlines produce recoverable failures; uncertain external submissions retain
+their reservation and require verified reconciliation rather than automatic resubmission.
+
+After import records awaiting-server status, a notification is scheduled outside the acquisition slot.
+Imports within five seconds share one connector notification; subsequent automatic notifications are
+spaced at least thirty seconds apart. In-flight refreshes are shared with delivery reconciliation.
+The five-minute pending-import job recovers notifications interrupted by restart or server outages.
+Only matching target-server inventory confirms delivery, as before.
+
+Move staging hardlinks video bytes when supported on the same filesystem; supplied sidecars are
+copied before metadata edits. The source remains intact until commit, and rollback restores any
+replaced bundle. Cross-filesystem or unsupported hardlinks fall back to copying.
+
+The sidebar polls active records and exposes initial loading and request errors. Progress consumes
+complete output lines, including split/batched lines, and database updates are serialized/coalesced.
+Monitor logs report all sources' queued, transferring, validating/importing and unresolved counts,
+with historical failure records clearly separated from this-pass external-client outcomes.
+
 Reviewed 2026-10-10 against main `10f8352`, product vision, workflow documentation and current code.
 This is a review baseline, not a claim that the gaps below have been fixed.
 
