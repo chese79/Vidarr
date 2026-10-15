@@ -54,7 +54,7 @@ describe('quality upgrade import safety', () => {
     await fs.writeFile(sourcePath.replace('.mp4', '.en.srt'), 'subtitles');
     await fs.writeFile(path.join(directory, 'other.nfo'), 'unrelated');
     await fs.writeFile(path.join(directory, 'upgrade-other.nfo'), 'another video');
-    const result = await importDownloadedFile(videoId, sourcePath, '1080p');
+    const result = await importDownloadedFile(videoId, sourcePath, '1080p', 1234);
     const base = result.path.replace('.mp4', '');
     await expect(fs.readFile(`${base}.nfo`, 'utf8')).resolves.toContain('<title>Song</title>');
     await expect(fs.readFile(`${base}.nfo`, 'utf8')).resolves.toContain('<plot>Keep this plot</plot>');
@@ -66,6 +66,8 @@ describe('quality upgrade import safety', () => {
     await expect(fs.readFile(path.join(directory, 'other.nfo'), 'utf8')).resolves.toBe('unrelated');
     await expect(fs.readFile(path.join(directory, 'upgrade-other.nfo'), 'utf8')).resolves.toBe('another video');
     expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).not.toBeNull();
+    const completion = await prisma.history.findFirstOrThrow({ where: { musicVideoId: videoId, eventType: 'downloadFolderImported' } });
+    expect(JSON.parse(completion.data)).toMatchObject({ queueId: 1234, path: result.path });
   });
 
   it('does not overwrite another video or an untracked file at the computed destination', async () => {

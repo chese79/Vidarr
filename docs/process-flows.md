@@ -1,11 +1,38 @@
 # Process flows and consistency review
 
+## Transfer/processing pipeline (2026-10-15)
+
+The required acquisition stages are preserved: accepted source and eligibility checks → transfer
+and merge → full-video validation → atomic import → separate target-server delivery confirmation.
+Three network slots no longer become unavailable simply because three videos are processing.
+A single processing worker takes staged files in download-completion order. Reservations include
+transfers, unresolved submissions and staged processing work, defaulting to the configured transfer
+limit plus three. This reserves space before simultaneous transfers finish, bounding the staging
+buffer. New transfers also stop below the staging storage minimum-free-space setting. Failed
+bundles remain available for recovery and consume real disk space; the count cap is not a byte-size
+guarantee for unknown-size media. Existing jobs finish if a limit is lowered.
+
+Staging paths and directories persist in the additive queue migration. Interrupted transfers reuse
+their directory; downloaded files resume processing. Pre-migration active jobs retain their legacy
+staging layout. The import transaction records its queue ID with ownership/history, so cleanup or
+restart after a successful Move cannot trigger another download of the moved source. Missing staged
+files resume a direct transfer or external-client status check, never an automatic external resubmission.
+
+Queue distinguishes finding formats, downloading, merging, waiting for validation, validating and
+importing. Processing bars are indeterminate rather than implying 100% end-to-end completion.
+Completed/failed results retain measured stage timings and the last reported transfer speed.
+Format extraction includes pre-transfer setup; merge timing includes post-processing/file movement.
+Processing wait runs from transfer completion to processor start; validation elapsed includes any
+wait for the shared motion worker. Total includes queue wait and restart downtime. Unknown stages
+are omitted rather than reported as zero. Source validation, ignored checks, metadata rollback and
+exact target-server confirmation still apply.
+
 ## Download efficiency update (2026-10-12)
 
 The acquisition sequence still requires source acceptance, eligibility checks, bounded download,
 full-video validation and atomic import. CPU-intensive motion validation shares one worker across
-downloads and discovery samples, with one decode/filter thread. Waiting for validation retains the
-existing acquisition slot, so the configured limit continues to bound in-flight work and disk usage.
+downloads and discovery samples. That release used one decode/filter thread and shared acquisition
+slots; the newer pipeline above supersedes its slot/thread policy while retaining bounded work.
 Subprocess and network deadlines produce recoverable failures; uncertain external submissions retain
 their reservation and require verified reconciliation rather than automatic resubmission.
 

@@ -35,6 +35,10 @@ it('enables the running Node executable for metadata extraction and direct downl
     expect(args?.slice(0, 2)).toEqual(['--js-runtimes', `node:${process.execPath}`]);
   }
   expect(vi.mocked(spawn).mock.calls[1][1]).toContain('--progress');
+  const args = vi.mocked(spawn).mock.calls[1][1]!;
+  expect(args[args.indexOf('--concurrent-fragments') + 1]).toBe('4');
+  expect(args).toContain('before_dl:__VIDARR_TRANSFER__');
+  expect(args).toContain('post_process:__VIDARR_MERGE__');
 });
 
 it('reports the private-video error without preceding runtime warnings', async () => {

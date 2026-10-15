@@ -21,6 +21,7 @@ export async function importDownloadedFile(
   musicVideoId: number,
   sourcePath: string,
   qualityName: string,
+  queueId?: number,
 ): Promise<ImportResult> {
   const musicVideo = await prisma.musicVideo.findUniqueOrThrow({
     where: { id: musicVideoId },
@@ -103,6 +104,7 @@ export async function importDownloadedFile(
         data: JSON.stringify({
           path: destPath,
           quality: qualityName,
+          queueId,
           upgradedFrom: existingFile && existingFile.path !== destPath ? existingFile.path : undefined,
         }),
       },

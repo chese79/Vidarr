@@ -93,6 +93,8 @@ export interface QueueItem {
   error?: string | null;
   quality: string | null;
   addedAt: string;
+  phase?: string | null;
+  stageTimings?: Record<string, number> | null;
   musicVideo: { title: string; artist: { id: number; name: string } };
 }
 

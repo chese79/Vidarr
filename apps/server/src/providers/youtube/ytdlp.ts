@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { cookieSnapshot } from './cookies.js';
 import { processDeadline, positiveTimeout } from '../../pipeline/processDeadline.js';
+import { fragmentConcurrency } from '../../pipeline/downloadTuning.js';
+import type { DownloadTelemetry, DownloadTimings } from '../../pipeline/downloadTimings.js';
 
 // Configurable so the binary doesn't have to be on PATH — matches Sonarr/Radarr's
 // own "path to external tool" settings pattern. Defaults assume PATH (true in the
@@ -51,19 +53,56 @@ export function channelVideosUrl(sourceUrl: string): string {
 
 const PROGRESS_LINE = /\[download\]\s+(\d+(?:\.\d+)?)%/;
 
-export function progressLines(onProgress?: (fraction: number) => void) {
+export function progressLines(onProgress?: (fraction: number) => void, onLine?: (line: string) => void) {
   let pending = '';
   return (chunk: string, final = false) => {
     pending += chunk;
     const lines = pending.split(/[\r\n]/);
     pending = final ? '' : lines.pop() ?? '';
     for (const line of lines) {
+      onLine?.(line);
       const match = PROGRESS_LINE.exec(line);
       if (match) onProgress?.(Math.max(0, Math.min(1, Number(match[1]) / 100)));
     }
     // Diagnostics need not be held indefinitely when a provider omits newlines.
     if (pending.length > 64_000) pending = pending.slice(-1024);
   };
+}
+
+export function downloadTelemetry(onEvent?: (event: DownloadTelemetry) => void, clock = () => performance.now()) {
+  const start = clock();
+  let transfer: number | undefined, merge: number | undefined;
+  const timings: DownloadTimings = {};
+  onEvent?.({ phase: 'extracting' });
+  return {
+    line(line: string) {
+      if (line === '__VIDARR_TRANSFER__' && transfer === undefined) {
+        transfer = clock(); timings.extractionMs = Math.round(transfer - start);
+        onEvent?.({ phase: 'transferring' });
+      }
+      if (line === '__VIDARR_MERGE__' && merge === undefined) {
+        merge = clock();
+        if (transfer !== undefined) timings.transferMs = Math.round(merge - transfer);
+        onEvent?.({ phase: 'merging' });
+      }
+      const speed = /VIDARR_SPEED=([\d.eE+-]+)/.exec(line);
+      if (speed && Number.isFinite(Number(speed[1])) && Number(speed[1]) > 0) timings.recentBytesPerSecond = Math.round(Number(speed[1]));
+    },
+    finish() {
+      const end = clock();
+      timings.acquisitionMs = Math.round(end - start);
+      if (merge !== undefined) timings.mergeMs = Math.round(end - merge);
+      else if (transfer !== undefined) timings.transferMs = Math.round(end - transfer);
+      onEvent?.({ timings });
+      return timings;
+    },
+  };
+}
+
+function directDownloadOptions(): string[] {
+  return ['--concurrent-fragments', String(fragmentConcurrency()),
+    '--print', 'before_dl:__VIDARR_TRANSFER__', '--print', 'post_process:__VIDARR_MERGE__',
+    '--progress-template', 'download:[download] %(progress._percent_str)s VIDARR_SPEED=%(progress.speed)s'];
 }
 
 function ytDlpFailure(stderr: string, code: number): string {
@@ -75,6 +114,7 @@ function ytDlpFailure(stderr: string, code: number): string {
 async function runYtDlp(
   args: string[],
   onProgress?: (fraction: number) => void,
+  onTelemetry?: (event: DownloadTelemetry) => void,
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   const cookies = await cookieSnapshot(args);
   try { return await new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
@@ -86,8 +126,9 @@ async function runYtDlp(
       : positiveTimeout(process.env.EXTRACTOR_TIMEOUT_MS, 10 * 60_000), 'yt-dlp', reject);
     let stdout = '';
     let stderr = '';
-    const stdoutProgress = progressLines(onProgress);
-    const stderrProgress = progressLines(onProgress);
+    const telemetry = onTelemetry ? downloadTelemetry(onTelemetry) : undefined;
+    const stdoutProgress = progressLines(onProgress, telemetry?.line);
+    const stderrProgress = progressLines(onProgress, telemetry?.line);
     child.stdout.on('data', (d) => {
       const chunk = d.toString();
       stdout += chunk;
@@ -95,7 +136,7 @@ async function runYtDlp(
     });
     child.stderr.on('data', (d) => { const chunk = d.toString(); stderr += chunk; stderrProgress(chunk); });
     child.on('error', reject);
-    child.on('close', (code) => { stdoutProgress('', true); stderrProgress('', true); resolve({ stdout, stderr, code: code ?? -1 }); });
+    child.on('close', (code) => { stdoutProgress('', true); stderrProgress('', true); telemetry?.finish(); resolve({ stdout, stderr, code: code ?? -1 }); });
   }); } finally { await cookies?.cleanup(); }
 }
 
@@ -244,6 +285,7 @@ export async function downloadVideo(
   destDir: string,
   formatSelector: string = DEFAULT_FORMAT,
   onProgress?: (fraction: number) => void,
+  onTelemetry?: (event: DownloadTelemetry) => void,
 ): Promise<string> {
   const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
   const args = [
@@ -265,8 +307,8 @@ export async function downloadVideo(
   if (FFMPEG_PATH !== 'ffmpeg') {
     args.push('--ffmpeg-location', path.dirname(FFMPEG_PATH));
   }
-  args.push(url);
-  const { stdout, stderr, code } = await runYtDlp(args, onProgress);
+  args.push(...directDownloadOptions(), url);
+  const { stdout, stderr, code } = await runYtDlp(args, onProgress, onTelemetry);
   if (code !== 0) {
     throw new Error(`yt-dlp download failed: ${ytDlpFailure(stderr, code)}`);
   }
@@ -284,6 +326,7 @@ export async function downloadDirectVideo(
   destDir: string,
   formatSelector: string = DEFAULT_FORMAT,
   onProgress?: (fraction: number) => void,
+  onTelemetry?: (event: DownloadTelemetry) => void,
 ): Promise<string> {
   const args = [
     '-f', formatSelector,
@@ -295,8 +338,8 @@ export async function downloadDirectVideo(
     '--print', 'after_move:filepath',
   ];
   if (FFMPEG_PATH !== 'ffmpeg') args.push('--ffmpeg-location', path.dirname(FFMPEG_PATH));
-  args.push(url);
-  const { stdout, stderr, code } = await runYtDlp(args, onProgress);
+  args.push(...directDownloadOptions(), url);
+  const { stdout, stderr, code } = await runYtDlp(args, onProgress, onTelemetry);
   if (code !== 0) throw new Error(`yt-dlp download failed: ${ytDlpFailure(stderr, code)}`);
   const lines = stdout.split('\n').map((line) => line.trim()).filter(Boolean);
   const filepath = lines[lines.length - 1];

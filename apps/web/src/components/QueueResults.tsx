@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { HistoryEntry } from '@vidarr/shared-types';
 import { api } from '../api/client';
+import { formatDownloadTimings } from './downloadStage';
+
+function resultTimings(item: HistoryEntry): string {
+  try { return formatDownloadTimings(JSON.parse(item.data ?? '{}').timings); } catch { return ''; }
+}
 
 function details(item: HistoryEntry): string {
   try {
@@ -16,7 +21,9 @@ export function QueueResultsTable({ items, failed }: { items: HistoryEntry[]; fa
   return <table><thead><tr><th>Date</th><th>Artist</th><th>Video</th><th>{failed ? 'Error' : 'Quality'}</th><th>{failed ? 'Next step' : 'Current delivery'}</th></tr></thead>
     <tbody>{items.map(item => <tr key={item.id}>
       <td>{new Date(item.date).toLocaleString()}</td><td>{item.musicVideo.artist.name}</td>
-      <td>{item.musicVideo.title}</td><td>{details(item)}</td>
+      <td>{item.musicVideo.title}</td><td>{details(item)}
+        {resultTimings(item) && <details><summary>Timings</summary>{resultTimings(item)}</details>}
+      </td>
       <td>{failed ? <Link to={item.musicVideo.artist.id ? `/artist/${item.musicVideo.artist.id}` : '/library'}>Review sources / retry</Link> :
         item.deliveryStatus === 'readyToPlay' ? 'Ready to play on target server' :
           item.deliveryStatus === 'awaitingServerCataloging' ? 'Imported · awaiting server cataloging' : 'Imported · server readiness unconfirmed'}</td>

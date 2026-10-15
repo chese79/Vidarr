@@ -4,6 +4,7 @@ import { refreshQueue } from '../pipeline/grab.js';
 import { z } from 'zod';
 import { getDownloadClientProvider } from '../providers/downloadclient/index.js';
 import { isDownloadRunnerActive, wakeDownloadQueue } from '../pipeline/downloadDispatcher.js';
+import { readDownloadTimings } from '../pipeline/downloadTimings.js';
 import { redactMessage } from '../security/redact.js';
 
 export async function queueRoutes(app: FastifyInstance) {
@@ -49,11 +50,12 @@ export async function queueRoutes(app: FastifyInstance) {
   });
   app.get('/api/v1/queue', async (req) => {
     const { activeOnly } = z.object({ activeOnly: z.enum(['true', 'false']).optional() }).parse(req.query);
-    return prisma.downloadQueueItem.findMany({
+    const items = await prisma.downloadQueueItem.findMany({
       where: activeOnly === 'true' ? { status: { in: ['queued', 'downloading', 'importing', 'submissionUnknown'] } } : undefined,
       include: { musicVideo: { include: { artist: true } } },
       orderBy: { addedAt: 'desc' },
     });
+    return items.map(item => ({ ...item, stageTimings: item.stageTimings ? readDownloadTimings(item.stageTimings) : null }));
   });
 
   for (const [section, eventType] of [['completed', 'downloadFolderImported'], ['failures', 'downloadFailed']] as const) {

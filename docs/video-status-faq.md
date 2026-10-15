@@ -31,6 +31,18 @@ Interrupted direct downloads resume after restart. External-client jobs and unce
 keep their existing handles; uncertain submissions require reconciliation before their slot frees.
 The limit applies to jobs Vidarr manages, including external-client jobs, not unrelated client jobs.
 
+Transfers have separate capacity from validation and import. One processing worker handles completed
+files while the next transfers run. By default, transfers and processing together reserve at most
+the transfer limit plus three jobs (six with the default settings). New transfers pause when the
+staging disk falls below the configured free-space reserve. Failed bundles remain for recovery
+and still use disk space. Downloaded files and partial-transfer directories survive normal restarts.
+
+The sidebar and Queue show finding formats, downloading, merging, waiting for validation,
+validating and importing. Processing bars are indeterminate because transferred bytes do not measure
+validation or import progress. Expand **Timings** for measured stages and the last reported transfer
+speed; completed and failed results retain these measurements. Total time includes queue wait.
+Full-file validation and target-server catalog confirmation still apply.
+
 ## What happens after a download?
 
 New installations default to Move. Vidarr places the video and its video-specific metadata,

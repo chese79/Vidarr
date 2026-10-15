@@ -176,13 +176,20 @@ accepted links before searching for a new candidate; newly discovered YouTube ca
 require validation.
 
 Acquisition requests enter a persistent first-in, first-out download queue. General Settings
-controls the simultaneous video limit (default three, from one to twenty), shared by direct
-transfers and Vidarr-submitted external-client jobs. A request acknowledges queue acceptance;
+controls simultaneous network transfers (default three, from one to twenty), shared by direct
+transfers and Vidarr-submitted external-client jobs. Validation/import uses a separate single
+worker. Pipeline reservations cover both in-flight transfers and staged files, capped at the
+transfer limit plus three by default; completed transfers retain their reservation until import
+or failure. New transfers pause below the configured minimum free space on staging storage.
+A request acknowledges queue acceptance;
 completion and failure are reported by Queue and video status. The sidebar shows active transfer
 progress and the waiting count. Lowering the limit does not interrupt active transfers.
 The sidebar stays within the viewport while the main content scrolls independently. Navigation
 can scroll separately on short screens, leaving download progress accessible below it.
-Motion validation shares one CPU worker and one decode/filter thread; full-video checks remain required.
+Motion validation shares one CPU worker, one filter thread and adaptive decode threads (two for HD,
+one for SD); full-video checks remain required. Fragment concurrency defaults to four for supported
+DASH/HLS transfers. Queue shows the current stage and measured extraction/transfer/merge/processing
+timings; missing telemetry remains unknown. Delivery confirmation stays separate from acquisition.
 Process deadlines and provider timeouts prevent stalled operations from indefinitely holding slots.
 Server scan notifications are batched outside acquisition slots after import, while persisted pending
 delivery and the reconciliation job retain notification recovery and target-server confirmation.
@@ -190,7 +197,10 @@ Queue shows active requests, followed by the three latest completed imports and 
 latest failed attempts. Each result section links to a paginated full list drawn from History;
 failed queue records and history are retained rather than deleted. Results use event timestamps
 and retain repeated attempts and upgrades, including completion after an earlier failure.
-Interrupted direct transfers resume after restart; external-client handles remain intact, and
+Interrupted direct transfers reuse their persisted staging directory. Completed staged files resume
+validation/import without downloading again. Import commits record the queue identity atomically,
+allowing restart/cleanup recovery to recognize a completed import before retrying its moved source.
+External-client handles remain intact, and
 uncertain submissions retain a slot until reconciled so they are never submitted twice.
 
 General Settings accepts an optional Netscape-format YouTube cookie file for an account that
