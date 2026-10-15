@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { processDeadline, positiveTimeout } from './processDeadline.js';
 import { withValidationWorker } from './validationWorker.js';
+import { validationThreads } from './downloadTuning.js';
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH ?? 'ffmpeg';
 // ffprobe ships alongside ffmpeg in every distribution vidarr documents
@@ -58,13 +59,14 @@ export async function assertHasVideoStream(filePath: string): Promise<void> {
   }
 }
 
-async function getDurationSeconds(filePath: string): Promise<number> {
+async function getVideoProbe(filePath: string): Promise<{ duration: number; width: number; height: number }> {
   const output = await new Promise<string>((resolve, reject) => {
     const child = spawn(FFPROBE_PATH, [
       '-v',
       'error',
+      '-select_streams', 'v:0',
       '-show_entries',
-      'format=duration',
+      'format=duration:stream=width,height',
       '-of',
       'json',
       filePath,
@@ -80,7 +82,8 @@ async function getDurationSeconds(filePath: string): Promise<number> {
       else resolve(stdout);
     });
   });
-  return Number(JSON.parse(output || '{}')?.format?.duration ?? 0);
+  const probe = JSON.parse(output || '{}');
+  return { duration: Number(probe.format?.duration ?? 0), width: Number(probe.streams?.[0]?.width ?? 0), height: Number(probe.streams?.[0]?.height ?? 0) };
 }
 
 const FREEZE_EVENT = /freeze_(start|duration):\s*([\d.]+)/g;
@@ -98,12 +101,13 @@ export async function computeFrozenFraction(filePath: string): Promise<number | 
 }
 
 async function computeFrozenFractionOnce(filePath: string): Promise<number | null> {
-  const duration = await getDurationSeconds(filePath);
+  const probe = await getVideoProbe(filePath);
+  const duration = probe.duration;
   if (!duration) return null;
 
   const stderr = await new Promise<string>((resolve, reject) => {
     const child = spawn(FFMPEG_PATH, [
-      '-threads', '1',
+      '-threads', String(validationThreads(probe.width, probe.height)),
       '-filter_threads', '1',
       '-i',
       filePath,

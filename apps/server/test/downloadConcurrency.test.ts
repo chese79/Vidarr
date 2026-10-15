@@ -4,7 +4,11 @@ import { queueDirectVideo, grabFromIndexer, refreshQueue, resumeDownloadQueue } 
 import { drainDownloadQueue } from '../src/pipeline/downloadDispatcher.js';
 import { downloadDirectVideo } from '../src/providers/youtube/ytdlp.js';
 import { getDownloadClientProvider } from '../src/providers/downloadclient/index.js';
-import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist, createMusicVideo } from './support/db.js';
+import { assertIsRealMusicVideo } from '../src/pipeline/validateVideoFile.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist, createMusicVideo, createMusicVideoFile } from './support/db.js';
 
 vi.mock('../src/providers/youtube/ytdlp.js', () => ({ downloadDirectVideo: vi.fn() }));
 vi.mock('../src/providers/downloadclient/index.js', () => ({ getDownloadClientProvider: vi.fn() }));
@@ -18,6 +22,7 @@ const transfers: Array<{ resolve: (path: string) => void; reject: (err: Error) =
 let artistId: number;
 beforeEach(async () => {
   vi.clearAllMocks(); transfers.length = 0;
+  vi.mocked(assertIsRealMusicVideo).mockReset().mockResolvedValue(undefined);
   await resetDb();
   const root = await createRootFolder();
   const profile = await createQualityProfile((await createQuality()).id);
@@ -29,13 +34,76 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   await prisma.downloadQueueItem.deleteMany({ where: { sourceType: 'indexer' } });
   // Let every pending transfer terminate before the next test resets the database.
   await waitFor(async () => {
     transfers.forEach(t => t.reject(new Error('test cleanup')));
     await drainDownloadQueue();
-    expect(await prisma.downloadQueueItem.count({ where: { status: { in: ['queued', 'downloading'] } } })).toBe(0);
+    expect(await prisma.downloadQueueItem.count({ where: { status: { in: ['queued', 'downloading', 'importing'] } } })).toBe(0);
   });
+});
+
+it('overlaps three new transfers with processing and stops at six pipeline reservations', async () => {
+  let release!: () => void;
+  vi.mocked(assertIsRealMusicVideo).mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve; }));
+  try {
+    for (let i = 0; i < 7; i++) await queueDirectVideo((await addVideo(`Pipeline${i}`)).id);
+    await waitFor(() => expect(transfers).toHaveLength(3));
+    transfers.slice(0, 3).forEach((transfer, index) => transfer.resolve(`/tmp/pipeline-${index}.mp4`));
+    await waitFor(() => expect(transfers).toHaveLength(6));
+    await waitFor(() => expect(assertIsRealMusicVideo).toHaveBeenCalledTimes(1));
+    transfers.slice(3, 6).forEach((transfer, index) => transfer.resolve(`/tmp/pipeline-${index + 3}.mp4`));
+    await waitFor(async () => expect(await prisma.downloadQueueItem.count({ where: { status: 'importing' } })).toBe(6));
+    await drainDownloadQueue();
+    expect(transfers).toHaveLength(6);
+    expect(await prisma.downloadQueueItem.count({ where: { phase: 'waitingValidation' } })).toBe(5);
+    release();
+    await waitFor(() => expect(transfers).toHaveLength(7));
+  } finally { release?.(); }
+});
+
+it('pauses new transfers below the staging disk reserve, then resumes after space returns', async () => {
+  const stat = vi.spyOn(fs, 'statfs').mockResolvedValue({ bavail: 0n, bsize: 4096n } as never);
+  await queueDirectVideo((await addVideo('Disk reserve')).id);
+  await drainDownloadQueue();
+  expect(transfers).toHaveLength(0);
+  stat.mockRestore();
+  await drainDownloadQueue();
+  await waitFor(() => expect(transfers).toHaveLength(1));
+});
+
+it('resumes a persisted staged file without another transfer', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vidarr-staged-resume-'));
+  try {
+    const source = path.join(directory, 'video.mp4'); await fs.writeFile(source, 'downloaded');
+    const video = await addVideo('Staged resume');
+    await prisma.downloadQueueItem.create({ data: { musicVideoId: video.id, sourceType: 'youtube', sourceRef: 'https://youtube.com/watch?v=staged',
+      status: 'importing', phase: 'validating', downloadedPath: source, downloadedAt: new Date() } });
+    await resumeDownloadQueue();
+    await waitFor(async () => expect(await prisma.downloadQueueItem.count()).toBe(0));
+    expect(downloadDirectVideo).not.toHaveBeenCalled();
+    expect(assertIsRealMusicVideo).toHaveBeenCalledWith(source);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+
+it('recognizes an atomically committed import after restart without downloading or validating again', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vidarr-committed-resume-'));
+  try {
+    const file = path.join(directory, 'owned.mp4'); await fs.writeFile(file, 'imported');
+    const video = await addVideo('Committed resume');
+    await createMusicVideoFile(video.id, { path: file });
+    await prisma.musicVideo.update({ where: { id: video.id }, data: { hasFile: true } });
+    const item = await prisma.downloadQueueItem.create({ data: { musicVideoId: video.id, sourceType: 'youtube', sourceRef: 'https://youtube.com/watch?v=committed',
+      status: 'importing', phase: 'importing', downloadedPath: path.join(directory, 'moved-source.mp4') } });
+    await prisma.history.create({ data: { musicVideoId: video.id, eventType: 'downloadFolderImported', data: JSON.stringify({ path: file, queueId: item.id }) } });
+    await resumeDownloadQueue();
+    expect(await prisma.downloadQueueItem.count()).toBe(0);
+    expect(downloadDirectVideo).not.toHaveBeenCalled();
+    expect(assertIsRealMusicVideo).not.toHaveBeenCalled();
+    expect(await fs.readFile(file, 'utf8')).toBe('imported');
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
 
 async function addVideo(name: string) {
@@ -87,6 +155,30 @@ it('shares slots with external jobs and resumes waiting transfers after an exter
   await refreshQueue();
   await waitFor(() => expect(transfers).toHaveLength(1));
   expect(addDownload).toHaveBeenCalledTimes(1);
+});
+
+it('stages a completed external job for the shared processor and frees its transfer slot', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vidarr-external-pipeline-'));
+  let release!: () => void;
+  try {
+    const source = path.join(directory, 'external.mp4'); await fs.writeFile(source, 'downloaded');
+    await prisma.settings.create({ data: { id: 1, maxConcurrentDownloads: 1 } });
+    const client = await prisma.downloadClient.create({ data: { name: 'Test', implementation: 'qBittorrent', host: 'localhost', port: 8080 } });
+    vi.mocked(getDownloadClientProvider).mockReturnValue({ addDownload: vi.fn().mockResolvedValue({ externalRef: 'completed-handle' }),
+      testConnection: vi.fn(), getStatus: vi.fn().mockResolvedValue({ status: 'completed', progress: 1, contentPath: source }) });
+    vi.mocked(assertIsRealMusicVideo).mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve; }));
+    await grabFromIndexer((await addVideo('External complete')).id, client.id, 'https://example.test/file', '1080p');
+    await queueDirectVideo((await addVideo('Following direct')).id);
+    expect((await refreshQueue()).staged).toBe(1);
+    await waitFor(() => expect(transfers).toHaveLength(1));
+    await waitFor(() => expect(assertIsRealMusicVideo).toHaveBeenCalledWith(source));
+    expect(await prisma.downloadQueueItem.findFirst({ where: { sourceType: 'indexer' } })).toMatchObject({
+      status: 'importing', phase: 'validating', downloadedPath: source,
+    });
+    release();
+    await waitFor(async () => expect(await prisma.downloadQueueItem.count({ where: { sourceType: 'indexer' } })).toBe(0));
+    expect(await fs.readFile(source, 'utf8')).toBe('downloaded');
+  } finally { release?.(); await fs.rm(directory, { recursive: true, force: true }); }
 });
 
 it('lets active transfers finish when the limit is lowered before starting the next queued video', async () => {

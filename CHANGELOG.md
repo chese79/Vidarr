@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — overlap downloads and processing
+
+- Separate network transfer slots from a single validation/import worker. Reserve a bounded pipeline (transfer limit plus three videos by default), and pause new acquisitions below the staging disk reserve.
+- Persist staging directories, downloaded files and processing phases. Resume staged files without another transfer and recognize atomically committed imports after restart or cleanup failure.
+- Download up to four DASH/HLS fragments per video by default, with a bounded environment override.
+- Use two decode threads for HD validation and one for SD after read-only benchmarks; retain full-video motion checks and one filter/processing worker.
+- Show extraction, downloading, merging, validation waiting, validation and import separately. Retain measured timings and the last reported transfer rate in Queue and completed/failed history.
+
 ### Fixed — download efficiency (2026-10-12)
 
 - Bound CPU-intensive motion validation to one worker and one decode/filter thread, retaining full-video validation.

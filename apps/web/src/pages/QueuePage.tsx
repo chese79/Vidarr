@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { downloadStage, formatDownloadTimings } from '../components/downloadStage';
 import { api } from '../api/client';
 import { RecentQueueResults } from '../components/QueueResults';
 
@@ -40,7 +41,7 @@ export default function QueuePage() {
   async function handleRefresh() {
     setRefreshing(true);
     try { const result = await api.queue.refresh();
-    setSummary(`${result.completed} imported, ${result.failed} failed, ${result.pending} still downloading`);
+    setSummary(`${result.staged ?? 0} transfers ready for processing, ${result.completed} imported, ${result.failed} failed, ${result.pending} pending`);
     queryClient.invalidateQueries({ queryKey: ['queue'] });
     queryClient.invalidateQueries({ queryKey: ['queueResults'] });
     queryClient.invalidateQueries({ queryKey: ['artist'] });
@@ -88,8 +89,10 @@ export default function QueuePage() {
                 <td>{item.musicVideo.title}</td>
                 <td>{item.sourceType}</td>
                 <td>{item.quality ?? '—'}</td>
-                <td>{item.status}</td>
-                <td>{Math.round(item.progress * 100)}%</td>
+                <td>{downloadStage(item)}</td>
+                <td>{item.status === 'importing' ? 'Transfer complete' : `${Math.round(item.progress * 100)}%`}
+                  {item.stageTimings && <details><summary>Timings</summary>{formatDownloadTimings(item.stageTimings)}</details>}
+                </td>
                 <td>{item.error ?? '—'}</td>
                 <td>{item.status === 'submissionUnknown' ? <ReconcileSubmission id={item.id} onDone={message => {
                   setSummary(message); queryClient.invalidateQueries({ queryKey: ['queue'] }); queryClient.invalidateQueries({ queryKey: ['queueResults'] });

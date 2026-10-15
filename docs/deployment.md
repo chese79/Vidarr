@@ -2,9 +2,31 @@
 
 ### Download resource limits and recovery
 
-Full-file motion validation uses one shared worker and one decode/filter thread. The configured
-concurrent-video limit still includes transfers and validation/import, preventing an unbounded
-backlog of downloaded files. Required source/content validation and target-server confirmation remain intact.
+Full-file motion validation uses one shared worker and one filter thread. Decode threads default
+to two for HD (width >=1280 or height >=720) and one for SD. The configured download limit governs
+network transfers; a separate processing worker validates/imports completed files. The default
+pipeline capacity is the transfer limit plus three reservations, including unfinished transfers,
+unresolved external submissions and processing files. This bounds staged work and reserves capacity
+before transfers finish. New transfers pause when staging free space is below Minimum Free Space MB.
+Required source/content validation and target-server confirmation remain intact.
+
+Optional environment tuning:
+
+- `DOWNLOAD_PIPELINE_CAPACITY`: total acquisition reservations, 1–200; effective capacity is never
+  lower than the configured transfer limit. Default: transfer limit + 3 (six with three transfers).
+- `YTDLP_CONCURRENT_FRAGMENTS`: 1–8, default four; applies to supported DASH/HLS fragment transfers.
+- `VALIDATION_DECODE_THREADS`: 1–4; overrides adaptive HD/SD defaults while retaining one worker.
+
+Partial downloads and completed staging paths persist across restart. A committed import records
+its queue ID atomically, preventing duplicate acquisition after a crash between import and queue cleanup.
+Queue/result timing details separate format setup, transfer, merge/post-processing, processing wait,
+full validation and import. The rate is yt-dlp's last reported valid transfer rate, not an average.
+
+Read-only 20-second benchmarks on two recent HD files under the running workload measured average
+one/two-thread elapsed times of 7.73/7.06 seconds (AV1, 1480x1080) and 11.68/8.03 seconds
+(VP9, 1920x1080). SD samples did not improve consistently. These short, noisy comparisons informed
+the adaptive defaults; they do not predict end-to-end speedup. Production validation still checks
+the full file, with unchanged motion thresholds and one filter thread.
 
 Optional container environment overrides are `DOWNLOAD_TIMEOUT_MS` (default 1800000),
 `EXTRACTOR_TIMEOUT_MS` (600000), `VALIDATION_TIMEOUT_MS` (900000), and `PROBE_TIMEOUT_MS` (30000).

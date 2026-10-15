@@ -92,7 +92,7 @@ export const JOBS: ScheduledJob[] = [
     defaultIntervalMs: 20_000,
     run: async () => {
       const r = await refreshQueue();
-      return `${r.completed} external imports, ${r.failed} external failures this pass; ${r.queueCounts.queued} queued, ${r.queueCounts.downloading} transferring, ${r.queueCounts.importing} validating/importing, ${r.queueCounts.submissionUnknown} unresolved, ${r.queueCounts.failedRecords} retained failure records`;
+      return `${r.staged} external transfers staged, ${r.failed} external failures this pass; ${r.queueCounts.queued} queued, ${r.queueCounts.downloading} transferring, ${r.queueCounts.importing} validating/importing, ${r.queueCounts.submissionUnknown} unresolved, ${r.queueCounts.failedRecords} retained failure records`;
     },
   },
   {

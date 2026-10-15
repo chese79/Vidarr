@@ -704,6 +704,7 @@ export const QueueRefreshResultSchema = z.object({
   completed: z.number().int(),
   failed: z.number().int(),
   pending: z.number().int(),
+  staged: z.number().int().optional(),
 });
 export type QueueRefreshResult = z.infer<typeof QueueRefreshResultSchema>;
 

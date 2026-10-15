@@ -255,6 +255,12 @@ model DownloadQueueItem {
   progress         Float           @default(0)
   error            String?
   quality          String? // parsed at grab time; needed at import time since no file exists yet to read it from
+  downloadedPath   String?
+  stagingDirectory String?
+  downloadedAt     DateTime?
+  processingStartedAt DateTime?
+  phase            String? // extracting/transferring/merging/waitingValidation/validating/importing; legacy preserves pre-pipeline staging
+  stageTimings     String? // JSON numeric durations/rate; never source URLs or credentials
   addedAt          DateTime        @default(now())
   @@index([status, addedAt, id])
 }

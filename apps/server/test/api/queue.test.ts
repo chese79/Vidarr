@@ -101,12 +101,14 @@ describe('queue routes', () => {
     const video = await createMusicVideo(artist.id, { title: 'Queued Video' });
 
     await prisma.downloadQueueItem.create({
-      data: { musicVideoId: video.id, sourceType: 'youtube', sourceRef: 'abc123', status: 'downloading' },
+      data: { musicVideoId: video.id, sourceType: 'youtube', sourceRef: 'abc123', status: 'downloading',
+        phase: 'merging', stageTimings: JSON.stringify({ extractionMs: 150, transferMs: 2400 }) },
     });
 
     const res = await app.inject({ method: 'GET', url: '/api/v1/queue', headers: authHeaders() });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveLength(1);
+    expect(res.json()[0]).toMatchObject({ phase: 'merging', stageTimings: { extractionMs: 150, transferMs: 2400 } });
     expect(res.json()[0]).toMatchObject({
       status: 'downloading',
       musicVideo: { title: 'Queued Video', artist: { name: 'Queue Artist' } },

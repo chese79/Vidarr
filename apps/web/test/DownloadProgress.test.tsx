@@ -24,7 +24,7 @@ it('shows active progress and waiting count while excluding failed downloads', (
     { id: 2, status: 'queued', progress: 0 }, { id: 3, status: 'failed', progress: .2 },
   ]);
   const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
-  expect(html).toContain('1 active'); expect(html).toContain('45%'); expect(html).toContain('1 video waiting');
+  expect(html).toContain('1 transferring'); expect(html).toContain('45%'); expect(html).toContain('1 video waiting');
   expect(html).toContain('value="0.45"'); expect(html).toContain('aria-label="Artist — Song"');
   expect(html).not.toContain('20%');
 });
@@ -35,4 +35,18 @@ it('keeps unresolved submissions visible even when no transfer is active', () =>
   const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
   expect(html).toContain('1 submission need reconciliation');
   expect(html).toContain('href="/queue"');
+});
+
+it('separates processing work from transfers and shows validation waits without claiming 100% completion', () => {
+  const client = new QueryClient();
+  client.setQueryData(['queue'], [
+    { id: 1, status: 'importing', phase: 'waitingValidation', progress: 1, musicVideo: { title: 'Ready', artist: { name: 'Artist' } } },
+    { id: 2, status: 'downloading', phase: 'merging', progress: 1, musicVideo: { title: 'Next', artist: { name: 'Artist' } } },
+  ]);
+  const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
+  expect(html).toContain('1 transferring');
+  expect(html).toContain('1 processing');
+  expect(html).toContain('Waiting for validation');
+  expect(html).toContain('Merging audio/video');
+  expect(html).toContain('aria-valuetext="Waiting for validation" max="1"></progress>');
 });

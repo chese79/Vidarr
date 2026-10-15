@@ -13,11 +13,11 @@ function processResult(stdout: string, stderr = '') {
 }
 it('retains whole-file static-content rejection with bounded threads and frees the worker for the next video', async () => {
   processResult(JSON.stringify({ streams: [{ codec_type: 'video', width: 1280, height: 720 }] }));
-  processResult(JSON.stringify({ format: { duration: '60' } }));
+  processResult(JSON.stringify({ format: { duration: '60' }, streams: [{ width: 1280, height: 720 }] }));
   processResult('', 'freeze_start: 0');
   await expect(assertIsRealMusicVideo('/tmp/static.mp4')).rejects.toThrow('static for 100%');
   const args = vi.mocked(spawn).mock.calls[2][1]!;
-  expect(args.slice(0, 4)).toEqual(['-threads', '1', '-filter_threads', '1']);
+  expect(args.slice(0, 4)).toEqual(['-threads', '2', '-filter_threads', '1']);
   expect(args).not.toContain('-t'); // No shortened/sample-only validation of a completed file.
   processResult(JSON.stringify({ streams: [{ codec_type: 'video', width: 1280, height: 720 }] }));
   processResult(JSON.stringify({ format: { duration: '60' } }));
