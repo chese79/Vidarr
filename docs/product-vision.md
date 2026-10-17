@@ -6,6 +6,15 @@ Vidarr is a self-hosted music-video catalog, acquisition, library-management, an
 Plex and Jellyfin are not merely export targets: their libraries are primary inputs to Vidarr's
 catalog and the playback destinations for the finished collection.
 
+Concerts and live performances are in a separate design phase. The
+[2026-10-17 design agreement](requests/2026-10-17-concerts-and-live-performances.md)
+records approved product decisions and unresolved gates; it does not enable live acquisition
+or replace the current music-video rules below.
+
+The [backend alignment plan](backend-alignment.md) separates shared media mechanics from
+catalog policies. Its first foundation refactor preserves current music-video behavior;
+recording/asset migrations and live workflows remain future implementation phases.
+
 ## Canonical catalog
 
 Vidarr qualified plays are distinct from Jellyfin/Plex's native play counters. One viewing

@@ -1,3 +1,4 @@
+import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/client.js';
@@ -83,7 +84,7 @@ export async function queueRoutes(app: FastifyInstance) {
   app.get('/api/v1/queue', async (req) => {
     const { activeOnly } = z.object({ activeOnly: z.enum(['true', 'false']).optional() }).parse(req.query);
     const items = await prisma.downloadQueueItem.findMany({
-      where: activeOnly === 'true' ? { status: { in: ['queued', 'downloading', 'importing', 'submissionUnknown'] } } : undefined,
+      where: activeOnly === 'true' ? { status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } } : undefined,
       include: { musicVideo: { include: { artist: true } } },
       orderBy: [{ queuePosition: 'asc' }, { addedAt: 'asc' }, { id: 'asc' }],
     });

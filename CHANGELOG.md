@@ -5,6 +5,22 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Deployment — Shared music-video foundations
+
+- Release the verified music-video foundation locally with configuration backup, existing
+  mounts and rollback retained. Public images and live/concert behavior are outside this release.
+
+### Changed — Shared media backend foundations
+
+- Extract database-free ownership/acquisition and playback observation mechanics, a single
+  file/motion inspector and validation worker, and explicit music-video catalog policies.
+- Preserve existing APIs, validation settings, source priorities, queue reservations and
+  music-video qualification behavior through compatibility adapters.
+- Document the backend audit, shared recording/asset model and staged migration/rollback plan
+  in `docs/backend-alignment.md`. No schema migration, live acquisition or production deployment in this step.
+- Build local test image `vidarr:music-video-test-20261017`; verify isolated startup, existing
+  migrations, web assets, API authentication and real FFmpeg inspection using disposable data.
+
 ### Fixed — Large playback-library synchronization
 
 - Deduplicate confirmed catalog matches and bound delivery-confirmation reads and writes during Jellyfin/Plex synchronization. Large libraries no longer exceed SQLite's query parameter budget in the pending-delivery query containing a negation filter.

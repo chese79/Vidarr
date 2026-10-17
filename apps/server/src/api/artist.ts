@@ -1,3 +1,4 @@
+import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -103,7 +104,7 @@ export async function artistRoutes(app: FastifyInstance) {
     const wanted = await prisma.musicVideo.findMany({ where: {
       artistId: id, catalogKind: { not: 'inventory' }, hasFile: false, awaitingServerScanAt: null,
       libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
-      queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
+      queueItems: { none: { status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } } },
     }, select: { id: true }, orderBy: { id: 'asc' } });
     let grabbed = 0;
     const failures: Array<{ musicVideoId: number; reason: string }> = [];
@@ -375,7 +376,7 @@ export async function artistRoutes(app: FastifyInstance) {
       ),
       queue_stats AS (
         SELECT DISTINCT "musicVideoId" FROM "DownloadQueueItem"
-        WHERE "status" IN ('queued', 'downloading', 'submissionUnknown', 'importing')
+        WHERE "status" IN (${Prisma.join(ACTIVE_DOWNLOAD_STATUSES)})
       ),
       video_stats AS (
         SELECT
@@ -627,7 +628,7 @@ export async function artistRoutes(app: FastifyInstance) {
         awaitingServerScanAt: null,
         artist: { monitored: true },
         libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
-        queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
+        queueItems: { none: { status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } } },
       },
       select: { id: true },
     });
@@ -859,7 +860,7 @@ export async function artistRoutes(app: FastifyInstance) {
         awaitingServerScanAt: null,
         artist: { monitored: true },
         libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
-        queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
+        queueItems: { none: { status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } } },
       },
       select: { id: true },
     });
