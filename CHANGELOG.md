@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — Large playback-library synchronization
+
+- Deduplicate confirmed catalog matches and bound delivery-confirmation reads and writes during Jellyfin/Plex synchronization. Large libraries no longer exceed SQLite's query parameter budget in the pending-delivery query containing a negation filter.
+- Preserve exact file-path delivery confirmation and artist reconciliation across batches. Playlist creation still reports sync failures and uses the last inventory when a server is unavailable.
+
 ### Added — Qualified playback counts
 
 - Record a Vidarr qualified play after half the video or four minutes of observed watching, whichever comes first. Exclude pauses, buffering, seeks, duplicate observations and unobserved gaps; persist qualification once per viewing across restarts.

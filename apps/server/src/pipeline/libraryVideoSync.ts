@@ -250,12 +250,17 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
         },
       })),
     ]);
-    const confirmedIds = planned
+    const confirmedIds = [...new Set(planned
       .map((p) => (p.match.matchConfidence === null ? p.match.musicVideoId : null))
-      .filter((value): value is number => value != null);
-    if (confirmedIds.length) {
+      .filter((value): value is number => value != null))];
+    // Prisma cannot automatically split an oversized IN query containing NOT
+    // (awaitingServerScanAt). Bound these reads and their follow-up writes
+    // explicitly, leaving room for relation filters and included records.
+    const CONFIRMATION_CHUNK = 500;
+    for (let offset = 0; offset < confirmedIds.length; offset += CONFIRMATION_CHUNK) {
+      const batchIds = confirmedIds.slice(offset, offset + CONFIRMATION_CHUNK);
       const pending = await prisma.musicVideo.findMany({
-        where: { id: { in: confirmedIds }, awaitingServerScanAt: { not: null }, artist: { rootFolder: { targetConnectorId: connector.id } } },
+        where: { id: { in: batchIds }, awaitingServerScanAt: { not: null }, artist: { rootFolder: { targetConnectorId: connector.id } } },
         include: { file: true, artist: { include: { rootFolder: true } } },
       });
       const deliveredIds = pending.filter(video => planned.some(item => item.match.musicVideoId === video.id
@@ -266,7 +271,7 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
         data: { awaitingServerScanAt: null },
       });
       await prisma.artist.updateMany({
-        where: { musicVideos: { some: { id: { in: confirmedIds } } } },
+        where: { musicVideos: { some: { id: { in: batchIds } } } },
         data: { reconciledAt: new Date() },
       });
     }

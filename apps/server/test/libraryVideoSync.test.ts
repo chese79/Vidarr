@@ -65,6 +65,48 @@ describe('syncConnectorVideos', () => {
     expect((await rows())[0]).toMatchObject({ title: 'Song One (Remastered)', playCount: 9, releaseYear: 2002, available: true });
   });
 
+  it('confirms deliveries across bounded batches without accepting a different server path', async () => {
+    const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+    await prisma.rootFolder.update({ where: { id: artist.rootFolderId }, data: { targetConnectorId: connectorId } });
+    await prisma.musicVideo.createMany({ data: Array.from({ length: 1005 }, (_, index) => ({
+      artistId, title: `Batch Song ${index}`, normalizedTitle: `batch song ${index}`,
+      awaitingServerScanAt: new Date(),
+    })) });
+    const videos = await prisma.musicVideo.findMany({ orderBy: { id: 'asc' } });
+    // Deliveries at both ends of the list must be confirmed; the middle one's
+    // title matches but its server path points at an older copy.
+    for (const video of [videos[0], videos[500], videos[1004]]) {
+      await prisma.musicVideoFile.create({ data: {
+        musicVideoId: video.id, path: `/media/test-root/Test Artist/${video.id}.mp4`,
+        sizeBytes: 1024n, originalFilename: 'source.mp4',
+      } });
+    }
+    provider.fetchVideos.mockResolvedValue(videos.map((video, index) => fetched(String(video.id), video.title, {
+      path: index === 500 ? '/server/older-copy.mp4' : `/server/Test Artist/${video.id}.mp4`,
+    })));
+    const queries = vi.spyOn(prisma.musicVideo, 'findMany');
+    try {
+      expect(await syncConnectorVideos(await connector())).toMatchObject({
+        videoCount: 1005, matched: { confirmed: 1005, unmatched: 0 },
+      });
+      const confirmationQueries = queries.mock.calls.filter(([query]) => query?.where?.awaitingServerScanAt);
+      expect(confirmationQueries.length).toBeGreaterThan(1);
+      for (const [query] of confirmationQueries) {
+        const ids = (query!.where!.id as { in: number[] }).in;
+        expect(ids.length).toBeLessThanOrEqual(500);
+      }
+    } finally {
+      queries.mockRestore();
+    }
+    const saved = await prisma.musicVideo.findMany({ orderBy: { id: 'asc' } });
+    expect(saved[0].awaitingServerScanAt).toBeNull();
+    expect(saved[1004].awaitingServerScanAt).toBeNull();
+    expect(saved[500].awaitingServerScanAt).not.toBeNull();
+    expect(await prisma.musicVideo.count({ where: { awaitingServerScanAt: { not: null } } })).toBe(1003);
+    expect(await prisma.libraryVideo.count({ where: { available: true, matchConfidence: null } })).toBe(1005);
+    expect((await prisma.artist.findUniqueOrThrow({ where: { id: artistId } })).reconciledAt).not.toBeNull();
+  }, 30000);
+
   it('marks a video that left the server unavailable, and reinstates it if it returns', async () => {
     provider.fetchVideos.mockResolvedValue([fetched('a', 'One'), fetched('b', 'Two')]);
     await syncConnectorVideos(await connector());

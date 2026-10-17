@@ -1,5 +1,13 @@
 # Process flows and consistency review
 
+## Large playback-library synchronization
+
+Inventory refresh deduplicates confirmed catalog video IDs and processes delivery confirmation
+in batches of at most 500 IDs, including follow-up delivery and artist reconciliation writes.
+Each batch retains the mapped playback-library and exact delivered-path checks. This avoids
+SQLite's parameter limit for queries containing negation filters. Playlist generation still
+reports a failed refresh and uses the last synced inventory; review and Push remain required.
+
 ## Qualified playback (2026-10-16)
 
 Enable a tested Jellyfin/Plex connector and select its video library → synchronize and confirm
