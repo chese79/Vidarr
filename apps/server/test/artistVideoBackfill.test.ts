@@ -19,6 +19,12 @@ vi.mock('../src/providers/youtube/ytdlp.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/providers/youtube/ytdlp.js')>()),
   listChannelVideos: vi.fn().mockResolvedValue([{ youtubeVideoId: 'test-song', title: 'Test Artist - Song (Official Music Video)' }]),
 }));
+vi.mock('../src/providers/youtube/musicDiscovery.js', async (original) => ({
+  ...(await original<typeof import('../src/providers/youtube/musicDiscovery.js')>()),
+  discoverYoutubeChannel: vi.fn(async (url: string) => ({ errors: [],
+    videos: (await listChannelVideos(url)).map(v => ({ ...v, officialEvidence: [], discoveryOrigins: ['channel-uploads'] })),
+  })),
+}));
 vi.mock('../src/providers/metadata/imvdb.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/providers/metadata/imvdb.js')>()),
   findPublicArtistSlug: vi.fn().mockResolvedValue(null),

@@ -1,11 +1,18 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { UpdateSettingsSchema } from '@vidarr/shared-types';
+import { UpdateSettingsSchema, ValidationSettingsSchema } from '@vidarr/shared-types';
+import { loadValidationSettings } from '../pipeline/validationPolicy.js';
 import { prisma } from '../db/client.js';
 import { wakeDownloadQueue } from '../pipeline/downloadDispatcher.js';
 import { MAX_COOKIE_BYTES, youtubeCookiesConfigured, saveYoutubeCookies, removeYoutubeCookies } from '../providers/youtube/cookies.js';
 
 export async function settingsRoutes(app: FastifyInstance) {
+  app.get('/api/v1/config/validation', async () => loadValidationSettings());
+  app.put('/api/v1/config/validation', async req => {
+    const policy = ValidationSettingsSchema.parse(req.body);
+    await prisma.settings.upsert({ where: { id: 1 }, update: { validationSettings: JSON.stringify(policy) }, create: { id: 1, validationSettings: JSON.stringify(policy) } });
+    return policy;
+  });
   app.get('/api/v1/config/youtube-cookies', async () => ({ configured: await youtubeCookiesConfigured() }));
   app.put('/api/v1/config/youtube-cookies', { bodyLimit: MAX_COOKIE_BYTES * 2 }, async (req, reply) => {
     const body = req.body as { cookies?: unknown } | null;

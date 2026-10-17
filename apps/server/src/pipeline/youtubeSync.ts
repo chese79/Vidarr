@@ -1,8 +1,9 @@
 import { prisma } from '../db/client.js';
-import { listChannelVideos } from '../providers/youtube/ytdlp.js';
+import { discoverYoutubeChannel, type DiscoveredYoutubeVideo } from '../providers/youtube/musicDiscovery.js';
 import { parseArtistAndTitle } from './bulkImport.js';
 import { excludedMusicVideoTitleReason } from './youtubeValidation.js';
 import { normalizeTitle } from './normalize.js';
+import { assessOfficialYoutubeVideo } from './youtubeOfficial.js';
 
 export interface YoutubeSyncResult {
   matched: number;
@@ -12,9 +13,8 @@ export interface YoutubeSyncResult {
   isInitialSync: boolean;
 }
 
-// A channel is a discovery hint. Its uploads are not catalog videos until a
-// person confirms each song music video in Video Review. This applies to
-// scheduled polls as well as a manual sync.
+// Official category/title evidence automates admission only after identity,
+// metadata exclusions and visual validation. Uncertainty remains in Video Review.
 export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncResult> {
   const source = await prisma.youtubeSource.findUniqueOrThrow({
     where: { id: sourceId }, include: { artist: true },
@@ -23,20 +23,24 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
     throw new Error('Confirm the artist in MusicBrainz before scanning its YouTube channel.');
   }
   const isInitialSync = source.lastPolledAt === null;
-  const videos = await listChannelVideos(source.url);
+  const discovery = await discoverYoutubeChannel(source.url);
+  const videos = discovery.videos;
   const existing = await prisma.musicVideo.findMany({
     where: { artistId: source.artistId }, select: { id: true, youtubeVideoId: true, sourcePublishedAt: true },
   });
   const byYoutubeId = new Map(existing.filter((video) => video.youtubeVideoId)
     .map((video) => [video.youtubeVideoId, video]));
-  const reviewRows = await prisma.videoReviewCandidate.findMany({
-    where: { source: 'youtube', externalId: { in: videos.map((video) => video.youtubeVideoId) } },
+  const reviewRows = [];
+  for (let offset = 0; offset < videos.length; offset += 500) reviewRows.push(...await prisma.videoReviewCandidate.findMany({
+    where: { source: 'youtube', externalId: { in: videos.slice(offset, offset + 500).map((video) => video.youtubeVideoId) } },
     select: { id: true, externalId: true, title: true, artistName: true, artistId: true, reason: true,
       decision: true, sourcePublishedAt: true },
-  });
+  }));
   const reviewByYoutubeId = new Map(reviewRows.map((row) => [row.externalId, row]));
   let matched = 0;
   let pending = 0;
+  let created = 0;
+  const affectedMusicVideoIds: number[] = [];
 
   for (const video of videos) {
     const catalogVideo = byYoutubeId.get(video.youtubeVideoId);
@@ -51,7 +55,7 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
     const title = parsed.title || video.title;
     const excluded = excludedMusicVideoTitleReason(video.title);
     const artistMatches = normalizeTitle(parsed.artist) === normalizeTitle(source.artist.name);
-    const reason = excluded ?? (artistMatches
+    let reason = excluded ?? (artistMatches
       ? 'Channel upload needs confirmation as an official song music video.'
       : `Title credits ${parsed.artist}; confirm the artist before adding this video.`);
     const existingReview = reviewByYoutubeId.get(video.youtubeVideoId);
@@ -71,25 +75,44 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
       }
       continue;
     }
+    // Shared channels and mixed playlists must never transfer another artist's review.
+    if (existingReview?.artistId && existingReview.artistId !== source.artistId) continue;
+    let rejected = Boolean(excluded);
+    const conflictingCredit = /^(.{1,100}?)\s+[-–—]\s+/.test(video.title) && !artistMatches;
+    if (!excluded && video.officialEvidence.length && !conflictingCredit) {
+      const assessment = await assessOfficialYoutubeVideo(video, source.artist.name);
+      reason = `${assessment.reason} Evidence: ${video.officialEvidence.join('; ')}. Origins: ${video.discoveryOrigins.join('; ')}.`;
+      if (assessment.decision === 'accept' && assessment.songTitle) {
+        const saved = await admitOfficialVideo(source.artistId, assessment.songTitle, video, existingReview?.id);
+        if (saved) {
+          if (saved.created) created++; else matched++;
+          affectedMusicVideoIds.push(saved.id);
+          continue;
+        }
+        reason = 'This YouTube video is already assigned to another artist; confirm its credits in Video Review.';
+      }
+      rejected = assessment.decision === 'reject';
+    }
     if (existingReview) {
       const changed = existingReview.title !== title || existingReview.artistName !== parsed.artist
         || existingReview.artistId !== source.artistId || existingReview.reason !== reason
-        || Boolean(excluded) || Boolean(newlyKnownDate);
-      if (changed) await prisma.videoReviewCandidate.update({
-        where: { id: existingReview.id },
+        || rejected || Boolean(newlyKnownDate);
+      if (changed) await prisma.videoReviewCandidate.updateMany({
+        where: { id: existingReview.id, decision: 'pending', artistId: existingReview.artistId },
         data: { title, artistName: parsed.artist, artistId: source.artistId, reason,
-          ...(excluded ? { decision: 'rejected' } : {}),
+          ...(rejected ? { decision: 'rejected' } : {}),
           ...(newlyKnownDate ? { sourcePublishedAt: newlyKnownDate } : {}) },
       });
-      if (!excluded) pending++;
+      if (!rejected) pending++;
       continue;
     }
-    const candidate = await prisma.videoReviewCandidate.create({
-      data: {
+    const candidate = await prisma.videoReviewCandidate.upsert({
+      where: { source_externalId: { source: 'youtube', externalId: video.youtubeVideoId } }, update: {},
+      create: {
         source: 'youtube', externalId: video.youtubeVideoId, title,
         artistName: parsed.artist, artistId: source.artistId,
         url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
-        decision: excluded ? 'rejected' : 'pending', reason,
+        decision: rejected ? 'rejected' : 'pending', reason,
         sourcePublishedAt: video.sourcePublishedAt ?? null,
       },
     });
@@ -104,8 +127,54 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
       data: { lastSeenAt: checkedAt },
     });
   }
+  if (discovery.errors.length) throw new Error(`YouTube discovery incomplete: ${discovery.errors.join('; ')}`);
   await prisma.youtubeSource.update({ where: { id: sourceId }, data: { lastPolledAt: checkedAt } });
-  return { matched, created: 0, pending, affectedMusicVideoIds: [], isInitialSync };
+  return { matched, created, pending, affectedMusicVideoIds, isInitialSync };
+}
+
+async function admitOfficialVideo(artistId: number, songTitle: string, video: DiscoveredYoutubeVideo, reviewId?: number) {
+  const url = `https://www.youtube.com/watch?v=${video.youtubeVideoId}`;
+  return prisma.$transaction(async tx => {
+    const owners = await tx.musicVideo.findMany({ where: { OR: [
+      { youtubeVideoId: video.youtubeVideoId },
+      { acquisitionSources: { some: { provider: 'youtube', OR: [{ externalId: video.youtubeVideoId }, { url }] } } },
+    ] } });
+    if (owners.some(owner => owner.artistId !== artistId)) return null;
+    const owner = owners[0] ?? null;
+    const review = await tx.videoReviewCandidate.findUnique({ where: { source_externalId: { source: 'youtube', externalId: video.youtubeVideoId } } });
+    if ((reviewId && !review) || (review && (review.decision !== 'pending' || (review.artistId && review.artistId !== artistId)))) return null;
+    const publishedAt = review?.sourcePublishedAt ?? video.sourcePublishedAt;
+    let title = songTitle;
+    let existing = owner;
+    for (let version = 2; !existing; version++) {
+      const collision = await tx.musicVideo.findUnique({ where: { artistId_normalizedTitle: { artistId, normalizedTitle: normalizeTitle(title) } }, select: { id: true } });
+      if (!collision) break;
+      // A shared song title does not establish the same official video version,
+      // nor ownership of a local file. Only an exact source ID/URL may link above.
+      title = `${songTitle} (Version ${version})`;
+    }
+    const saved = existing ? await tx.musicVideo.update({ where: { id: existing.id }, data: {
+      catalogKind: 'official', ...(!existing.youtubeVideoId ? { youtubeVideoId: video.youtubeVideoId } : {}),
+      ...(!existing.sourcePublishedAt && publishedAt ? { sourcePublishedAt: publishedAt } : {}),
+    } }) : await tx.musicVideo.create({ data: {
+      artistId, title, normalizedTitle: normalizeTitle(title), catalogKind: 'official', monitored: false,
+      youtubeVideoId: video.youtubeVideoId, sourcePublishedAt: publishedAt,
+    } });
+    const origin = JSON.stringify({ source: 'youtube-official-discovery', evidence: video.officialEvidence, origins: video.discoveryOrigins });
+    const accepted = await tx.acquisitionSource.findUnique({ where: { musicVideoId_provider_url: { musicVideoId: saved.id, provider: 'youtube', url } } });
+    await tx.acquisitionSource.upsert({
+      where: { musicVideoId_provider_url: { musicVideoId: saved.id, provider: 'youtube', url } },
+      update: { accepted: true, confidence: 'confirmed', ...(!accepted ? { discoveryOrigin: origin } : {}) },
+      create: { musicVideoId: saved.id, provider: 'youtube', externalId: video.youtubeVideoId, url,
+        authority: 'verified', confidence: 'confirmed', accepted: true, discoveryOrigin: origin },
+    });
+    const reviewData = { artistId, title: saved.title, artistName: (await tx.artist.findUniqueOrThrow({ where: { id: artistId } })).name,
+      decision: 'approved', reason: `Automatically confirmed official song music video after identity, metadata and motion checks. ${origin}`,
+      sourcePublishedAt: publishedAt };
+    await tx.videoReviewCandidate.upsert({ where: { source_externalId: { source: 'youtube', externalId: video.youtubeVideoId } },
+      update: reviewData, create: { ...reviewData, source: 'youtube', externalId: video.youtubeVideoId, url } });
+    return { id: saved.id, created: !existing };
+  });
 }
 
 export async function pollAndGrabYoutubeSource(sourceId: number): Promise<YoutubeSyncResult & { grabbed: number }> {

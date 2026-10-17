@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../src/db/client.js';
 import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist } from './support/db.js';
 
-vi.mock('../src/providers/youtube/ytdlp.js', () => ({
-  listChannelVideos: vi.fn().mockResolvedValue([
+vi.mock('../src/providers/youtube/musicDiscovery.js', async (original) => ({
+  ...(await original<typeof import('../src/providers/youtube/musicDiscovery.js')>()),
+  discoverYoutubeChannel: vi.fn().mockResolvedValue({ errors: [], videos: [
     { youtubeVideoId: 'song-video', title: '311 - Down (Official Music Video)', sourcePublishedAt: new Date('1995-01-01T00:00:00Z') },
     { youtubeVideoId: 'interview', title: '311 Official Interview', sourcePublishedAt: null },
-  ]),
+  ].map(v => ({ ...v, officialEvidence: [], discoveryOrigins: ['channel-uploads'] })) }),
 }));
 
 describe('YouTube channel discovery', () => {

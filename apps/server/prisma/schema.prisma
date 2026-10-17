@@ -262,7 +262,10 @@ model DownloadQueueItem {
   phase            String? // extracting/transferring/merging/waitingValidation/validating/importing; legacy preserves pre-pipeline staging
   stageTimings     String? // JSON numeric durations/rate; never source URLs or credentials
   addedAt          DateTime        @default(now())
+  queuePosition    Int             @default(0) // negative positions precede new FIFO entries
+  validationCategory String        @default("additional") // source classification, never a queued policy snapshot
   @@index([status, addedAt, id])
+  @@index([status, queuePosition, addedAt, id])
 }
 
 model History {
@@ -292,6 +295,7 @@ model ScheduledTask {
 }
 
 model Settings {
+  validationSettings String @default("{\"policies\":{\"imports\":{\"file\":true,\"motion\":true},\"canonical\":{\"file\":false,\"motion\":false},\"additional\":{\"file\":true,\"motion\":true}},\"minimumDimension\":64,\"maximumStaticPercent\":80}")
   defaultPlaybackConnectorId Int? // validated enabled Plex/Jellyfin video connector; stale defaults are ignored
   id             Int     @id @default(1)
   namingFormat   String  @default("{Artist Name}/{Video Title} ({Year})/{Artist Name} - {Video Title} ({Year}) [{Quality}]")

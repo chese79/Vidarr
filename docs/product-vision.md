@@ -13,6 +13,9 @@ Workflow changes must preserve each required outcome and expose the next step. S
 Library hides empty artists by default only when available, known and unmatched counts are all zero;
 the highlighted checkbox can reveal them. Addition explicitly reveals the artist before collection
 finishes, and a New badge lasts seven days from its original added date.
+Library ordering and its alphabet rail use the displayed artist name, ignoring a leading
+The, A or An. Ingrid Michaelson appears under I even when MusicBrainz supplies
+Michaelson, Ingrid as a sort name. Provider sort metadata is retained separately.
 
 Vidarr first observes artists from configured audio libraries, video libraries, manual additions,
 and discovery services. An observation is not itself a canonical identity. The preferred identity
@@ -65,8 +68,9 @@ credit or a video uploader name is an observation, not an artist identity. Unres
 belong in a separate Match Review list until a MusicBrainz identity is confirmed. A channel such as
 `311VEVO` may suggest the artist 311, but the channel name is never promoted as an artist.
 
-After artist identity is resolved, IMVDb defines the authoritative list of expected official music
-videos. IMVDb completeness is therefore separate from source discovery and local ownership.
+After artist identity is resolved, IMVDb supplies the primary authoritative list of expected official
+music videos. Validated official YouTube discoveries may extend the canonical catalog as described
+below. IMVDb completeness remains separate from source discovery and local ownership.
 MusicBrainz recording credits can support artist matching, but audio recordings never become
 music-video catalog entries. Artist channel links are discovery hints, not proof that an individual
 upload is an official video.
@@ -103,6 +107,30 @@ for ten minutes while later artists continue; stored candidates and success time
 
 ## Discovery and acquisition
 
+### Validation/Quality policies
+
+Settings combines validation and the existing quality-profile editor, with quality profiles at
+the bottom. Initial user-file imports and supplementary/additional downloads default to video-stream
+and full-file motion checks, import/registration and exact playback-server delivery confirmation.
+Canonical-source downloads default to import and delivery only. Canonical trust belongs to the
+selected accepted source with confirmed authoritative/verified authority; a catalog title, manual
+source approval or unknown/indexer source alone cannot receive that category. Existing local files
+always use the initial-import policy, including canonical matches, and are registered in place.
+
+Users can independently enable file and motion checks for each category. Import/registration and
+delivery remain required. File dimensions default to 64 pixels per side; motion rejection defaults
+to more than 80% static runtime. Quality profiles continue governing format eligibility and upgrade
+cutoffs. These settings do not relax artist identity, source approval or excluded-content checks.
+Motion inspections retain their existing limitations: unknown duration allows import, and neither
+the motion check nor file probe guarantees complete corruption/audio-integrity detection.
+
+Queued downloads retain a source category, not a validation-policy snapshot. New downloads and
+already queued downloads read the saved category policy when validation begins; checks already
+running keep their loaded policy. Failed validation preserves staging or the original user file,
+without creating ownership; local candidates remain reviewable. Delivery requires exact inventory
+confirmation, including for files registered in place. Existing owned files are not rescanned on
+settings save. Historical queue categories are backfilled only from an exact accepted source URL.
+
 Discover can select an existing Library artist or search MusicBrainz and add the selected identity
 for source collection and video review. Selected acquisition actions return to the preserved Discover
 context. New names require a unique MusicBrainz match; ambiguous names must be resolved with the
@@ -130,8 +158,19 @@ uncertain. Only an official music video for a song enters the launch catalog. Of
 live performances, live songs, lyric videos, visualizers, and static-art or audio-only uploads do
 not enter it. Live material may receive a separate category later.
 
+A whole-word `official` (case-insensitive) in a linked Music shelf/playlist category or a video's
+title supplies official authority evidence, including when a playlist member has a bare `(Video)`
+title. It does not match `unofficial`. Artist/song identity, metadata exclusions and bounded visual
+validation remain required. Passing videos enter the canonical official catalog automatically;
+uncertain identity, metadata or visual results remain in Video Review. A conflicting explicit artist
+credit is never overridden by playlist membership. Official audio, live performances, concerts,
+lyrics and visualizers remain excluded even inside an official playlist. Recorded livestreams are
+also excluded; a separate live/concert category is future scope, not a current catalog kind.
+New automatically admitted videos start unmonitored and collection never queues a full acquisition.
+
 Confirming an artist collects a source record for that artist: every IMVDb artist-credit video,
-the uploads in each linked YouTube channel's Videos tab, and files in configured local video
+the uploads in each linked YouTube channel's Videos tab, YouTube Music video/official shelves and
+artist-created playlists (including View all continuations), and files in configured local video
 roots whose filename or folder identifies the artist. The artist page can refresh this record
 and show source counts, scan state, and pending review items. A direct IMVDb URL in MusicBrainz
 resolves the artist slug; the public IMVDb videography is used when the API is unavailable.
@@ -143,7 +182,13 @@ source-record endpoint to remain responsive with large channel inventories.
 Video Review fetches bounded pages and applies artist and title search on the server; the
 unpaginated API remains available for existing clients.
 When YouTube and YouTube Music links point to the same channel, a collection checks the channel
-once. A channel with no Videos tab contributes no candidates and is not an inventory error.
+once across both surfaces. A channel with no standard Videos tab still receives Music discovery;
+absence of that tab alone is not an inventory error or proof of an empty artist catalog.
+Video IDs are deduplicated after merging surfaces. Official category/title evidence and discovery
+origins are retained with accepted sources and automatic review decisions. Broken endpoints,
+unreadable pages, repeated continuations or traversal limits mark the scan partial while preserving
+collected candidates; normal source-check retry applies. Shared-channel scans do not transfer an
+existing pending review to another artist.
 Repeat channel checks preserve unchanged review decisions and manual approvals.
 Every review candidate records when Vidarr first and most recently saw it. YouTube channel feeds
 also provide publication timestamps for recent uploads; older uploads can retain an unknown
@@ -175,8 +220,10 @@ authority order: authoritative, verified, manual, then heuristic. Automatic sear
 accepted links before searching for a new candidate; newly discovered YouTube candidates still
 require validation.
 
-Acquisition requests enter a persistent first-in, first-out download queue. General Settings
-controls simultaneous network transfers (default three, from one to twenty), shared by direct
+Acquisition requests enter a persistent first-in, first-out download queue.
+Users may reorder waiting requests, including moving a request to the top; saved order survives
+restart, and new requests join the end. Active transfers and processing are unaffected.
+General Settings controls simultaneous network transfers (default three, from one to twenty), shared by direct
 transfers and Vidarr-submitted external-client jobs. Validation/import uses a separate single
 worker. Pipeline reservations cover both in-flight transfers and staged files, capped at the
 transfer limit plus three by default; completed transfers retain their reservation until import
@@ -187,7 +234,7 @@ progress and the waiting count. Lowering the limit does not interrupt active tra
 The sidebar stays within the viewport while the main content scrolls independently. Navigation
 can scroll separately on short screens, leaving download progress accessible below it.
 Motion validation shares one CPU worker, one filter thread and adaptive decode threads (two for HD,
-one for SD); full-video checks remain required. Fragment concurrency defaults to four for supported
+one for SD); enabled motion checks inspect the full video under the category policy above. Fragment concurrency defaults to four for supported
 DASH/HLS transfers. Queue shows the current stage and measured extraction/transfer/merge/processing
 timings; missing telemetry remains unknown. Delivery confirmation stays separate from acquisition.
 Process deadlines and provider timeouts prevent stalled operations from indefinitely holding slots.

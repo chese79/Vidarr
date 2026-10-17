@@ -434,7 +434,24 @@ describe('artist routes', () => {
       });
     });
 
-    it('filters by the A-Z rail letter, bucketing non-alphabetic sort names under "#"', async () => {
+    it('uses displayed names for Library letters and paging while preserving provider sort names', async () => {
+      const ingrid = await createArtist(rootFolderId, qualityProfileId, { name: 'Ingrid Michaelson', sortName: 'Michaelson, Ingrid' });
+      await createArtist(rootFolderId, qualityProfileId, { name: 'Ingo Star Cruiser', sortName: 'Ingo Star Cruiser' });
+      await createArtist(rootFolderId, qualityProfileId, { name: 'The Insteps', sortName: 'ZZZ provider sort' });
+      const get = (query: string) => app.inject({ url: `/api/v1/artist/summary?hideWithoutVideos=false&${query}`, headers: authHeaders() });
+      const first = await get('letter=I&pageSize=1&page=1');
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toMatchObject({ total: 3, availableLetters: ['I'], items: [{ name: 'Ingo Star Cruiser' }] });
+      const second = await get('letter=I&pageSize=1&page=2');
+      expect(second.json().items).toMatchObject([{ id: ingrid.id, name: 'Ingrid Michaelson', sortName: 'Michaelson, Ingrid' }]);
+      const searched = await get('search=Ingrid&letter=I');
+      expect(searched.json()).toMatchObject({ total: 1, availableLetters: ['I'], items: [{ id: ingrid.id }] });
+      const wrongLetter = await get('search=Ingrid&letter=M');
+      expect(wrongLetter.json().total).toBe(0);
+      expect((await prisma.artist.findUniqueOrThrow({ where: { id: ingrid.id } })).sortName).toBe('Michaelson, Ingrid');
+    });
+
+    it('filters by the A-Z rail letter, bucketing non-alphabetic names under "#"', async () => {
       await createArtist(rootFolderId, qualityProfileId, { name: 'Apple', sortName: 'Apple' });
       await createArtist(rootFolderId, qualityProfileId, { name: '3 Doors Down', sortName: '3 Doors Down' });
 

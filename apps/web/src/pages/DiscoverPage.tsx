@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { defaultArtistProfile, defaultArtistRoot } from '../artistDefaults';
 import ConfirmGenreDownloadAll from '../components/ConfirmGenreDownloadAll';
 import { contentScrollTop, scrollContentTo } from '../contentScroll';
 
@@ -42,7 +43,7 @@ export default function DiscoverPage() {
   }
   const addReview = useMutation({
     mutationFn: (mbid: string) => {
-      const root = rootFolders.data?.[0]; const profile = qualityProfiles.data?.[0];
+      const root = defaultArtistRoot(rootFolders.data); const profile = defaultArtistProfile(qualityProfiles.data);
       if (!root || !profile) throw new Error('Add a root folder and quality profile first.');
       return api.artists.addMusicbrainz({ musicbrainzArtistId: mbid, rootFolderId: root.id, qualityProfileId: profile.id });
     },
@@ -61,7 +62,7 @@ export default function DiscoverPage() {
   const [validating, setValidating] = useState(false);
   const createNew = useMutation({
     mutationFn: (data: { name: string }) => {
-      const root = rootFolders.data?.[0]; const profile = qualityProfiles.data?.[0];
+      const root = defaultArtistRoot(rootFolders.data); const profile = defaultArtistProfile(qualityProfiles.data);
       if (!root || !profile) throw new Error('Add a root folder and quality profile first.');
       return api.artists.addNew({ ...data, rootFolderId: root.id, qualityProfileId: profile.id });
     },
@@ -100,7 +101,7 @@ export default function DiscoverPage() {
   const dismiss = useMutation({ mutationFn: api.recommendations.dismiss, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recommendations'] }) });
   const add = useMutation({
     mutationFn: (id: number) => {
-      const rootFolder = rootFolders.data?.[0]; const qualityProfile = qualityProfiles.data?.[0];
+      const rootFolder = defaultArtistRoot(rootFolders.data); const qualityProfile = defaultArtistProfile(qualityProfiles.data);
       if (!rootFolder || !qualityProfile) throw new Error('Add a root folder and a quality profile first.');
       return api.recommendations.add(id, { rootFolderId: rootFolder.id, qualityProfileId: qualityProfile.id });
     },

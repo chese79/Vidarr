@@ -216,6 +216,7 @@ export interface YoutubeVideoMetadata {
   channel: string;
   description: string;
   channelIsVerified: boolean;
+  isLivePerformance?: boolean;
 }
 
 // A single-video metadata fetch — no download, no --flat-playlist (which
@@ -237,10 +238,13 @@ export async function getVideoMetadata(youtubeVideoId: string): Promise<YoutubeV
     // count as a negative signal (handled by the caller, not defaulted to
     // false-as-"unverified" here, to keep that judgment call in one place).
     channelIsVerified: Boolean(entry.channel_is_verified),
+    isLivePerformance: Boolean(entry.is_live || entry.was_live || entry.live_status === 'post_live'),
   };
 }
 
-const SAMPLE_CLIP_FORMAT = 'worst[height>=64]';
+// Motion needs video only. Modern YouTube uploads often have no combined
+// video/audio format; requiring one prevented otherwise valid sample checks.
+const SAMPLE_CLIP_FORMAT = 'worstvideo[height>=64]/worst[height>=64]';
 const SAMPLE_CLIP_SECONDS = 20;
 
 // Downloads only the first ~20 seconds at the lowest available quality —
@@ -264,8 +268,9 @@ export async function downloadSampleClip(youtubeVideoId: string, destDir: string
     '--print',
     'after_move:filepath',
   ];
-  if (FFMPEG_PATH !== 'ffmpeg') {
-    args.push('--ffmpeg-location', path.dirname(FFMPEG_PATH));
+  const sampleFfmpegPath = process.env.SAMPLE_FFMPEG_PATH ?? FFMPEG_PATH;
+  if (sampleFfmpegPath !== 'ffmpeg') {
+    args.push('--ffmpeg-location', path.dirname(sampleFfmpegPath));
   }
   args.push(url);
   const { stdout, stderr, code } = await runYtDlp(args);

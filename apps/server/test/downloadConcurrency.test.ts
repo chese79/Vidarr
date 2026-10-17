@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist, createMusicVideo, createMusicVideoFile } from './support/db.js';
+import { DEFAULT_VALIDATION_SETTINGS } from '@vidarr/shared-types';
 
 vi.mock('../src/providers/youtube/ytdlp.js', () => ({ downloadDirectVideo: vi.fn() }));
 vi.mock('../src/providers/downloadclient/index.js', () => ({ getDownloadClientProvider: vi.fn() }));
@@ -84,7 +85,7 @@ it('resumes a persisted staged file without another transfer', async () => {
     await resumeDownloadQueue();
     await waitFor(async () => expect(await prisma.downloadQueueItem.count()).toBe(0));
     expect(downloadDirectVideo).not.toHaveBeenCalled();
-    expect(assertIsRealMusicVideo).toHaveBeenCalledWith(source);
+    expect(assertIsRealMusicVideo).toHaveBeenCalledWith(source, expect.objectContaining({ checkVideoFile: true, checkVideoMotion: true }));
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
 
@@ -171,7 +172,7 @@ it('stages a completed external job for the shared processor and frees its trans
     await queueDirectVideo((await addVideo('Following direct')).id);
     expect((await refreshQueue()).staged).toBe(1);
     await waitFor(() => expect(transfers).toHaveLength(1));
-    await waitFor(() => expect(assertIsRealMusicVideo).toHaveBeenCalledWith(source));
+    await waitFor(() => expect(assertIsRealMusicVideo).toHaveBeenCalledWith(source, expect.objectContaining({ checkVideoFile: true, checkVideoMotion: true })));
     expect(await prisma.downloadQueueItem.findFirst({ where: { sourceType: 'indexer' } })).toMatchObject({
       status: 'importing', phase: 'validating', downloadedPath: source,
     });
@@ -196,6 +197,19 @@ it('lets active transfers finish when the limit is lowered before starting the n
   await waitFor(() => expect(transfers).toHaveLength(4));
 });
 
+it('dispatches persisted manual order before FIFO entries after a restart', async () => {
+  await prisma.settings.create({ data: { id: 1, maxConcurrentDownloads: 1 } });
+  const first = await addVideo('First requested'); const promoted = await addVideo('Promoted');
+  for (const [video, position] of [[first, 0], [promoted, -1]] as const) {
+    await prisma.downloadQueueItem.create({ data: { musicVideoId: video.id, sourceType: 'youtube',
+      sourceRef: `https://youtube.com/watch?v=${video.id}`, status: 'queued', queuePosition: position } });
+  }
+  await resumeDownloadQueue();
+  await waitFor(() => expect(transfers).toHaveLength(1));
+  expect(await prisma.downloadQueueItem.findFirst({ where: { status: 'downloading' } })).toMatchObject({ musicVideoId: promoted.id });
+  expect(await prisma.downloadQueueItem.findFirst({ where: { status: 'queued' } })).toMatchObject({ musicVideoId: first.id });
+});
+
 it('resumes interrupted direct transfers while preserving external and uncertain handles', async () => {
   await prisma.settings.create({ data: { id: 1, maxConcurrentDownloads: 3 } });
   const direct = await addVideo('Interrupted');
@@ -208,4 +222,19 @@ it('resumes interrupted direct transfers while preserving external and uncertain
   await waitFor(() => expect(transfers).toHaveLength(1));
   expect((await prisma.downloadQueueItem.findMany({ where: { sourceType: 'indexer' }, orderBy: { id: 'asc' } })).map(row => row.sourceRef))
     .toEqual(['handle-downloading', 'handle-submissionUnknown']);
+});
+
+it('persists the selected source category but reads changed settings only when validation starts', async () => {
+  const video = await addVideo('Canonical policy');
+  const url = 'https://www.youtube.com/watch?v=canonical-policy';
+  const source = await prisma.acquisitionSource.create({ data: { musicVideoId: video.id, provider: 'youtube', url,
+    authority: 'verified', confidence: 'confirmed', accepted: true, discoveryOrigin: 'test' } });
+  const queued = await queueDirectVideo(video.id);
+  expect(await prisma.downloadQueueItem.findUnique({ where: { id: queued.queueId } })).toMatchObject({ validationCategory: 'canonical' });
+  await waitFor(() => expect(transfers).toHaveLength(1));
+  const policy = structuredClone(DEFAULT_VALIDATION_SETTINGS); policy.policies.canonical.motion = true; policy.maximumStaticPercent = 55;
+  await prisma.settings.upsert({ where: { id: 1 }, create: { id: 1, validationSettings: JSON.stringify(policy) }, update: { validationSettings: JSON.stringify(policy) } });
+  await prisma.acquisitionSource.update({ where: { id: source.id }, data: { authority: 'manual' } });
+  transfers[0].resolve('/tmp/policy-download.mp4');
+  await waitFor(() => expect(assertIsRealMusicVideo).toHaveBeenCalledWith('/tmp/policy-download.mp4', expect.objectContaining({ category: 'canonical', checkVideoFile: false, checkVideoMotion: true, maximumStaticFraction: .55 })));
 });

@@ -3,6 +3,9 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../db/client.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
 import { scanLocalVideoCandidates } from '../pipeline/localVideoReview.js';
+import { validationOptions } from '../pipeline/validationPolicy.js';
+import { assertIsRealMusicVideo } from '../pipeline/validateVideoFile.js';
+import { requestServerRefresh } from '../pipeline/serverRefresh.js';
 
 export async function videoReviewRoutes(app: FastifyInstance) {
   app.get('/api/v1/video-review', async () => prisma.videoReviewCandidate.findMany({
@@ -79,7 +82,12 @@ export async function videoReviewRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: 'This song already has a different owned file' });
     }
 
-    return prisma.$transaction(async (tx) => {
+    if (candidate.source === 'local' && candidate.filePath) {
+      try { await assertIsRealMusicVideo(candidate.filePath, await validationOptions('imports')); }
+      catch (error) { return reply.code(409).send({ error: `Local validation failed; file retained for review: ${(error as Error).message}` }); }
+    }
+
+    const approved = await prisma.$transaction(async (tx) => {
       const video = await tx.musicVideo.upsert({
         where: { artistId_normalizedTitle: { artistId, normalizedTitle: normalizeTitle(title) } },
         update: candidate.sourcePublishedAt ? { sourcePublishedAt: candidate.sourcePublishedAt } : {},
@@ -93,7 +101,7 @@ export async function videoReviewRoutes(app: FastifyInstance) {
           where: { musicVideoId: video.id }, update: {},
           create: { musicVideoId: video.id, path: candidate.filePath, sizeBytes: localSize, originalFilename: candidate.filePath.split(/[\\/]/).pop()! },
         });
-        await tx.musicVideo.update({ where: { id: video.id }, data: { hasFile: true } });
+        await tx.musicVideo.update({ where: { id: video.id }, data: { hasFile: true, awaitingServerScanAt: new Date() } });
       }
       if (candidate.source === 'youtube' && candidate.url) {
         await tx.acquisitionSource.upsert({
@@ -109,5 +117,10 @@ export async function videoReviewRoutes(app: FastifyInstance) {
       await tx.videoReviewCandidate.update({ where: { id }, data: { decision: 'approved', artistId, title, reason: 'Approved as a song music video.' } });
       return video;
     });
+    if (candidate.source === 'local') {
+      const root = await prisma.rootFolder.findUnique({ where: { id: artist.rootFolderId }, include: { targetConnector: true } });
+      if (root?.targetConnector?.enabled && root.targetConnector.videoLibraryId) requestServerRefresh(root.targetConnector.id);
+    }
+    return approved;
   });
 }

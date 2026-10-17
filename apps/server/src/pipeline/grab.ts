@@ -12,6 +12,7 @@ import { preferredDirectSource } from './directSourcePriority.js';
 import { drainDownloadQueue, registerDownloadRunner, registerProcessingRunner, wakeDownloadQueue } from './downloadDispatcher.js';
 import { STAGING_DIR } from './downloadTuning.js';
 import { readDownloadTimings, type DownloadTimings } from './downloadTimings.js';
+import { validationCategoryForSource, validationOptions } from './validationPolicy.js';
 
 const waiting = new Map<number, { resolve: (result: ImportResult | undefined) => void; reject: (err: unknown) => void }>();
 
@@ -76,6 +77,7 @@ async function enqueueDirectDownload(musicVideoId: number): Promise<DownloadQueu
         sourceType: source.provider,
         sourceRef: source.url,
         status: 'queued',
+        validationCategory: validationCategoryForSource(directSource),
       },
     });
   } catch (err) {
@@ -184,6 +186,7 @@ export async function grabFromIndexer(
       data: {
         musicVideoId,
         sourceType: 'indexer',
+        validationCategory: 'additional',
         sourceRef: downloadUrl,
         downloadClientId,
         status: 'queued',
@@ -278,7 +281,9 @@ registerProcessingRunner(async item => {
     if (!item.downloadedPath) throw new Error('Downloaded file path is missing; retained for recovery.');
     const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: item.musicVideoId } });
     if (video.ignored) throw new Error('Video is ignored; unignore it before importing.');
-    await assertIsRealMusicVideo(item.downloadedPath);
+    const validation = await validationOptions(item.validationCategory);
+    await assertIsRealMusicVideo(item.downloadedPath, validation);
+    await logActivity('info', 'video-validation', JSON.stringify({ queueId: item.id, musicVideoId: item.musicVideoId, ...validation }));
     timings.validationMs = Date.now() - start;
     await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { phase: 'importing', stageTimings: JSON.stringify(timings) } });
     const importing = Date.now();

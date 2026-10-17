@@ -1,4 +1,9 @@
-import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { assertIsRealMusicVideo } from '../../src/pipeline/validateVideoFile.js';
+vi.mock('../../src/pipeline/validateVideoFile.js', () => ({ assertIsRealMusicVideo: vi.fn().mockResolvedValue(undefined) }));
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { prisma } from '../../src/db/client.js';
@@ -12,6 +17,7 @@ describe('artist and video review boundaries', () => {
   beforeAll(async () => { app = await buildApp(); await app.ready(); });
   afterAll(async () => { await app.close(); });
   beforeEach(async () => {
+    vi.mocked(assertIsRealMusicVideo).mockReset().mockResolvedValue(undefined);
     await resetDb();
     await ensureSettings({ apiKey: TEST_API_KEY });
     const root = await createRootFolder();
@@ -64,5 +70,25 @@ describe('artist and video review boundaries', () => {
     expect(first.json()).toMatchObject({ total: 2, limit: 1, items: [expect.objectContaining({ title: 'Back in Black' })] });
     const second = await app.inject({ method: 'GET', url: `/api/v1/video-review/page?artistId=${artistId}&limit=1&search=hells`, headers: authHeaders() });
     expect(second.json()).toMatchObject({ total: 1, items: [expect.objectContaining({ title: 'Hells Bells' })] });
+  });
+
+  it('validates user files before registering ownership, retaining failed candidates and the original file', async () => {
+    await prisma.artist.update({ where: { id: artistId }, data: { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' } });
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vidarr-import-policy-'));
+    const file = path.join(directory, 'Song.mp4');
+    try {
+      await fs.writeFile(file, 'original bytes');
+      const candidate = await prisma.videoReviewCandidate.create({ data: { source: 'local', externalId: file, filePath: file, artistName: 'AC/DC', title: 'Song', artistId } });
+      vi.mocked(assertIsRealMusicVideo).mockRejectedValueOnce(new Error('Video is static'));
+      const approve = () => app.inject({ method: 'POST', url: `/api/v1/video-review/${candidate.id}/approve`, headers: authHeaders(), payload: { artistId, title: 'Song' } });
+      expect((await approve()).statusCode).toBe(409);
+      expect(await prisma.musicVideoFile.count()).toBe(0);
+      expect(await prisma.videoReviewCandidate.findUnique({ where: { id: candidate.id } })).toMatchObject({ decision: 'pending' });
+      expect((await approve()).statusCode).toBe(200);
+      expect(assertIsRealMusicVideo).toHaveBeenCalledWith(file, expect.objectContaining({ category: 'imports', checkVideoFile: true, checkVideoMotion: true }));
+      expect(await prisma.musicVideoFile.findFirst()).toMatchObject({ path: file });
+      expect((await prisma.musicVideo.findFirst())?.awaitingServerScanAt).toBeInstanceOf(Date);
+      expect(await fs.readFile(file, 'utf8')).toBe('original bytes');
+    } finally { await fs.rm(directory, { recursive: true, force: true }); }
   });
 });

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { saveYoutubeCookies } from '../src/providers/youtube/cookies.js';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { downloadDirectVideo, getVideoMetadata } from '../src/providers/youtube/ytdlp.js';
+import { downloadDirectVideo, downloadSampleClip, getVideoMetadata } from '../src/providers/youtube/ytdlp.js';
 
 vi.mock('node:child_process', () => ({ spawn: vi.fn() }));
 
@@ -24,6 +24,27 @@ function mockProcess(stdout: string, stderr = '', code = 0) {
 }
 
 beforeEach(() => vi.clearAllMocks());
+
+it('allows video-only sample streams while preserving the bounded 20-second section', async () => {
+  mockProcess('/tmp/video.sample.mp4\n');
+  expect(await downloadSampleClip('video-id', '/tmp')).toBe('/tmp/video.sample.mp4');
+  const args = vi.mocked(spawn).mock.calls[0][1]!;
+  expect(args[args.indexOf('-f') + 1]).toBe('worstvideo[height>=64]/worst[height>=64]');
+  expect(args[args.indexOf('--download-sections') + 1]).toBe('*0-20');
+});
+
+it('can select a compatible sample extractor without changing full-download tools', async () => {
+  vi.stubEnv('SAMPLE_FFMPEG_PATH', '/compat/ffmpeg');
+  try {
+    mockProcess('/tmp/video.sample.mp4\n');
+    await downloadSampleClip('video-id', '/tmp');
+    const args = vi.mocked(spawn).mock.calls[0][1]!;
+    expect(args[args.indexOf('--ffmpeg-location') + 1]).toBe('/compat');
+    mockProcess('/tmp/video.mp4\n');
+    await downloadDirectVideo('https://www.youtube.com/watch?v=video-id', '/tmp');
+    expect(vi.mocked(spawn).mock.calls[1][1]).not.toContain('/compat');
+  } finally { vi.unstubAllEnvs(); }
+});
 
 it('enables the running Node executable for metadata extraction and direct downloads', async () => {
   mockProcess(JSON.stringify({ title: 'Song', channel: 'Artist' }));
