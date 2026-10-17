@@ -1,3 +1,4 @@
+import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
@@ -8,7 +9,7 @@ import { accessibleRootPath } from './localVideoReview.js';
 import { isPathWithinRoot } from './pathContainment.js';
 import { normalizeTitle } from './normalize.js';
 
-const ACTIVE = ['queued', 'downloading', 'importing', 'submissionUnknown'];
+const ACTIVE = [...ACTIVE_DOWNLOAD_STATUSES];
 const INITIAL_DELAY_MS = 5 * 60_000;
 const RETRY_DELAY_MS = 40 * 60_000;
 const targetSchema = z.object({ libraryVideoId: z.number().int(), connectorId: z.number().int(), externalId: z.string(), expectedPath: z.string(), libraryId: z.string().nullable(), host: z.string(), type: z.string() });

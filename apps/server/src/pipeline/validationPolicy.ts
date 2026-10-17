@@ -1,9 +1,7 @@
-import { DEFAULT_VALIDATION_SETTINGS, ValidationSettingsSchema, ValidationCategorySchema, type ValidationCategory, type ValidationSettings } from '@vidarr/shared-types';
+import { DEFAULT_VALIDATION_SETTINGS, ValidationSettingsSchema, ValidationCategorySchema, type ValidationSettings } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
 
-export function validationCategoryForSource(source: { accepted?: boolean; authority?: string; confidence?: string } | null | undefined): ValidationCategory {
-  return source?.accepted && source.confidence === 'confirmed' && ['authoritative', 'verified'].includes(source.authority ?? '') ? 'canonical' : 'additional';
-}
+export { validationCategoryForSource } from '../catalog/musicVideoPolicy.js';
 
 export async function loadValidationSettings(): Promise<ValidationSettings> {
   const row = await prisma.settings.findUnique({ where: { id: 1 }, select: { validationSettings: true } });

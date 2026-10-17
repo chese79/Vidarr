@@ -1,5 +1,21 @@
 # Process flows and consistency review
 
+## Planned live workflows (design only)
+
+The [concerts and live performances design](requests/2026-10-17-concerts-and-live-performances.md)
+describes proposed discovery, matching/review, acquisition, validation, delivery, correction and
+recovery flows. Product rules and UI previews are approved; live implementation still requires
+technical capability verification and separate authorization. The current flows below, including
+the label-only Live/Concert action, remain unchanged.
+
+## Shared backend foundations
+
+The [backend alignment audit and migration plan](backend-alignment.md) records the authorized
+foundation refactor. Ownership/acquisition, watched-time observation and physical inspection
+use shared mechanics with explicit music-video policies and compatibility entry points.
+Identity, review, validation choices, import, delivery confirmation, deletion and playlist
+publication stages retain their existing outcomes. This introduces no live workflow or schema change.
+
 ## Large playback-library synchronization
 
 Inventory refresh deduplicates confirmed catalog video IDs and processes delivery confirmation

@@ -1,3 +1,4 @@
+import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import { prisma, logActivity } from '../db/client.js';
 import { searchAllIndexers } from './search.js';
 import { grabFromIndexer, queueDirectVideo } from './grab.js';
@@ -229,7 +230,7 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
       // the match's connector still be enabled — a disabled connector's
       // stale last-synced rows must not suppress search either.
       libraryVideos: { none: { available: true, matchConfidence: null, connector: { enabled: true } } },
-      queueItems: { none: { status: { in: ['queued', 'downloading', 'submissionUnknown', 'importing'] } } },
+      queueItems: { none: { status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } } },
     },
     select: { id: true },
   });
