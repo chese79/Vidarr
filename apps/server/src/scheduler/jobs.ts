@@ -12,6 +12,7 @@ import { reconcilePendingImports } from '../pipeline/pendingImportReconciliation
 import { backfillArtistVideoInventories } from '../pipeline/artistVideoBackfill.js';
 import { backfillArtistGenres } from '../pipeline/artistGenres.js';
 import { pollLastFmPlayback } from '../pipeline/lastfmScrobbling.js';
+import { processPendingVideoDeletions } from '../pipeline/deleteVideo.js';
 
 export interface ScheduledJob {
   name: string;
@@ -54,6 +55,7 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  { name: 'Pending Video Deletions', defaultIntervalMs: 60_000, run: async () => { await processPendingVideoDeletions(); return 'Checked due video deletions'; } },
   { name: 'Last.fm Playback Scrobbling', defaultIntervalMs: 15_000, run: () => pollLastFmPlayback() },
   {
     name: 'Artist Genre Backfill',

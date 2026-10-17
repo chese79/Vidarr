@@ -8,6 +8,20 @@ catalog and the playback destinations for the finished collection.
 
 ## Canonical catalog
 
+Artist detail groups genres in a disclosure closed by default. Its Videos heading includes a
+case-insensitive title filter; bulk selection follows the visible results. Queue and History
+follow Genres in navigation. A user-controlled Live/Concert boolean labels an existing video;
+it does not enable discovery, validation or acquisition of live performances or concerts.
+
+Individual video deletion starts after five minutes and retries failures 40 minutes later. Playing or paused matched server sessions defer deletion. Pending state and deadlines survive restarts. Completion removes the Vidarr catalog entry, its owned local video/metadata bundle,
+and every confirmed matched Jellyfin/Plex copy, including the server catalog item. Unconfirmed
+matches are never deletion targets. General settings place Warn before delete (default on) beside
+Exclude deleted videos from future scans (default off). A small independent deletion ledger retains
+artist-scoped provider IDs and local path, falling back to normalized title only when source IDs
+are unavailable. While exclusion is enabled these identities suppress IMVDb, YouTube and local
+review scans. Disabling it allows rediscovery; it neither restores media nor removes existing
+catalog entries. Distinct provider versions are not suppressed merely for sharing a song title.
+
 Workflow changes must preserve each required outcome and expose the next step. See
 [process flows](process-flows.md) for the complete sequences and the shortcut-check rule.
 Library hides empty artists by default only when available, known and unmatched counts are all zero;

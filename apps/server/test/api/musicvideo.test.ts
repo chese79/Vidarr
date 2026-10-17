@@ -92,11 +92,22 @@ describe('musicvideo routes', () => {
   it('DELETE /api/v1/musicvideo/:id removes the video', async () => {
     const video = await createMusicVideo(artistId, { title: 'To Delete' });
 
-    const del = await app.inject({ method: 'DELETE', url: `/api/v1/musicvideo/${video.id}`, headers: authHeaders() });
-    expect(del.statusCode).toBe(204);
+    const unconfirmed = await app.inject({ method: 'DELETE', url: `/api/v1/musicvideo/${video.id}`, headers: authHeaders() });
+    expect(unconfirmed.statusCode).toBe(409);
+    const del = await app.inject({ method: 'DELETE', url: `/api/v1/musicvideo/${video.id}`, headers: authHeaders(), payload: { confirmed: true } });
+    expect(del.statusCode).toBe(202);
+    expect(del.json()).toEqual({ scheduled: true });
 
     const list = await app.inject({ method: 'GET', url: '/api/v1/musicvideo', headers: authHeaders() });
-    expect(list.json()).toHaveLength(0);
+    expect(list.json()).toHaveLength(1);
+    expect(list.json()[0]).toMatchObject({ deletionState: 'pending', ignored: true, monitored: false });
+  });
+
+  it('flags live/concert without changing catalog ownership or monitoring', async () => {
+    const video = await createMusicVideo(artistId);
+    const res = await app.inject({ method: 'PUT', url: `/api/v1/musicvideo/${video.id}`, headers: authHeaders(), payload: { isLiveConcert: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ isLiveConcert: true, monitored: true, hasFile: false });
   });
 
   it('GET /api/v1/musicvideo/:id/search 404s for a nonexistent video before attempting any indexer search', async () => {

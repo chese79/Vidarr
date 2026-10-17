@@ -29,10 +29,10 @@ const NAV_ITEMS = [
   { to: '/match-review', label: 'Artist Review' },
   { to: '/video-review', label: 'Video Review' },
   { to: '/genres', label: 'Genres' },
-  { to: '/calendar', label: 'Calendar' },
-  { to: '/import', label: 'Import' },
   { to: '/queue', label: 'Queue' },
   { to: '/history', label: 'History' },
+  { to: '/calendar', label: 'Calendar' },
+  { to: '/import', label: 'Import' },
 ];
 
 const SETTINGS_NAV_ITEMS = [

@@ -16,6 +16,17 @@ import { validationCategoryForSource, validationOptions } from './validationPoli
 
 const waiting = new Map<number, { resolve: (result: ImportResult | undefined) => void; reject: (err: unknown) => void }>();
 
+// Serialize the queue claim with deletion intent so a stale preflight cannot
+// enqueue work after Delete has claimed the catalog entry.
+async function createQueueItem(data: Prisma.DownloadQueueItemUncheckedCreateInput): Promise<DownloadQueueItem> {
+  return prisma.$transaction(async tx => {
+    const video = await tx.musicVideo.findUniqueOrThrow({ where: { id: data.musicVideoId }, select: { deletionState: true, ignored: true } });
+    if (video.deletionState) throw new Error('Video deletion is pending; finish Delete before downloading.');
+    if (video.ignored) throw new Error('Video is ignored; unignore it before downloading.');
+    return tx.downloadQueueItem.create({ data });
+  });
+}
+
 function waitForItem(id: number): Promise<ImportResult | undefined> {
   return new Promise((resolve, reject) => waiting.set(id, { resolve, reject }));
 }
@@ -71,14 +82,12 @@ async function enqueueDirectDownload(musicVideoId: number): Promise<DownloadQueu
   // which guard caught it.
   let queueItem: DownloadQueueItem;
   try {
-    queueItem = await prisma.downloadQueueItem.create({
-      data: {
+    queueItem = await createQueueItem({
         musicVideoId,
         sourceType: source.provider,
         sourceRef: source.url,
         status: 'queued',
         validationCategory: validationCategoryForSource(directSource),
-      },
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -182,8 +191,7 @@ export async function grabFromIndexer(
   // index); hasActiveDownload() above is only the fast-path.
   let queueItem: DownloadQueueItem;
   try {
-    queueItem = await prisma.downloadQueueItem.create({
-      data: {
+    queueItem = await createQueueItem({
         musicVideoId,
         sourceType: 'indexer',
         validationCategory: 'additional',
@@ -191,7 +199,6 @@ export async function grabFromIndexer(
         downloadClientId,
         status: 'queued',
         quality,
-      },
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {

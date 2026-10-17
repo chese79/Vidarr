@@ -5,6 +5,7 @@ import { ensureDefaultData } from './pipeline/ensureDefaults.js';
 import { startScheduler } from './scheduler/index.js';
 import { prisma } from './db/client.js';
 import { resumeDownloadQueue } from './pipeline/grab.js';
+import { recoverInterruptedVideoDeletions } from './pipeline/deleteVideo.js';
 
 const app = await buildApp();
 
@@ -16,6 +17,7 @@ await ensureDefaultData();
 await prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL');
 await prisma.$queryRawUnsafe('PRAGMA busy_timeout=15000');
 await resumeDownloadQueue();
+await recoverInterruptedVideoDeletions();
 
 const port = Number(process.env.PORT ?? 3434);
 app.listen({ port, host: '0.0.0.0' }).catch((err) => {

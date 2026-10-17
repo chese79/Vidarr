@@ -1,5 +1,20 @@
 # Deployment
 
+### Artist video actions: local-only release
+
+Migration `20261016220000_artist_video_actions` adds the live/concert flag, durable deletion deadlines/attempts/retry state,
+two General preferences and a minimal independent deletion ledger. Existing settings default to
+warning on and rediscovery allowed. No migration deletes media or revisits existing owned files.
+Back up configuration with the offline cutover helper and recreate only Vidarr, retaining exact
+configuration/media/staging mounts and the rollback container. The Pending Video Deletions job checks due work every minute; a five-minute grace period precedes deletion and failures/playback defer it another 40 minutes. Run tests against fixture files and
+mock server APIs; do not exercise Delete on real library media during deployment verification.
+
+For this user-authorized local-only release, squash merge with `[skip ci]` in the merge subject to
+skip the normal public-image workflow, then rebuild/tag/deploy a local image from the merged commit.
+Do not push or replace public image tags. The publishing workflow itself remains unchanged for
+subsequent ordinary releases. Verify health, migration, preserved ownership/queue records and both
+preference defaults after cutover.
+
 ### Validation/Quality release
 
 Apply additive migration `20261016200000_validation_policies` through normal startup. It adds

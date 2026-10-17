@@ -316,7 +316,7 @@ export const api = {
       request<MusicVideo>('/musicvideo', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: UpdateMusicVideo) =>
       request<MusicVideo>(`/musicvideo/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    remove: (id: number) => request<void>(`/musicvideo/${id}`, { method: 'DELETE' }),
+    remove: (id: number, confirmed = false) => request<void>(`/musicvideo/${id}`, { method: 'DELETE', body: JSON.stringify({ confirmed }) }),
     grab: (id: number) => request<GrabResult>(`/musicvideo/${id}/grab`, { method: 'POST' }),
     bulkSearch: (ids: number[]) =>
       request<BulkSearchResult>('/musicvideo/bulk-search', {

@@ -1,5 +1,38 @@
 # Process flows and consistency review
 
+## Artist video actions and deletion (2026-10-16)
+
+Open artist → optionally expand Genres → filter Videos by name → act on a visible video.
+Flag as Live/Concert updates only its persisted label and can be reversed. Existing canonical
+identity, source admission and validation outcomes remain intact.
+
+Delete → load saved warning preference → confirm if enabled → reject active/waiting acquisition →
+persist deletion intent and freeze targets → wait five minutes → preflight the owned local bundle and all confirmed
+server copies → defer if any matched server session is playing or paused → delete server items → confirm each exact item is absent → remove the local bundle →
+atomically record deletion identities and remove Vidarr catalog/ownership, confirmed observations,
+playlist references and corresponding review decisions. Never delete by title on a server. Verify
+current item identity, type, selected library membership and every media path against the matched
+path; changed or additional versions require reconciliation. Local paths must be regular files
+inside an accessible configured root; symlinks, unavailable mounts and shared ownership block
+deletion. Delete only the video and same-base metadata/artwork/subtitles, not the artist directory.
+
+A one-minute scheduled job processes due deletions in bounded batches. Any server, playback check or filesystem failure retains the entry and frozen remaining targets with a visible
+error and a next attempt 40 minutes later. Further failures retry every 40 minutes. Reschedule delete restarts the five-minute delay. Already absent targets are safe on retry; authentication errors are not
+treated as absence. Pending deletion is ignored/unmonitored to prevent reacquisition. Restart
+marks interrupted work failed and schedules retry 40 minutes later; pending deadlines survive restarts.
+
+`DELETE /api/v1/musicvideo/:id` accepts `{ "confirmed": true }` when warnings are enabled and
+returns `202 { "scheduled": true }` after persisting the request. It does not report completion.
+Artist/video responses expose deletion state, error, attempt count and the next attempt time.
+An already scheduled request or active download returns 409. The one-minute job never runs an
+attempt before its persisted deadline, even when invoked manually from System / Tasks.
+
+Settings → General → Video deletion → independently save Warn before delete and Exclude deleted
+videos from future scans. Defaults are on/off respectively. All successful deletions retain minimal
+identity fingerprints. Scans consult the current exclusion preference: enabled suppresses matching
+provider IDs/local paths (artist-scoped title fallback only without IDs); disabled allows normal
+discovery and review again. Settings changes do not restore deleted files or delete catalog entries.
+
 ## Category validation policies (2026-10-16)
 
 Settings → Validation/Quality → select Check video file and Check video motion per category →

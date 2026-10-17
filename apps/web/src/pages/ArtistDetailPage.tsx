@@ -6,6 +6,7 @@ import VideoThumb from '../components/VideoThumb';
 import GenreEditor from '../components/GenreEditor';
 import { NewArtistBadge, sourceCheckLabel } from '../components/ArtistProgress';
 import { downloadableSelectedIds } from './downloadSelection';
+import { filterArtistVideos } from './artistVideoFilters';
 import type {
   YoutubeSourceType,
   IndexerSearchResult,
@@ -295,12 +296,31 @@ export default function ArtistDetailPage() {
   const [bulkSearching, setBulkSearching] = useState(false);
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [videoSearch, setVideoSearch] = useState('');
   const [artistActionMessage, setArtistActionMessage] = useState<string | null>(null);
 
   const artist = useQuery({
     queryKey: ['artist', artistId],
     queryFn: () => api.artists.get(artistId),
     refetchInterval: 5000,
+  });
+  const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings.get });
+  const flagLiveConcert = useMutation({
+    mutationFn: ({ id, isLiveConcert }: { id: number; isLiveConcert: boolean }) => api.musicVideos.update(id, { isLiveConcert }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', artistId] }),
+    onError: error => setArtistActionMessage(`Flag update failed: ${(error as Error).message}`),
+  });
+  const deleteVideo = useMutation({
+    mutationFn: ({ id, confirmed }: { id: number; confirmed: boolean; title: string }) => api.musicVideos.remove(id, confirmed),
+    onSuccess: (_result, video) => {
+      setSelected(current => { const next = new Set(current); next.delete(video.id); return next; });
+      setArtistActionMessage(`Deletion scheduled for ${video.title} in five minutes. Playback or removal failures retry after 40 minutes.`);
+      for (const key of [['artist', artistId], ['artistSummary'], ['queue'], ['history'], ['playlists'], ['video-review']]) queryClient.invalidateQueries({ queryKey: key });
+    },
+    onError: error => {
+      setArtistActionMessage(`Delete failed: ${(error as Error).message}`);
+      queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
+    },
   });
   const videoInventory = useQuery({
     queryKey: ['artist-video-inventory', artistId],
@@ -455,8 +475,9 @@ export default function ArtistDetailPage() {
   if (!artist.data) return <p>Artist not found.</p>;
 
   const currentArtist = artist.data;
-  const wantedVideos = artist.data.musicVideos.filter((mv) => !mv.hasFile);
-  const downloadableIds = downloadableSelectedIds(artist.data.musicVideos, selected);
+  const visibleVideos = filterArtistVideos(artist.data.musicVideos, videoSearch);
+  const wantedVideos = visibleVideos.filter((mv) => !mv.hasFile);
+  const downloadableIds = downloadableSelectedIds(visibleVideos, selected);
   const allSelected = wantedVideos.length > 0 && wantedVideos.every((mv) => selected.has(mv.id));
 
   function toggleSelectAll() {
@@ -576,7 +597,14 @@ export default function ArtistDetailPage() {
         </p>
       )}
 
-      <GenreEditor artistId={artistId} />
+      <details className="artist-genres"><summary>Genres</summary><GenreEditor artistId={artistId} /></details>
+
+      <div className="form-row artist-videos-header">
+        <h3>Videos</h3>
+        <input aria-label="Filter videos by name" placeholder="Search video names" value={videoSearch} onChange={e => { setVideoSearch(e.target.value); setSelected(new Set()); }} />
+        <span>{visibleVideos.length} of {artist.data.musicVideos.length}</span>
+      </div>
+      {settings.isError && <p role="alert">Could not load deletion preferences. Reload the page to enable Delete.</p>}
 
       {showAdd && (
         <form className="card" onSubmit={handleSubmit}>
@@ -622,9 +650,9 @@ export default function ArtistDetailPage() {
         </div>
       )}
 
-      {artist.data.musicVideos.length ? (
+      {visibleVideos.length ? (
         <div className="video-list">
-          {artist.data.musicVideos.map((mv) => (
+          {visibleVideos.map((mv) => (
             <div className="video-row" key={mv.id}>
               {!mv.hasFile && (
                 <input
@@ -641,6 +669,21 @@ export default function ArtistDetailPage() {
                   <span className="empty-state" style={{ padding: 0 }}>
                     ({mv.releaseYear ?? 'year unknown'})
                   </span>
+                  {' '}<button type="button" className="secondary" disabled={flagLiveConcert.isPending || Boolean(mv.deletionState)}
+                    onClick={() => flagLiveConcert.mutate({ id: mv.id, isLiveConcert: !mv.isLiveConcert })}>
+                    {mv.isLiveConcert ? 'Unflag Live/Concert' : 'Flag as Live/Concert'}
+                  </button>
+                  {' '}<button type="button" className="secondary" aria-label={`Delete ${mv.title}`}
+                    disabled={!settings.isSuccess || deleteVideo.isPending || mv.deletionState === 'running' || mv.deletionState === 'pending' || ['queued', 'downloading', 'importing', 'submissionUnknown'].includes(mv.status.acquisition ?? '')}
+                    onClick={() => {
+                      const warning = settings.data?.warnBeforeDelete ?? true;
+                      if (warning && !window.confirm(`Delete ${currentArtist.name} — ${mv.title}?\n\nThis permanently removes the local file and its metadata, all confirmed matched Jellyfin/Plex copies, and the Vidarr entry. This cannot be undone.\n\n${settings.data?.excludeDeletedVideosFromScans ? 'Future scans will exclude this video.' : 'Future scans may add this video again.'}`)) return;
+                      deleteVideo.mutate({ id: mv.id, title: mv.title, confirmed: warning });
+                    }}>{mv.deletionState === 'running' ? 'Deleting…' : mv.deletionState === 'pending' ? 'Pending deletion' : mv.deletionState === 'failed' ? 'Reschedule delete' : 'Delete'}</button>
+                  {mv.isLiveConcert && <span className="status-chip">Live/Concert</span>}
+                  {mv.deletionError && <p role="alert">{mv.deletionError}</p>}
+                  {mv.deletionNextAttemptAt && <p role="status">{mv.deletionState === 'failed' ? 'Deletion retry' : 'Deletion scheduled'}: {new Date(mv.deletionNextAttemptAt).toLocaleString()}</p>}
+                  {['queued', 'downloading', 'importing', 'submissionUnknown'].includes(mv.status.acquisition ?? '') && <small> Remove or finish the download in Queue before deleting.</small>}
                 </div>
                 {mv.director && (
                   <div className="empty-state" style={{ padding: 0 }}>
@@ -751,7 +794,7 @@ export default function ArtistDetailPage() {
           ))}
         </div>
       ) : (
-        <p className="empty-state">No music videos yet.</p>
+        <p className="empty-state">{videoSearch.trim() ? 'No videos match this name.' : 'No music videos yet.'}</p>
       )}
 
       {artist.data.unmatchedInventory.length > 0 && (

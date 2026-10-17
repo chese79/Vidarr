@@ -77,6 +77,12 @@ model ArtistGenre {
 }
 
 model MusicVideo {
+  isLiveConcert  Boolean @default(false)
+  deletionState  String?
+  deletionError  String?
+  deletionTargets String?
+  deletionNextAttemptAt DateTime?
+  deletionAttempts Int @default(0)
   id             Int      @id @default(autoincrement())
   artistId       Int
   artist         Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
@@ -295,6 +301,8 @@ model ScheduledTask {
 }
 
 model Settings {
+  warnBeforeDelete Boolean @default(true)
+  excludeDeletedVideosFromScans Boolean @default(false)
   validationSettings String @default("{\"policies\":{\"imports\":{\"file\":true,\"motion\":true},\"canonical\":{\"file\":false,\"motion\":false},\"additional\":{\"file\":true,\"motion\":true}},\"minimumDimension\":64,\"maximumStaticPercent\":80}")
   defaultPlaybackConnectorId Int? // validated enabled Plex/Jellyfin video connector; stale defaults are ignored
   id             Int     @id @default(1)
@@ -323,6 +331,16 @@ model Settings {
   // POST /api/v1/auth/login/credentials, which hashes it server-side.
   adminUsername     String?
   adminPasswordHash String? // format "<hex salt>:<hex scrypt derived key>"
+}
+
+model DeletedVideoRecord {
+  id Int @id @default(autoincrement())
+  originalMusicVideoId Int @unique
+  artistId Int
+  title String
+  identities String
+  deletedAt DateTime @default(now())
+  @@index([artistId])
 }
 
 model LibraryConnector {

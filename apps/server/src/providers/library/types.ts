@@ -73,6 +73,9 @@ export interface LibraryItemMatch {
 }
 
 export interface LibraryConnectorProvider {
+  verifyVideoDeletion?(config: LibraryConnector, item: { externalId: string; expectedPath: string }): Promise<void>;
+  isVideoInUse?(config: LibraryConnector, externalId: string): Promise<boolean>;
+  deleteVideo?(config: LibraryConnector, item: { externalId: string; expectedPath: string }): Promise<void>;
   fetchPlaybackSessions?(config: LibraryConnector): Promise<LibraryPlaybackSession[]>;
   testConnection(config: LibraryConnector): Promise<LibraryConnectorTestResult>;
   fetchArtists(config: LibraryConnector): Promise<FetchedLibraryArtist[]>;

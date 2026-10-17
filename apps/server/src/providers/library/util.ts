@@ -25,6 +25,16 @@ export function isNotFound(err: unknown): boolean {
   return err instanceof ProviderHttpError && err.status === 404;
 }
 
+export function assertDeletionPaths(paths: string[], expectedPath: string): void {
+  const normalize = (value: string) => {
+    const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
+    return /^(?:[a-z]:|\/\/)/i.test(normalized) ? normalized.toLowerCase() : normalized;
+  };
+  if (!expectedPath || /^https?:/i.test(expectedPath) || !paths.length || paths.some(p => normalize(p) !== normalize(expectedPath))) {
+    throw new Error('Server media paths changed or include unconfirmed versions; resync and review this item before deleting.');
+  }
+}
+
 // Plex and Jellyfin's HTTP APIs differ only in header name and error-message
 // label — this factory captures that one difference so both providers share
 // the actual fetch/error/204-handling logic instead of duplicating it.

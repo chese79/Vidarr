@@ -30,7 +30,21 @@ describe('settings routes', () => {
       transferMode: 'move',
       minFreeSpaceMb: 1024,
       maxConcurrentDownloads: 3,
+      warnBeforeDelete: true,
+      excludeDeletedVideosFromScans: false,
     });
+  });
+
+  it('saves deletion preferences independently and rejects non-booleans', async () => {
+    const result = await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { warnBeforeDelete: false, excludeDeletedVideosFromScans: true } });
+    expect(result.statusCode).toBe(200);
+    expect(result.json()).toMatchObject({ warnBeforeDelete: false, excludeDeletedVideosFromScans: true });
+    await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { minFreeSpaceMb: 2048 } });
+    const saved = await app.inject({ url: '/api/v1/config', headers: authHeaders() });
+    expect(saved.json()).toMatchObject({ warnBeforeDelete: false, excludeDeletedVideosFromScans: true });
+    for (const payload of [{ warnBeforeDelete: 'false' }, { excludeDeletedVideosFromScans: 1 }]) {
+      expect((await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload })).statusCode).toBe(400);
+    }
   });
 
   it('authenticates validation policies, saves all categories atomically and rejects incomplete/invalid updates', async () => {
