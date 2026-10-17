@@ -52,7 +52,9 @@ RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
   && apt-get purge -y python3-pip \
   && apt-get autoremove -y
 
-# Static ffmpeg/ffprobe build instead of Debian's `ffmpeg` package. apt's
+# Static ffmpeg/ffprobe for local merges and full-file validation. Remote
+# samples additionally use Debian's ffmpeg below: the static build crashes
+# on the YouTube HTTPS/HLS inputs used by bounded sample extraction. apt's
 # ffmpeg drags in a large tree of hard dependencies vidarr never uses
 # (libsdl2, libcairo2, libpango, librsvg2, X11/GLX libraries — all there for
 # ffplay's display output and subtitle/font rendering, not headless
@@ -105,6 +107,14 @@ COPY apps/web/package.json apps/web/
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --workspace @vidarr/server --workspace @vidarr/shared-types
 
+# Keep remote sample extraction separate from the established local validation
+# binary/thread tuning. Debian's dynamically linked FFmpeg handles the remote
+# inputs that crashed the static binary in the live discovery smoke test.
+# This deliberately adds the distribution package's dependency footprint.
+RUN --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends ffmpeg
+
 # npm ci installs the plain @prisma/client package, but that only ships an
 # uninitialized stub (node_modules/.prisma/client/default.js throws "did not
 # initialize yet" until `prisma generate` has run against schema.prisma) —
@@ -121,6 +131,7 @@ ENV NODE_ENV=production
 ENV PORT=3434
 ENV DATABASE_URL="file:/config/vidarr.db"
 ENV WEB_DIST_PATH=/app/apps/web/dist
+ENV SAMPLE_FFMPEG_PATH=/usr/bin/ffmpeg
 
 # Don't run as root — reuse the "node" user/group (uid/gid 1000) that the
 # node:*-bookworm-slim base image already creates, rather than creating a new

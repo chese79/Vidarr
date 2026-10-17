@@ -21,7 +21,9 @@ const SAMPLE_DIR = process.env.STAGING_DIR ?? path.join(os.tmpdir(), 'vidarr-sta
 // regardless of how well the title otherwise matched the song.
 const TOPIC_CHANNEL = /-\s*topic$/i;
 const PROVIDED_TO_YOUTUBE = /^provided to youtube by/i;
+const LIVE_TITLE = /[([]\s*live\b|\blive\s*[)\]]|[-–—]\s*live(?:\s+(?:at|in|from|on)\b.*)?\s*$/i;
 const REJECT_TITLE_PATTERNS: { pattern: RegExp; label: string }[] = [
+  { pattern: /\bconcerts?\b|\ben vivo\b|\bao vivo\b|\ben directo\b/, label: 'live/concert footage' },
   { pattern: /\blyrics?\b/, label: 'lyric video' },
   { pattern: /\bkaraoke\b/, label: 'karaoke' },
   { pattern: /\bvisualizer\b/, label: 'visualizer' },
@@ -40,6 +42,7 @@ const REJECT_TITLE_PATTERNS: { pattern: RegExp; label: string }[] = [
 ];
 
 export function excludedMusicVideoTitleReason(title: string): string | null {
+  if (LIVE_TITLE.test(title)) return 'Title indicates live/concert footage, not a song music video.';
   const normalized = normalizeTitle(title);
   const match = REJECT_TITLE_PATTERNS.find(({ pattern }) => pattern.test(normalized));
   return match ? `Title indicates ${match.label}, not a song music video.` : null;
@@ -73,6 +76,10 @@ export function classifyCandidate(metadata: YoutubeVideoMetadata, expectedTitle?
       decision: 'reject',
       reason: 'Description starts with "Provided to YouTube by" — a label-ingested audio upload, not an official video.',
     };
+  }
+
+  if (metadata.isLivePerformance || LIVE_TITLE.test(metadata.title)) {
+    return { decision: 'reject', reason: 'Title indicates live/concert footage, not a song music video.' };
   }
 
   const expectedContainsCover = expectedTitle != null && /\bcover\b/.test(normalizeTitle(expectedTitle));

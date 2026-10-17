@@ -1,4 +1,5 @@
 import type {
+  ValidationSettings,
   Artist,
   CreateArtist,
   MusicVideo,
@@ -85,6 +86,7 @@ export interface ArtistSummaryParams {
 }
 
 export interface QueueItem {
+  validationCategory?: string;
   id: number;
   musicVideoId: number;
   sourceType: string;
@@ -150,6 +152,10 @@ async function requestBlob(path: string): Promise<Blob> {
 }
 
 export const api = {
+  validation: {
+    get: () => request<ValidationSettings>('/config/validation'),
+    save: (settings: ValidationSettings) => request<ValidationSettings>('/config/validation', { method: 'PUT', body: JSON.stringify(settings) }),
+  },
   genres: {
     stats: (smallThreshold = 1) => request<GenreStats>(`/genres/stats?smallThreshold=${smallThreshold}`),
   },
@@ -498,6 +504,8 @@ export const api = {
       }),
   },
   queue: {
+    move: (id: number, direction: 'up' | 'down' | 'top' | 'bottom') =>
+      request<{ ok: boolean }>(`/queue/${id}/move`, { method: 'POST', body: JSON.stringify({ direction }) }),
     reconcile: (id: number, body: { action: 'attach'; externalRef: string; verified: true } | { action: 'notSubmitted'; verified: true }) =>
       request<{ ok: boolean }>(`/queue/${id}/reconcile`, { method: 'POST', body: JSON.stringify(body) }),
     list: () => request<QueueItem[]>('/queue?activeOnly=true'),

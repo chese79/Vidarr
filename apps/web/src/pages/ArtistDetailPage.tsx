@@ -314,7 +314,7 @@ export default function ArtistDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
       queryClient.invalidateQueries({ queryKey: ['artist-video-inventory', artistId] });
       queryClient.invalidateQueries({ queryKey: ['video-review'] });
-      setArtistActionMessage(`Collected ${result.official} IMVDb videos, ${result.pendingYoutube} YouTube and ${result.pendingLocal} local candidates.${result.errors.length ? ` Source errors: ${result.errors.join('; ')}` : ''}`);
+      setArtistActionMessage(`Collected ${result.official} official videos, ${result.pendingYoutube} YouTube and ${result.pendingLocal} local candidates.${result.errors.length ? ` Source errors: ${result.errors.join('; ')}` : ''}`);
     },
     onError: (error: Error) => setArtistActionMessage(error.message),
   });
@@ -552,7 +552,7 @@ export default function ArtistDetailPage() {
       {artistActionMessage && <p role="status" className="empty-state">{artistActionMessage}</p>}
 
       {artist.data.musicbrainzMatchStatus === 'confirmed' && <details className="artist-source-details">
-        <summary>Video sources · {videoInventory.data ? `${videoInventory.data.official} IMVDb · ${videoInventory.data.approvedOther} approved · ${videoInventory.data.pendingYoutube + videoInventory.data.pendingLocal} to review` : 'loading'}</summary>
+        <summary>Video sources · {videoInventory.data ? `${videoInventory.data.official} official · ${videoInventory.data.approvedOther} approved · ${videoInventory.data.pendingYoutube + videoInventory.data.pendingLocal} to review` : 'loading'}</summary>
         <div className="artist-source-content"><div className="form-row"><button className="secondary" onClick={() => collectVideoInventory.mutate()} disabled={collectVideoInventory.isPending}>{collectVideoInventory.isPending ? 'Collecting…' : 'Refresh all sources'}</button></div>
         {videoInventory.isPending && <p>Loading source record…</p>}
         {videoInventory.isError && <p role="alert">Could not load the source record.</p>}
@@ -566,7 +566,7 @@ export default function ArtistDetailPage() {
       </details>}
 
       {!artist.data.musicbrainzArtistId && <section className="card">
-        <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr builds the IMVDb catalog.</p></div><button className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</button></div>
+        <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr collects its video catalog.</p></div><button className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</button></div>
         {musicbrainzCandidates.data?.map((candidate) => <div key={candidate.id} className="form-row" style={{ alignItems: 'center' }}><strong>{candidate.name}</strong><span>{candidate.artistType ?? 'Unknown type'} · {candidate.country ?? 'Unknown country'}{candidate.disambiguation ? ` · ${candidate.disambiguation}` : ''} · {Math.round(candidate.score * 100)}%{recordingEvidenceLabel(candidate.evidence) ? ` · ${recordingEvidenceLabel(candidate.evidence)}` : ''}</span><button onClick={() => confirmMusicbrainz.mutate(candidate.musicbrainzArtistId)} disabled={confirmMusicbrainz.isPending}>Confirm</button></div>)}
       </section>}
 
@@ -653,7 +653,7 @@ export default function ArtistDetailPage() {
                     : 'Duration unknown'}
                   {' · '}{mv.catalogStatus === 'removedReview' ? 'Removed from latest IMVDb catalog — review'
                     : mv.catalogKind === 'supplementary' ? 'Supplementary music video'
-                      : mv.catalogKind === 'inventory' ? 'Inventory video' : 'In current IMVDb catalog'}
+                      : mv.catalogKind === 'inventory' ? 'Inventory video' : mv.imvdbVideoId ? 'In current IMVDb catalog' : 'Validated official music video'}
                 </div>
                 {mv.sourcePublishedAt && <div className="empty-state" style={{ padding: 0 }}>
                   YouTube published {new Date(mv.sourcePublishedAt).toLocaleDateString()}

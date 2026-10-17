@@ -24,3 +24,15 @@ it('retains whole-file static-content rejection with bounded threads and frees t
   processResult('', 'freeze_duration: 2');
   await expect(assertIsRealMusicVideo('/tmp/moving.mp4')).resolves.toBeUndefined();
 });
+
+it('runs exactly the enabled file/motion checks with the configured thresholds', async () => {
+  vi.mocked(spawn).mockClear();
+  const options = { checkVideoFile: false, checkVideoMotion: false, minimumDimension: 128, maximumStaticFraction: .5 };
+  await assertIsRealMusicVideo('/tmp/trusted.mp4', options);
+  expect(spawn).not.toHaveBeenCalled();
+  processResult(JSON.stringify({ streams: [{ codec_type: 'video', width: 100, height: 100 }] }));
+  await expect(assertIsRealMusicVideo('/tmp/small.mp4', { ...options, checkVideoFile: true })).rejects.toThrow('100x100');
+  processResult(JSON.stringify({ format: { duration: '60' } }));
+  processResult('', 'freeze_duration: 40');
+  await expect(assertIsRealMusicVideo('/tmp/static.mp4', { ...options, checkVideoMotion: true })).rejects.toThrow('static for 67%');
+});

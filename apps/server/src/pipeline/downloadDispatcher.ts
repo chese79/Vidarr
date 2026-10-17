@@ -57,7 +57,7 @@ async function claimNextDownload(): Promise<DownloadQueueItem | null> {
       const rows = await prisma.$queryRaw<Array<{ id: number }>>`
         UPDATE DownloadQueueItem SET status = 'downloading', progress = 0,
           phase = CASE WHEN phase = 'legacy' THEN 'legacy' ELSE 'extracting' END
-        WHERE id = (SELECT id FROM DownloadQueueItem WHERE status = 'queued' ORDER BY addedAt, id LIMIT 1)
+        WHERE id = (SELECT id FROM DownloadQueueItem WHERE status = 'queued' ORDER BY queuePosition, addedAt, id LIMIT 1)
           AND (SELECT COUNT(*) FROM DownloadQueueItem WHERE status IN ('downloading', 'submissionUnknown'))
             < COALESCE((SELECT maxConcurrentDownloads FROM Settings WHERE id = 1), 3)
           AND (SELECT COUNT(*) FROM DownloadQueueItem WHERE status IN ('downloading', 'importing', 'submissionUnknown')) < ${capacity}

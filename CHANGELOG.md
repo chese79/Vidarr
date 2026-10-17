@@ -5,6 +5,39 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — Validation/Quality settings
+
+- Combine category validation settings and the existing quality-profile editor into one Settings page, with quality controls at the bottom and old links redirected.
+- Configure video-file and full-file motion checks independently for initial user imports, canonical-source downloads and supplementary/additional videos, with explanations and adjustable thresholds. Canonical sources default to import/delivery only; other categories retain all four stages. Import/registration and delivery confirmation remain required.
+- Persist each queued video's category from its selected source and apply current saved settings when validation starts, including already queued downloads. Record performed choices in activity logs. Retain identity, source acceptance and content exclusions.
+- Validate local user files before registering ownership in place; failures retain files and pending reviews. Successful registration awaits exact playback-server inventory confirmation.
+- Add a backward-compatible settings/queue-category migration, preserving existing profiles, ownership, staged files and queue order. Unknown/manual/indexer sources default to full validation.
+
+### Fixed — Library alphabet navigation
+
+- Use displayed artist names for Library ordering and alphabet filters, retaining leading-article handling. Ingrid Michaelson now appears under I regardless of MusicBrainz's surname-first sort name. Preserve stored provider metadata and apply filters before pagination.
+
+### Added — YouTube Music official-video discovery
+
+- Traverse linked artists' YouTube Music video shelves and artist-created playlists, including View all and continuation pages, alongside standard channel uploads. Deduplicate video IDs while retaining playlist/category provenance.
+- Automatically admit official song music videos when a whole-word **official** title or category is supported by artist/song identity, metadata exclusions and bounded motion validation. Retain uncertain candidates for Video Review and preserve manual decisions and shared-channel ownership.
+- Continue excluding official audio, lyric videos, visualizers, live performances and concerts. Live/concert catalog categories remain future scope. New automatic catalog entries start unmonitored; collection does not download the full video.
+- Support video-only streams for the existing 20-second motion sample when YouTube offers no combined audio/video format. Motion thresholds and full-file import validation remain unchanged.
+- Bundle Debian FFmpeg for remote sample extraction after reproducing crashes in the static binary on YouTube HTTPS/HLS inputs. Keep the existing static binary and thread tuning for local full-file validation; the image includes the distribution package's additional dependencies.
+- Use a bounded offline database/WAL backup for Docker Desktop cutovers, validate the private copy and preserve the previous container and every configuration/media/staging mount for rollback.
+- Retain partial discoveries and report incomplete traversal for the existing source-check retry path. No database migration or configuration reset is required.
+- Label artist source totals as official videos and distinguish validated YouTube entries from IMVDb entries in the catalog.
+
+### Fixed — artist collection and addition defaults
+
+- Serialize application SQLite access through one Prisma connection with bounded lock/pool waits, avoiding competing pooled writes during source collection and downloads. Retain WAL mode and provider retry recovery.
+- Default new artists to **Any** quality and the first configured music-video root mapped to a playback library (oldest root as fallback). Library selections remain editable; Discover uses the same defaults. Existing artists keep their configuration.
+
+### Added — download queue ordering
+
+- Move waiting downloads up, down, to the top or to the bottom from Queue. Save order across restart and append new requests after waiting work. Active transfers, processing and uncertain external submissions retain their state and reservations.
+- Add an additive queue-position migration and an ordering index; existing requests retain FIFO order until explicitly moved.
+
 ### Changed — overlap downloads and processing
 
 - Separate network transfer slots from a single validation/import worker. Reserve a bounded pipeline (transfer limit plus three videos by default), and pause new acquisitions below the staging disk reserve.

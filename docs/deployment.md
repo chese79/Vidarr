@@ -1,5 +1,66 @@
 # Deployment
 
+### Validation/Quality release
+
+Apply additive migration `20261016200000_validation_policies` through normal startup. It adds
+typed JSON settings storage and a persisted queue source category. Existing settings, quality
+profiles, queue positions and IDs remain intact. Existing queue sources are canonical only when
+an exact provider/URL match is accepted, confirmed and authoritative/verified; all others retain
+full checks by default. Policy is read when validation starts, including existing queued work.
+No historical owned-file rescan is triggered. Back up configuration before migration and recreate
+only Vidarr; preserve all media/staging mounts. Old source versions tolerate the additive columns.
+The combined page is `/validation-quality`; old `/quality-profiles` links redirect automatically.
+Release verification: Node 22 production shared/server/web builds passed, all 758 server tests
+(93 files) and 52 web tests passed. The complete server run used isolated memory-backed SQLite
+and 30-second deadlines; an earlier disk-backed run was replaced after a loaded fixture timed out.
+The public Docker publisher rebuilds `latest` and commit-specific tags after merging to main.
+
+### YouTube Music discovery
+
+Before replacement, stop only Vidarr and make an offline private configuration backup. On Docker
+Desktop, copy the SQLite database and its WAL/journal sidecars together, then recover and run
+`PRAGMA quick_check` against the writable backup copy. Do not run recovery against the source or
+omit its WAL. Bound the backup operation and restore the original service if it fails; a read-only
+SQLite online backup can stall against the Windows bind mount. Preserve all mounts and the old
+container for rollback. Media and staged downloads are not copied or removed during deployment.
+
+Rebuild/recreate only Vidarr, preserving configuration, media and persistent staging mounts.
+This revision needs no schema migration, cookies reset or other-service restart. Existing manual
+review decisions and canonical IDs remain intact. Use an artist's Refresh all sources to collect
+Music shelves and official playlists immediately; normal monitored-channel polling also uses the
+new discovery. Automatic admission performs bounded sample validation and creates unmonitored
+catalog entries, not full download requests. Uncertain results remain in Video Review.
+Public Music page/browse requests have 20-second deadlines; playlist and sample operations use
+the existing yt-dlp deadlines and private cookie snapshots. Incomplete traversal retains partial
+results and triggers the normal collection retry; only complete scans advance channel success.
+Motion samples select a low-resolution video-only stream when available, with a combined-stream
+fallback, and retain the 20-second section limit. A sample extraction failure remains reviewable.
+The Docker image uses Debian's dynamically linked `/usr/bin/ffmpeg` for remote sample extraction
+because the bundled static binary crashed on real YouTube HTTPS/HLS inputs. This adds the Debian
+FFmpeg package and its dependency footprint. Local full-file validation/merging retains the
+existing static tools and thread limits. `SAMPLE_FFMPEG_PATH` overrides only the sample extractor;
+outside Docker it defaults to the existing `FFMPEG_PATH`/PATH behavior.
+See [process flows](process-flows.md#youtube-music-official-discovery-2026-10-16).
+
+### SQLite access and download ordering
+
+The application uses one Prisma SQLite connection (`connection_limit=1`) to serialize API,
+source-collection and background queue database work. Network requests and transfers remain
+concurrent. Runtime connection URLs default to `socket_timeout=15` and `pool_timeout=30` seconds;
+explicit timeout parameters are preserved. WAL and the 15-second busy timeout remain enabled at
+startup, now on the same connection used for subsequent operations. Keep transactions short and
+use their supplied transaction client for every query inside them. Failed source collections
+retain existing data and remain eligible for the normal ten-minute retry or Refresh all sources.
+
+The additive `20261016170000_download_queue_order` migration adds a queue-position column and
+index. Existing requests default to zero and retain added-time/ID FIFO order. Manual reorder
+normalizes waiting positions below zero, leaving subsequently added requests at the end.
+Queue and the atomic transfer claim use position, added time and ID in the same order. Reorder
+operations write bounded batches inside one transaction to avoid a database round trip per item.
+Controls affect waiting work only; active transfers, uncertain submissions, processing and
+delivery confirmation retain their existing behavior. Normal startup applies the migration;
+no configuration-volume or media changes are needed.
+
 ### Download resource limits and recovery
 
 Full-file motion validation uses one shared worker and one filter thread. Decode threads default

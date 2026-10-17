@@ -11,6 +11,18 @@ function result(id: number, eventType: string) {
     musicVideo: { title: `Result ${id}`, artist: { name: 'Artist' } } };
 }
 
+it('exposes ordering controls only for waiting downloads and disables boundary moves', () => {
+  const client = new QueryClient();
+  client.setQueryData(['queue'], ['downloading', 'queued', 'queued', 'importing'].map((status, index) => ({
+    id: index + 1, status, progress: 0, musicVideo: { title: `Video ${index}`, artist: { id: 1, name: 'Artist' } },
+  })));
+  const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><QueuePage /></MemoryRouter></QueryClientProvider>);
+  expect(html.match(/>Move to top<\/button>/g)).toHaveLength(2);
+  expect(html).toContain('<button disabled="">Move to top</button>');
+  expect(html).toContain('<button>Move to top</button>');
+  expect(html).toContain('<button disabled="">Move to bottom</button>');
+});
+
 it('separates failed entries from active work and places completed results before failures', () => {
   const client = new QueryClient();
   client.setQueryData(['queue'], [

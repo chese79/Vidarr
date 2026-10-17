@@ -1,7 +1,7 @@
-import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import LibraryPage from './pages/LibraryPage';
 import ArtistDetailPage from './pages/ArtistDetailPage';
-import QualityProfilesPage from './pages/QualityProfilesPage';
+import ValidationQualityPage from './pages/ValidationQualityPage';
 import RootFoldersPage from './pages/RootFoldersPage';
 import SettingsPage from './pages/SettingsPage';
 import DiscoverPage from './pages/DiscoverPage';
@@ -37,7 +37,7 @@ const NAV_ITEMS = [
 
 const SETTINGS_NAV_ITEMS = [
   { to: '/settings', label: 'General' },
-  { to: '/quality-profiles', label: 'Quality Profiles' },
+  { to: '/validation-quality', label: 'Validation/Quality' },
   { to: '/root-folders', label: 'Root Folders' },
   { to: '/connectors', label: 'Library Connectors' },
   { to: '/indexers', label: 'Indexers' },
@@ -80,7 +80,8 @@ export default function App() {
           <Route path="/" element={<LibraryPage />} />
           <Route path="/artist/:id" element={<ArtistDetailPage />} />
           <Route path="/genres" element={<GenresPage />} />
-          <Route path="/quality-profiles" element={<QualityProfilesPage />} />
+          <Route path="/quality-profiles" element={<Navigate to="/validation-quality" replace />} />
+          <Route path="/validation-quality" element={<ValidationQualityPage />} />
           <Route path="/root-folders" element={<RootFoldersPage />} />
           <Route path="/discover" element={<DiscoverPage />} />
           <Route path="/match-review" element={<MatchReviewPage />} />

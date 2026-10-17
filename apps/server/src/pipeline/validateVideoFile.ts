@@ -20,7 +20,7 @@ export class NotAVideoError extends Error {}
 // music video, or a format selector falling back to an audio-only stream) —
 // this actually inspects the file with ffprobe rather than trusting the
 // source's own labeling, and rejects anything without a real video stream.
-export async function assertHasVideoStream(filePath: string): Promise<void> {
+export async function assertHasVideoStream(filePath: string, minimumDimension = MIN_VIDEO_DIMENSION): Promise<void> {
   const args = [
     '-v',
     'error',
@@ -52,7 +52,7 @@ export async function assertHasVideoStream(filePath: string): Promise<void> {
   if (!stream || stream.codec_type !== 'video') {
     throw new NotAVideoError('Downloaded file has no video stream — likely audio-only.');
   }
-  if ((stream.width ?? 0) < MIN_VIDEO_DIMENSION || (stream.height ?? 0) < MIN_VIDEO_DIMENSION) {
+  if ((stream.width ?? 0) < minimumDimension || (stream.height ?? 0) < minimumDimension) {
     throw new NotAVideoError(
       `Video stream is only ${stream.width}x${stream.height} — likely embedded cover art, not a real video.`,
     );
@@ -151,18 +151,18 @@ async function computeFrozenFractionOnce(filePath: string): Promise<number | nul
 // on screen for the whole song — passes the video-stream/dimension check above
 // but has no actual motion. ffmpeg's freezedetect filter flags frozen spans;
 // if they cover most of the runtime, this isn't a real music video.
-export async function assertHasMotion(filePath: string): Promise<void> {
+export async function assertHasMotion(filePath: string, maximumStaticFraction = MAX_STATIC_FRACTION): Promise<void> {
   const frozenFraction = await computeFrozenFraction(filePath);
   if (frozenFraction == null) return; // can't determine — don't block the import over this alone
 
-  if (frozenFraction > MAX_STATIC_FRACTION) {
+  if (frozenFraction > maximumStaticFraction) {
     throw new NotAVideoError(
       `Video is static for ${Math.round(frozenFraction * 100)}% of its runtime — likely album art, not a real music video.`,
     );
   }
 }
 
-export async function assertIsRealMusicVideo(filePath: string): Promise<void> {
-  await assertHasVideoStream(filePath);
-  await assertHasMotion(filePath);
+export async function assertIsRealMusicVideo(filePath: string, options?: { checkVideoFile: boolean; checkVideoMotion: boolean; minimumDimension: number; maximumStaticFraction: number }): Promise<void> {
+  if (!options || options.checkVideoFile) await assertHasVideoStream(filePath, options?.minimumDimension);
+  if (!options || options.checkVideoMotion) await assertHasMotion(filePath, options?.maximumStaticFraction);
 }

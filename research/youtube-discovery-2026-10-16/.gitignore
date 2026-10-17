@@ -1,0 +1,11 @@
+# Keep public reports and reusable deployment helpers; raw exploratory captures
+# and temporary probes remain local and are never included in a release commit.
+*
+!.gitignore
+!README.md
+!report.html
+!official-report.html
+!deploy.ps1
+!deploy-backup.py
+!verify-preservation.py
+!run-server-tests.sh

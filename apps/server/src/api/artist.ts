@@ -355,6 +355,14 @@ export async function artistRoutes(app: FastifyInstance) {
     if (query.completeness === 'activeDownloads') refineConditions.push(Prisma.sql`"downloadingVideoCount" > 0`);
     const refineWhere = Prisma.join(refineConditions, ' AND ');
 
+    // Library navigation follows the name on the row, not MusicBrainz's hidden
+    // surname-first sort name. Keep the established leading-article convention.
+    const librarySortName = Prisma.sql`TRIM(CASE
+      WHEN LOWER(SUBSTR(TRIM(a."name"), 1, 4)) = 'the ' THEN SUBSTR(TRIM(a."name"), 5)
+      WHEN LOWER(SUBSTR(TRIM(a."name"), 1, 3)) = 'an ' THEN SUBSTR(TRIM(a."name"), 4)
+      WHEN LOWER(SUBSTR(TRIM(a."name"), 1, 2)) = 'a ' THEN SUBSTR(TRIM(a."name"), 3)
+      ELSE a."name" END)`;
+
     const filteredCte = Prisma.sql`
       WITH library_stats AS (
         SELECT lv."musicVideoId", MAX(lv."playCount") AS "playCount"
@@ -405,6 +413,7 @@ export async function artistRoutes(app: FastifyInstance) {
           (SELECT COUNT(*) FROM "VideoReviewCandidate" vrc WHERE vrc."artistId" = a."id" AND vrc."decision" = 'pending') AS "pendingVideoReviewCount",
           a."name" AS "name",
           a."sortName" AS "sortName",
+          ${librarySortName} AS "librarySortName",
           a."genre" AS "genre",
           a."monitored" AS "monitored",
           a."musicbrainzMatchStatus" AS "musicbrainzMatchStatus",
@@ -433,8 +442,8 @@ export async function artistRoutes(app: FastifyInstance) {
           ) AS "inventoryVideoCount",
           CASE WHEN COALESCE(s."playCountKnownN", 0) > 0 THEN s."playCountSum" ELSE NULL END AS "aggregatePlayCount",
           CASE
-            WHEN UPPER(SUBSTR(TRIM(a."sortName"), 1, 1)) BETWEEN 'A' AND 'Z'
-            THEN UPPER(SUBSTR(TRIM(a."sortName"), 1, 1))
+            WHEN UPPER(SUBSTR(${librarySortName}, 1, 1)) BETWEEN 'A' AND 'Z'
+            THEN UPPER(SUBSTR(${librarySortName}, 1, 1))
             ELSE '#'
           END AS "letter"
         FROM "Artist" a
@@ -447,7 +456,7 @@ export async function artistRoutes(app: FastifyInstance) {
       prisma.$queryRaw<ArtistSummaryRow[]>(Prisma.sql`
         ${filteredCte}
         SELECT * FROM filtered WHERE ${refineWhere}
-        ORDER BY "sortName" ASC
+        ORDER BY "librarySortName" COLLATE NOCASE ASC, "id" ASC
         LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}
       `),
       prisma.$queryRaw<{ total: number }[]>(Prisma.sql`

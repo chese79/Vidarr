@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { resetDb, ensureSettings } from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
+import { DEFAULT_VALIDATION_SETTINGS } from '@vidarr/shared-types';
 
 describe('settings routes', () => {
   let app: FastifyInstance;
@@ -30,6 +31,21 @@ describe('settings routes', () => {
       minFreeSpaceMb: 1024,
       maxConcurrentDownloads: 3,
     });
+  });
+
+  it('authenticates validation policies, saves all categories atomically and rejects incomplete/invalid updates', async () => {
+    expect((await app.inject({ url: '/api/v1/config/validation' })).statusCode).toBe(401);
+    const original = await app.inject({ url: '/api/v1/config/validation', headers: authHeaders() });
+    expect(original.json()).toEqual(DEFAULT_VALIDATION_SETTINGS);
+    const policy = structuredClone(DEFAULT_VALIDATION_SETTINGS);
+    policy.policies.canonical.file = true; policy.maximumStaticPercent = 60;
+    expect((await app.inject({ method: 'PUT', url: '/api/v1/config/validation', headers: authHeaders(), payload: policy })).json()).toEqual(policy);
+    for (const payload of [{ ...policy, minimumDimension: 0 }, { ...policy, maximumStaticPercent: 101 }, { policies: {} }, { ...policy, import: false }]) {
+      expect((await app.inject({ method: 'PUT', url: '/api/v1/config/validation', headers: authHeaders(), payload })).statusCode).toBe(400);
+    }
+    expect((await app.inject({ url: '/api/v1/config/validation', headers: authHeaders() })).json()).toEqual(policy);
+    await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { minFreeSpaceMb: 1500 } });
+    expect((await app.inject({ url: '/api/v1/config/validation', headers: authHeaders() })).json()).toEqual(policy);
   });
 
   it('requires authentication for cookie status, uploads and removal', async () => {

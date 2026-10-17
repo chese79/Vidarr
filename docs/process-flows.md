@@ -1,9 +1,83 @@
 # Process flows and consistency review
 
+## Category validation policies (2026-10-16)
+
+Settings → Validation/Quality → select Check video file and Check video motion per category →
+save the complete policy and thresholds atomically. Existing quality profile controls remain at
+the bottom, with existing assignments unchanged; the old quality-profile route redirects here.
+
+Acquisition still requires accepted sources and ownership/ignored/eligibility checks. Queueing
+records canonical vs supplementary/additional from the actual selected source. Only accepted,
+confirmed authoritative/verified direct sources qualify as canonical; other direct and indexer
+sources default to additional. After transfer completes, load the current category policy once →
+perform enabled file/motion checks → atomically import → confirm exact playback-server inventory.
+Canonical downloads skip file/motion checks by default; additional downloads enable both. Existing
+queued downloads use the policy current when validation starts, per the user's explicit decision.
+Later settings edits do not change checks in flight. An invalid stored policy fails visibly.
+
+Existing local-file approval validates with the initial-import policy (both checks on by default)
+before committing ownership. Failures leave the candidate pending and the file intact. Success
+registers it in place and marks delivery pending, then requests mapped server refresh. Existing
+files are never moved merely to register them or resubmitted merely because validation fails.
+Import/registration and exact server confirmation cannot be disabled. No full-file validation
+policy changes discovery's separate bounded sample or metadata/identity checks.
+
+## Library alphabet navigation (2026-10-16)
+
+After addition or search, Library computes letters and ordering from the displayed artist name,
+ignoring leading The, A or An. It applies the selected letter and other filters before pagination;
+available letters use the same name convention. Surname-first MusicBrainz sort names remain stored
+metadata and cannot hide Ingrid Michaelson from I. Visibility, collection and review stages remain
+unchanged; clearing filters still reveals zero-video confirmed artists.
+
+## YouTube Music official discovery (2026-10-16)
+
+Artist addition, Refresh all sources and scheduled channel checks traverse standard uploads and
+the linked Music page. Music video/official shelves and artist-created playlists are expanded,
+including View all and continuation pages; albums and unrelated recommendation shelves are not
+catalog inputs. Merge by video ID while retaining official category/title evidence and origins.
+
+For an official-keyword candidate: validate the confirmed artist/song credit → exclude audio,
+lyrics, visualizers, live performances/concerts and other non-song-video content using metadata →
+check a bounded motion sample → atomically create/link the canonical official video, accepted
+YouTube source and approved decision. The keyword stage automates authority evidence, not identity
+or content checks. Uncertain checks remain in Video Review; failed sample/metadata inspection does
+not count as acceptance. Conflicting explicit artist credits remain reviewable. Prior manual
+approvals/rejections and pending reviews owned by another artist are preserved.
+
+New canonical videos are unmonitored and collection enqueues no full downloads. Acquisition still
+requires eligibility/ownership checks, transfer, full-file validation and atomic import, followed
+by separate target-server delivery confirmation. Official audio and live/concert material remain
+excluded today; future live categories are not implemented.
+
+Partial results persist before a failed scan reports incomplete coverage. Only complete traversal
+advances the channel success timestamp; the established ten-minute collection retry handles
+provider errors. Requests have deadlines and traversal caps (100 continuation pages per shelf,
+100 playlists per channel); reaching a cap is partial, not silent success. UI remains on the artist
+page with existing source status and Video Review links. No schema change is needed.
+Scheduled polling continues after a failed source and checks equivalent standard/Music links once
+per artist; failed sources retain their prior success timestamp for a later retry.
+
+## Artist defaults and queue ordering (2026-10-16)
+
+Library additions preselect Any quality and the oldest root mapped to a playback video library,
+falling back to the oldest configured root. If Any is absent, the oldest profile is used.
+Users can override Library selections; Discover additions use the same defaults. Missing roots or
+profiles still require configuration, and selecting a validated MusicBrainz identity remains required.
+Existing canonical artists retain their saved settings when reused. Collection and uncertain-video
+review continue unchanged; partial source failures retain data and the ten-minute retry path.
+
+Queue offers Move up/down/to top/to bottom for waiting downloads only. A successful action persists
+the new order and refreshes the list. New requests join the end; restarts preserve ordering.
+If the item has already started or disappeared, the action reports the conflict and reloads the
+queue. Concurrent reorder and dispatcher claims are serialized by the database. Ordering changes
+transfer selection only: active transfers finish, processing stays in transfer-completion order,
+unknown submissions retain reservations, and validation/import/delivery checks remain required.
+
 ## Transfer/processing pipeline (2026-10-15)
 
 The required acquisition stages are preserved: accepted source and eligibility checks → transfer
-and merge → full-video validation → atomic import → separate target-server delivery confirmation.
+and merge → configured category validation → atomic import → separate target-server delivery confirmation.
 Three network slots no longer become unavailable simply because three videos are processing.
 A single processing worker takes staged files in download-completion order. Reservations include
 transfers, unresolved submissions and staged processing work, defaulting to the configured transfer

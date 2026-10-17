@@ -1,0 +1,21 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { prisma } from '../src/db/client.js';
+import { JOBS } from '../src/scheduler/jobs.js';
+import { pollAndGrabYoutubeSource } from '../src/pipeline/youtubeSync.js';
+import { createArtist, createQuality, createQualityProfile, createRootFolder, resetDb } from './support/db.js';
+vi.mock('../src/pipeline/youtubeSync.js', () => ({ pollAndGrabYoutubeSource: vi.fn() }));
+beforeEach(async () => { await resetDb(); vi.resetAllMocks(); });
+it('continues after a failed source and deduplicates standard/Music links for one artist', async () => {
+  const root = await createRootFolder(); const profile = await createQualityProfile((await createQuality()).id);
+  const artist = await createArtist(root.id, profile.id);
+  const failed = await prisma.youtubeSource.create({ data: { artistId: artist.id, type: 'channel', url: 'https://www.youtube.com/channel/UCfailed' } });
+  const good = await prisma.youtubeSource.create({ data: { artistId: artist.id, type: 'channel', url: 'https://www.youtube.com/channel/UCgood' } });
+  const duplicate = await prisma.youtubeSource.create({ data: { artistId: artist.id, type: 'channel', url: 'https://music.youtube.com/channel/UCgood' } });
+  vi.mocked(pollAndGrabYoutubeSource).mockRejectedValueOnce(new Error('provider unavailable')).mockResolvedValue({ created: 2, pending: 0, matched: 0, affectedMusicVideoIds: [], isInitialSync: true, grabbed: 0 });
+  const result = await JOBS.find(j=>j.name==='YouTube Channel Poll')!.run();
+  expect(result).toMatch(/2 new video.*1 incomplete/);
+  expect(pollAndGrabYoutubeSource).toHaveBeenCalledTimes(2);
+  expect(pollAndGrabYoutubeSource).toHaveBeenNthCalledWith(2,good.id);
+  expect((await prisma.youtubeSource.findUniqueOrThrow({ where: { id: failed.id } })).lastPolledAt).toBeNull();
+  expect((await prisma.youtubeSource.findUniqueOrThrow({ where: { id: duplicate.id } })).lastPolledAt).not.toBeNull();
+});

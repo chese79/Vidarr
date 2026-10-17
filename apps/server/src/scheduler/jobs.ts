@@ -1,4 +1,5 @@
-import { prisma } from '../db/client.js';
+import { prisma, logActivity } from '../db/client.js';
+import { channelVideosUrl } from '../providers/youtube/ytdlp.js';
 import { refreshQueue } from '../pipeline/grab.js';
 import { runBacklogSearch, runQualityUpgradeSearch } from '../pipeline/autoSearch.js';
 import { pruneOldLogs } from '../pipeline/logCleanup.js';
@@ -27,12 +28,26 @@ async function pollAllYoutubeSources(): Promise<string> {
   const sources = await prisma.youtubeSource.findMany({ where: { monitored: true } });
   let created = 0;
   let grabbed = 0;
+  let failed = 0;
+  const checked = new Map<string, Date>();
   for (const source of sources) {
-    const result = await pollAndGrabYoutubeSource(source.id);
-    created += result.created;
-    grabbed += result.grabbed;
+    const key = `${source.artistId}:${channelVideosUrl(source.url)}`;
+    const earlier = checked.get(key);
+    if (earlier) {
+      await prisma.youtubeSource.update({ where: { id: source.id }, data: { lastPolledAt: earlier } });
+      continue;
+    }
+    try {
+      const result = await pollAndGrabYoutubeSource(source.id);
+      created += result.created;
+      grabbed += result.grabbed;
+      checked.set(key, new Date());
+    } catch (error) {
+      failed++;
+      await logActivity('warn', `youtube-poll:${source.id}`, error);
+    }
   }
-  return `${sources.length} source(s) polled, ${created} new video(s), ${grabbed} grabbed`;
+  return `${sources.length} source(s) checked, ${created} new video(s), ${grabbed} grabbed, ${failed} incomplete`;
 }
 
 // Fixed-interval jobs are enough for what these actually are (every N minutes/

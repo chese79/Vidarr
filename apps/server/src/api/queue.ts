@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db/client.js';
 import { refreshQueue } from '../pipeline/grab.js';
 import { z } from 'zod';
@@ -8,6 +9,37 @@ import { readDownloadTimings } from '../pipeline/downloadTimings.js';
 import { redactMessage } from '../security/redact.js';
 
 export async function queueRoutes(app: FastifyInstance) {
+  app.post('/api/v1/queue/:id/move', async (req, reply) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const { direction } = z.object({ direction: z.enum(['up', 'down', 'top', 'bottom']) }).parse(req.body);
+    const outcome = await prisma.$transaction(async tx => {
+      // Lock before reading order so a dispatcher claim or concurrent reorder
+      // cannot change the waiting set halfway through the update.
+      const locked = await tx.downloadQueueItem.updateMany({ where: { id, status: 'queued' }, data: { status: 'queued' } });
+      if (!locked.count) return await tx.downloadQueueItem.findUnique({ where: { id } }) ? 'active' : 'missing';
+      const items = await tx.downloadQueueItem.findMany({ where: { status: 'queued' },
+        orderBy: [{ queuePosition: 'asc' }, { addedAt: 'asc' }, { id: 'asc' }], select: { id: true } });
+      const from = items.findIndex(item => item.id === id);
+      const to = direction === 'top' ? 0 : direction === 'bottom' ? items.length - 1
+        : Math.max(0, Math.min(items.length - 1, from + (direction === 'up' ? -1 : 1)));
+      if (from === to) return 'ok';
+      const [item] = items.splice(from, 1); items.splice(to, 0, item);
+      // Keep round trips bounded for large queues, staying below SQLite's
+      // conservative 999-parameter limit (three bindings per item).
+      for (let offset = 0; offset < items.length; offset += 250) {
+        const batch = items.slice(offset, offset + 250);
+        await tx.$executeRaw(Prisma.sql`UPDATE "DownloadQueueItem" SET "queuePosition" = CASE "id"
+          ${Prisma.join(batch.map((entry, index) => Prisma.sql`WHEN ${entry.id} THEN ${offset + index - items.length}`), ' ')}
+          ELSE "queuePosition" END
+          WHERE "status" = 'queued' AND "id" IN (${Prisma.join(batch.map(entry => entry.id))})`);
+      }
+      return 'ok';
+    }, { timeout: 15000 });
+    if (outcome === 'missing') return reply.code(404).send({ error: 'Queue item not found' });
+    if (outcome === 'active') return reply.code(409).send({ error: 'Only waiting downloads can be reordered. Refresh the queue and try again.' });
+    wakeDownloadQueue();
+    return { ok: true };
+  });
   app.post('/api/v1/queue/:id/reconcile', async (req, reply) => {
     const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
     const body = z.discriminatedUnion('action', [
@@ -53,7 +85,7 @@ export async function queueRoutes(app: FastifyInstance) {
     const items = await prisma.downloadQueueItem.findMany({
       where: activeOnly === 'true' ? { status: { in: ['queued', 'downloading', 'importing', 'submissionUnknown'] } } : undefined,
       include: { musicVideo: { include: { artist: true } } },
-      orderBy: { addedAt: 'desc' },
+      orderBy: [{ queuePosition: 'asc' }, { addedAt: 'asc' }, { id: 'asc' }],
     });
     return items.map(item => ({ ...item, stageTimings: item.stageTimings ? readDownloadTimings(item.stageTimings) : null }));
   });

@@ -1,7 +1,10 @@
 import { PrismaClient } from '@prisma/client';
+import { sqliteRuntimeUrl } from './sqlite.js';
 import { rememberSecrets, redactDiagnostic, redactMessage } from '../security/redact.js';
 
-export const prisma = new PrismaClient();
+export const prisma = new PrismaClient(process.env.DATABASE_URL ? {
+  datasources: { db: { url: sqliteRuntimeUrl(process.env.DATABASE_URL) } },
+} : undefined);
 const credentialModels = new Set(['Settings', 'LibraryConnector', 'RecommendationProviderConfig', 'DownloadClient', 'Indexer', 'LastFmAccount']);
 prisma.$use(async (params, next) => {
   if (credentialModels.has(params.model ?? '')) rememberSecrets(params.args?.data);

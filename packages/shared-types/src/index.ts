@@ -252,6 +252,20 @@ export type VideoStatus = z.infer<typeof VideoStatusSchema>;
 export const UpdateMusicVideoSchema = CreateMusicVideoSchema.omit({ artistId: true }).partial();
 export type UpdateMusicVideo = z.infer<typeof UpdateMusicVideoSchema>;
 
+export const ValidationCategorySchema = z.enum(['imports', 'canonical', 'additional']);
+export type ValidationCategory = z.infer<typeof ValidationCategorySchema>;
+const ValidationChecksSchema = z.object({ file: z.boolean(), motion: z.boolean() }).strict();
+export const ValidationSettingsSchema = z.object({
+  policies: z.object({ imports: ValidationChecksSchema, canonical: ValidationChecksSchema, additional: ValidationChecksSchema }).strict(),
+  minimumDimension: z.number().int().min(1).max(8192),
+  maximumStaticPercent: z.number().int().min(1).max(100),
+}).strict();
+export type ValidationSettings = z.infer<typeof ValidationSettingsSchema>;
+export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
+  policies: { imports: { file: true, motion: true }, canonical: { file: false, motion: false }, additional: { file: true, motion: true } },
+  minimumDimension: 64, maximumStaticPercent: 80,
+};
+
 export const SettingsSchema = z.object({
   defaultPlaybackConnectorId: z.number().int().positive().nullable().optional(),
   namingFormat: z.string(),

@@ -67,6 +67,11 @@ identity. Validation is cached for one minute, with at most 100 names retained, 
 independently enforces it at addition. Older clients cannot bypass validation with an unverified override.
 
 Library's **Add Artist** form also searches MusicBrainz and requires selection of a returned identity.
+The form preselects **Any** quality and the oldest configured root mapped to a playback video
+library, falling back to the oldest root if none is mapped. If Any is unavailable, the oldest
+profile is used. Both selectors remain editable, including while choosing an identity; late query
+results do not replace a user's selection. Discover uses these same defaults for new additions.
+Missing configuration still blocks addition. Reusing an existing artist preserves its root/profile.
 The Add manually option is removed. Last.fm and IMVDb remain metadata/video sources after canonical
 identity confirmation; they do not validate artist additions. Existing observations remain preserved
 for Artist Review. Confirmed additions collect all video sources in the background.
