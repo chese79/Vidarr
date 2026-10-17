@@ -5,6 +5,22 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — Unified live catalog first increment
+
+- Prepare the user-authorized local-only unified release of music videos and the first live
+  catalog increment; retain configuration/media/staging mounts, verified backup and rollback.
+  Public image publishing is skipped. Live discovery/acquisition/playback are not enabled yet.
+- Add persistent independent performances, ordered song occurrences and shared recording candidates,
+  reusing existing MusicBrainz-confirmed artists. Keep partial dates and separate setting/style/
+  claimed-coverage dimensions without inferring an event match, eligible video or ownership.
+- Add paged Live Performances/Recordings views and artist Music Videos/Live navigation, candidate
+  evidence capture and revision-protected performance corrections. No automatic search/download.
+- Add an additive Prisma migration; preserve existing files, counts, flags, queue and playlist IDs.
+  Block artist removal when live performances depend on that identity.
+- Music-video foundation PR #25 was merged and locally deployed as `vidarr:1e2eb2b`, with verified
+  offline configuration backup, rollback container and all mounts preserved; production is healthy.
+
+
 ### Deployment — Shared music-video foundations
 
 - Release the verified music-video foundation locally with configuration backup, existing

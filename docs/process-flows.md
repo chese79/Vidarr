@@ -1,12 +1,21 @@
 # Process flows and consistency review
 
-## Planned live workflows (design only)
+## Live catalog implementation
 
 The [concerts and live performances design](requests/2026-10-17-concerts-and-live-performances.md)
 describes proposed discovery, matching/review, acquisition, validation, delivery, correction and
 recovery flows. Product rules and UI previews are approved; live implementation still requires
-technical capability verification and separate authorization. The current flows below, including
-the label-only Live/Concert action, remain unchanged.
+technical capability verification. The user has now authorized starting implementation. The
+current music-video flows below, including the label-only Live/Concert action, remain unchanged.
+
+The first [catalog increment](live-implementation.md) supports: choose an existing confirmed
+artist → save an independent performance with known/unknown date/place and ordered song
+occurrences → retain recording evidence as pending candidates. A source URL or full-concert
+claim does not validate identity, video content, coverage or ownership, and starts no acquisition.
+Setting/style filters and paged lists refer to stable shared identities. Corrections use a
+revision check; stale edits return a reload conflict and retain prior song/recording links.
+Artist removal returns a conflict while live performances exist; it cannot cascade live history.
+The migration only adds tables; existing Live/Concert flags are left for future migration review.
 
 ## Shared backend foundations
 

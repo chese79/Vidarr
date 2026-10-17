@@ -8,6 +8,7 @@ import fastifyCookie from '@fastify/cookie';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from './db/client.js';
+import { liveRoutes } from './api/live.js';
 import { artistRoutes } from './api/artist.js';
 import { genreRoutes } from './api/genre.js';
 import { musicVideoRoutes } from './api/musicvideo.js';
@@ -156,6 +157,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(googleAuthRoutes);
   await app.register(localAuthRoutes);
   await app.register(artistRoutes);
+  await app.register(liveRoutes);
   await app.register(genreRoutes);
   await app.register(videoReviewRoutes);
   await app.register(musicVideoRoutes);

@@ -541,6 +541,7 @@ export default function ArtistDetailPage() {
           <ArtistHeaderImage artistId={artistId} name={artist.data.name} />
           <div>
             <h2>{artist.data.name} <NewArtistBadge addedAt={artist.data.addedAt} /></h2>
+            <nav aria-label="Artist catalog"><strong>Music Videos</strong> · <Link to={`/artist/${artistId}/live`}>Live</Link></nav>
             <div className="artist-meta">
               {artist.data.musicbrainzArtistId ? `MusicBrainz: ${artist.data.musicbrainzArtistId}` : `MusicBrainz: ${artist.data.musicbrainzMatchStatus}`} ·{' '}
               {artist.data.imvdbArtistId ? `IMVDb: ${artist.data.imvdbArtistId}` : 'No IMVDb match'} ·{' '}

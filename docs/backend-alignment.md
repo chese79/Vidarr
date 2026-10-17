@@ -184,3 +184,7 @@ music-video foundation, then starting live/concert implementation. The release u
 configuration backup and retained rollback container. No public image publication is requested.
 Live implementation starts after release verification on a separate branch and is not included
 in this music-video deployment. Earlier scope restrictions above describe their original phase.
+
+Release completed: PR #25 merged as `1e2eb2b`; local `vidarr:1e2eb2b` is healthy, with backup
+and rollback retained and no public image publication. The subsequently authorized first live
+catalog increment is tracked separately in [live implementation](live-implementation.md).

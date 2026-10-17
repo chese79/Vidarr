@@ -1,3 +1,5 @@
+import LivePage from './pages/LivePage';
+import LivePerformancePage from './pages/LivePerformancePage';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import LibraryPage from './pages/LibraryPage';
 import ArtistDetailPage from './pages/ArtistDetailPage';
@@ -24,6 +26,7 @@ import { QueueResultsPage } from './components/QueueResults';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
+  { to: '/live', label: 'Live' },
   { to: '/playlists', label: 'Playlists' },
   { to: '/discover', label: 'Discover' },
   { to: '/match-review', label: 'Artist Review' },
@@ -79,6 +82,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LibraryPage />} />
           <Route path="/artist/:id" element={<ArtistDetailPage />} />
+          <Route path="/live" element={<LivePage />} />
+          <Route path="/artist/:id/live" element={<LivePage />} />
+          <Route path="/live/performance/:id" element={<LivePerformancePage />} />
           <Route path="/genres" element={<GenresPage />} />
           <Route path="/quality-profiles" element={<Navigate to="/validation-quality" replace />} />
           <Route path="/validation-quality" element={<ValidationQualityPage />} />
