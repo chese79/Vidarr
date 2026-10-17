@@ -42,6 +42,7 @@ export interface LibrarySection {
 
 // Only current playback in the selected video library; all server users.
 export interface LibraryPlaybackSession {
+  userId?: string;
   sessionId: string;
   externalId: string;
   positionSeconds: number;

@@ -107,6 +107,7 @@ export const plexProvider: LibraryConnectorProvider = {
       && ['playing', 'paused', 'buffering'].includes(item.Player?.state),
     ).map((item: any) => ({
       sessionId: String(item.Session.id), externalId: String(item.ratingKey),
+      userId: item.User?.id == null ? undefined : String(item.User.id),
       positionSeconds: item.viewOffset / 1000, durationSeconds: item.duration / 1000,
       playing: item.Player.state === 'playing', artistName: item.grandparentTitle,
       title: item.title,

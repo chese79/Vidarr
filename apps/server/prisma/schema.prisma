@@ -77,6 +77,9 @@ model ArtistGenre {
 }
 
 model MusicVideo {
+  qualifiedPlayCount Int @default(0)
+  lastQualifiedPlayAt DateTime?
+  qualifiedPlaybacks QualifiedPlayback[]
   isLiveConcert  Boolean @default(false)
   deletionState  String?
   deletionError  String?
@@ -588,6 +591,29 @@ model LastFmPlayback {
 
   @@index([connectorId, sessionId, active])
   @@index([status, startedAt])
+}
+
+model QualifiedPlayback {
+  id Int @id @default(autoincrement())
+  musicVideoId Int
+  musicVideo MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  connectorId Int
+  sourceKey String
+  libraryId String
+  sessionId String
+  externalId String
+  userId String?
+  durationSeconds Float
+  positionSeconds Float
+  playing Boolean
+  listenedSeconds Float @default(0)
+  qualifiedAt DateTime?
+  firstObservedAt DateTime @default(now())
+  lastObservedAt DateTime
+  active Boolean @default(true)
+
+  @@index([sourceKey, sessionId, active])
+  @@index([active, lastObservedAt])
 }
 
 model Recommendation {

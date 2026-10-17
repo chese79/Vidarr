@@ -438,6 +438,8 @@ export default function SettingsPage() {
             value={maxConcurrentDownloads} onChange={e => setMaxConcurrentDownloads(Number(e.target.value))} />
           <span className="empty-state" style={{ padding: '4px 0 0' }}>Default: 3. Additional videos wait in the queue.</span>
         </div>
+        <h3>Qualified plays</h3>
+        <p>Qualified plays are tracked independently of Last.fm: half the video or four minutes of observed watching, whichever comes first. Pauses, buffering, seeks and unobserved gaps earn no time. Counts begin with this release; existing server play counts remain separate. Connector settings explain optional Jellyfin playback notifications.</p>
         <h3>Video deletion</h3>
         <div className="form-row">
           <label><input type="checkbox" checked={warnBeforeDelete} onChange={e => setWarnBeforeDelete(e.target.checked)} />Warn before delete</label>

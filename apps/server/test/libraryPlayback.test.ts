@@ -17,8 +17,8 @@ describe('current library playback', () => {
       .mockResolvedValueOnce(mockJson({ Items: [{ Id: 'item0' }, { Id: 'item1' }], TotalRecordCount: 2 }));
     vi.stubGlobal('fetch', mock);
     expect(await jellyfinProvider.fetchPlaybackSessions!(config)).toEqual([
-      { sessionId: 'device0:play0', externalId: 'item0', positionSeconds: 30, durationSeconds: 120, playing: true, artistName: 'Artist', title: 'Song' },
-      { sessionId: 'device1:play1', externalId: 'item1', positionSeconds: 30, durationSeconds: 120, playing: false, artistName: 'Artist', title: 'Song' },
+      { sessionId: 'device0:play0', userId: 'selected-user', externalId: 'item0', positionSeconds: 30, durationSeconds: 120, playing: true, artistName: 'Artist', title: 'Song' },
+      { sessionId: 'device1:play1', userId: 'other-user', externalId: 'item1', positionSeconds: 30, durationSeconds: 120, playing: false, artistName: 'Artist', title: 'Song' },
     ]);
     expect(mock.mock.calls[0][0]).toBe('http://media-server/Sessions');
     expect(mock.mock.calls[0][1].headers.Authorization).toBe('MediaBrowser Token="media-token"');

@@ -4,6 +4,8 @@ import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { normalizeTitle } from '../pipeline/normalize.js';
 import { syncPlayCounts } from '../pipeline/playCountSync.js';
+import { wakeQualifiedPlayback } from '../pipeline/qualifiedPlayback.js';
+import { z } from 'zod';
 import { discoverPlexServers, discoverJellyfinServers } from '../pipeline/discovery.js';
 import { refreshRecommendations } from '../pipeline/recommendations.js';
 import { syncConnectorVideos } from '../pipeline/libraryVideoSync.js';
@@ -361,6 +363,17 @@ export async function libraryConnectorRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(502).send({ error: (err as Error).message });
     }
+  });
+  // The global API authentication hook also protects this receiver. The body
+  // is only a wake-up signal: identity, duration and progress come from a fresh
+  // authenticated server session read, never from a supplied play counter.
+  app.post('/api/v1/libraryconnector/:id/playback-webhook', { bodyLimit: 16_384 }, async (req, reply) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    z.object({ NotificationType: z.enum(['PlaybackStart', 'PlaybackProgress', 'PlaybackStop']) }).parse(req.body);
+    const connector = await prisma.libraryConnector.findUnique({ where: { id } });
+    if (!connector?.enabled || connector.type !== 'jellyfin' || !connector.videoLibraryId) return reply.code(409).send({ error: 'Select an enabled Jellyfin music-video library for this webhook.' });
+    wakeQualifiedPlayback();
+    return reply.code(202).send({ accepted: true });
   });
 }
 

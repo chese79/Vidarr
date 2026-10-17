@@ -187,7 +187,7 @@ export const api = {
               id: number; provider: string; url: string; authority: string; confidence: string; accepted: boolean;
             }>;
           })[];
-          summary: { known: number; available: number; missing: number; monitored: number; aggregatePlayCount: number | null };
+          summary: { known: number; available: number; missing: number; monitored: number; aggregatePlayCount: number | null; qualifiedPlayCount: number };
           unmatchedInventory: Array<{
             id: number; title: string; releaseYear: number | null; durationSeconds: number | null;
             matchConfidence: string | null; musicVideoId: number | null;
@@ -198,6 +198,7 @@ export const api = {
     videos: (id: number) => request<Array<{
       id: number; title: string; releaseYear: number | null; director: string | null;
       durationSeconds: number | null; monitored: boolean; ignored: boolean; hasFile: boolean;
+      qualifiedPlayCount: number;
         effectivePlayCount: number | null;
       libraryVideos: Array<{ available: boolean; matchConfidence: string | null; playCount: number | null }>;
       status: VideoStatus;

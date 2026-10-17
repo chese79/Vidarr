@@ -8,6 +8,15 @@ catalog and the playback destinations for the finished collection.
 
 ## Canonical catalog
 
+Vidarr qualified plays are distinct from Jellyfin/Plex's native play counters. One viewing
+qualifies after half the video's duration or four minutes of observed watching, whichever is
+first. Starts alone, pauses, buffering, seeks and unobserved gaps do not earn watched time.
+Track all exposed server sessions only for confirmed available catalog matches in selected
+video libraries; Last.fm linking is independent. Counters begin with this capability and do
+not reinterpret earlier server history. Show both qualified and reported server counts honestly;
+existing minimum-play and Unwatched rules retain their server-history semantics. See
+[qualified playback](qualified-playback.md) for observation, webhook setup and recovery details.
+
 Artist detail groups genres in a disclosure closed by default. Its Videos heading includes a
 case-insensitive title filter; bulk selection follows the visible results. Queue and History
 follow Genres in navigation. A user-controlled Live/Concert boolean labels an existing video;

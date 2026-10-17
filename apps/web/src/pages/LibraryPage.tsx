@@ -134,6 +134,7 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
             {mv.title}
           </span>
           <span className="artist-meta">
+            {mv.qualifiedPlayCount ?? 0} qualified plays ·{' '}
             {mv.director ? `Dir. ${mv.director}` : 'Director unknown'}
             {mv.durationSeconds != null ? ` · ${Math.floor(mv.durationSeconds / 60)}:${String(mv.durationSeconds % 60).padStart(2, '0')}` : ''}
           </span>
@@ -151,8 +152,8 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
           {mv.ignored && <span className="status-chip ignored">Ignored</span>}
           <span className="artist-meta">
             {mv.effectivePlayCount != null
-              ? `${mv.effectivePlayCount} plays`
-              : 'plays unknown'}
+              ? `${mv.effectivePlayCount} server plays`
+              : 'server plays unknown'}
           </span>
           <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
             <input
@@ -237,7 +238,7 @@ function ArtistRow({
           {artist.downloadingVideoCount > 0 && (
             <span className="downloading">{artist.downloadingVideoCount} downloading</span>
           )}
-          <span>{artist.aggregatePlayCount != null ? `${artist.aggregatePlayCount} plays` : 'plays unknown'}</span>
+          <span>{artist.qualifiedPlayCount ?? 0} qualified plays · {artist.aggregatePlayCount != null ? `${artist.aggregatePlayCount} server plays` : 'server plays unknown'}</span>
         </div>
         <div className="artist-row-actions">
           <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13 }}>
@@ -543,7 +544,7 @@ export default function LibraryPage() {
               />
             </label>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
-              Min play count
+              Min server play count
               <input
                 type="number"
                 min={0}

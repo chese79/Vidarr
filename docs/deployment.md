@@ -1,5 +1,14 @@
 # Deployment
 
+### Qualified-play revision
+
+Migration `20261017010000_qualified_play_counts` adds zero-initialized Vidarr counters and
+session observations without changing native server counts. The new 15-second tracking job
+uses configured video connectors independently of Last.fm. Startup breaks watching continuity
+while preserving earlier qualification. See [qualified playback](qualified-playback.md) for
+the half-video/four-minute rule and optional Jellyfin webhook setup. Rebuild/recreate only
+Vidarr, preserve its mounts and skip public publication for this local-only revision.
+
 ### Artist video actions: local-only release
 
 Migration `20261016220000_artist_video_actions` adds the live/concert flag, durable deletion deadlines/attempts/retry state,

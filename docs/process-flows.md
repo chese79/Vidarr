@@ -1,5 +1,27 @@
 # Process flows and consistency review
 
+## Qualified playback (2026-10-16)
+
+Enable a tested Jellyfin/Plex connector and select its video library → synchronize and confirm
+the catalog match → observe live sessions every 15 seconds → accumulate continuous watched
+seconds → atomically mark the viewing qualified and increment the video counter once at
+`min(duration / 2, 240 seconds)` → refresh artist/Library qualified totals. Duplicate events,
+pauses, buffering, seeks and gaps over 45 seconds earn no time. A start is only a baseline;
+already-watched positions never backfill time. The counter is separate from native server
+history and from optional Last.fm submission.
+
+Optional Jellyfin Webhook plugin → authenticated PlaybackStart/Progress/Stop POST → coalesced
+fresh server-session read → the same observation/qualification checks. Payload counts and
+positions cannot qualify a video. Polling provides the complete flow when the plugin is absent.
+No Jellyfin installation/restart is required by Vidarr deployment.
+
+Persist current observation and qualified status together with each earned counter update.
+On a failed server read, preserve viewing identity but break continuity; a later read cannot
+credit the missed time or repeat a qualification. Unconfigured sources close active observations;
+completed diagnostic rows expire after 30 days while counters remain. Catalog deletion cascades
+its observation records. Existing server count synchronization, playlist rules and Last.fm
+qualification/delivery continue independently. See [setup and limits](qualified-playback.md).
+
 ## Artist video actions and deletion (2026-10-16)
 
 Open artist → optionally expand Genres → filter Videos by name → act on a visible video.
