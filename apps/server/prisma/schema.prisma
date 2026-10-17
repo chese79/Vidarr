@@ -49,6 +49,7 @@ model Artist {
   reconciledAt     DateTime?
   addedAt          DateTime     @default(now())
 
+  livePerformances LivePerformance[]
   musicVideos   MusicVideo[]
   youtubeSources YoutubeSource[]
   sources       ArtistSource[]
@@ -115,6 +116,7 @@ model MusicVideo {
   awaitingServerScanAt DateTime?
   addedAt        DateTime @default(now())
 
+  recordings     Recording[]
   file           MusicVideoFile?
   queueItems     DownloadQueueItem[]
   history        History[]
@@ -639,4 +641,70 @@ model RecommendationSourceHit {
   seedArtistName   String
   score            Float
   reason           String
+}
+
+
+// Live catalog identity is separate from captures and physical ownership.
+// No title/date uniqueness: unknown details must never merge distinct shows.
+model LivePerformance {
+  id Int @id @default(autoincrement())
+  artistId Int
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  title String
+  performanceDate String? // YYYY, YYYY-MM or YYYY-MM-DD; null is unknown
+  venue String?
+  city String?
+  setting String @default("concert")
+  style String @default("unknown")
+  notes String @default("")
+  identityStatus String @default("independent")
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  songs LiveSongPerformance[]
+  recordings RecordingPerformance[]
+
+  @@index([artistId, performanceDate, id])
+  @@index([setting, style, id])
+}
+
+model LiveSongPerformance {
+  id Int @id @default(autoincrement())
+  performanceId Int
+  performance LivePerformance @relation(fields: [performanceId], references: [id], onDelete: Restrict)
+  position Int
+  title String
+  section String?
+  kind String @default("unknown") // full | snippet | medleyComponent | unknown; not coverage proof
+
+  @@unique([performanceId, position])
+}
+
+// Shared capture/edit identity, suitable for either catalog. This first increment
+// records candidates only; a URL/coverage claim never creates file ownership.
+model Recording {
+  id Int @id @default(autoincrement())
+  musicVideoId Int?
+  musicVideo MusicVideo? @relation(fields: [musicVideoId], references: [id], onDelete: Restrict)
+  title String
+  claimedCoverage String @default("unknown")
+  origin String @default("unknown") // professional | audience | unknown
+  evidenceUrl String?
+  notes String @default("")
+  reviewStatus String @default("pending")
+  createdAt DateTime @default(now())
+  performances RecordingPerformance[]
+
+  @@index([musicVideoId])
+  @@index([reviewStatus, id])
+}
+
+model RecordingPerformance {
+  recordingId Int
+  recording Recording @relation(fields: [recordingId], references: [id], onDelete: Restrict)
+  performanceId Int
+  performance LivePerformance @relation(fields: [performanceId], references: [id], onDelete: Restrict)
+
+  @@id([recordingId, performanceId])
+  @@index([performanceId])
 }

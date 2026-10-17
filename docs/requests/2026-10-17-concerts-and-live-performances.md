@@ -1,7 +1,7 @@
 # Concerts and live performances
 
 Date: 2026-10-17  
-Status: Product rules and all three UI previews approved; implementation is not authorized by this document.  
+Status: Product rules and all three UI previews approved; the user subsequently authorized starting implementation (see live-implementation.md).
 Scope: Consolidated user decisions, observable requirements and remaining design questions.
 
 ## Design review outcome
@@ -16,6 +16,12 @@ database migrations, external publication or deployment.
 The user subsequently authorized the audit, shared model, migration plan and behavior-preserving
 foundation refactor in [backend alignment](../backend-alignment.md). That limited authorization
 does not enable live workflows or apply the future recording/asset migration.
+
+The user subsequently requested: merge/deploy the tested music-video foundation, then start
+building live concerts. Implementation is now authorized under the agreed rules; the current
+[implementation scope and evidence](../live-implementation.md) distinguishes the first catalog
+increment from the remaining discovery/acquisition/playback work. Production live deployment
+has not been performed. Earlier design-only restrictions below describe the design phase.
 
 ## Objective and current boundary
 

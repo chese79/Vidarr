@@ -1,3 +1,4 @@
+import type { UpdateLivePerformance, CreateLivePerformance, CreateRecordingCandidate, LiveArtist, LivePerformanceSummary, LivePerformanceDetail, LivePage, RecordingCandidate } from '@vidarr/shared-types';
 import type {
   ValidationSettings,
   Artist,
@@ -152,6 +153,15 @@ async function requestBlob(path: string): Promise<Blob> {
 }
 
 export const api = {
+  live: {
+    artists: (search: string, artistId?: number) => request<LivePage<LiveArtist>>(`/live/artists?search=${encodeURIComponent(search)}${artistId ? `&artistId=${artistId}` : ''}`),
+    performances: (query: string) => request<LivePage<LivePerformanceSummary>>(`/live/performances?${query}`),
+    performance: (id: number) => request<LivePerformanceDetail>(`/live/performances/${id}`),
+    updatePerformance: (id: number, data: UpdateLivePerformance) => request<LivePerformanceSummary>(`/live/performances/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    createPerformance: (data: CreateLivePerformance) => request<LivePerformanceSummary>('/live/performances', { method: 'POST', body: JSON.stringify(data) }),
+    recordings: (query: string) => request<LivePage<RecordingCandidate>>(`/live/recordings?${query}`),
+    createRecording: (data: CreateRecordingCandidate) => request<RecordingCandidate>('/live/recordings', { method: 'POST', body: JSON.stringify(data) }),
+  },
   validation: {
     get: () => request<ValidationSettings>('/config/validation'),
     save: (settings: ValidationSettings) => request<ValidationSettings>('/config/validation', { method: 'PUT', body: JSON.stringify(settings) }),

@@ -935,6 +935,9 @@ export async function artistRoutes(app: FastifyInstance) {
 
   app.delete('/api/v1/artist/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
+    if (await prisma.livePerformance.count({ where: { artistId: id } })) {
+      return reply.code(409).send({ error: 'Artist has live performances; preserve or reassign them before removing the artist' });
+    }
     await prisma.artist.delete({ where: { id } });
     reply.code(204);
   });
