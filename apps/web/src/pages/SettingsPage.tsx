@@ -350,6 +350,8 @@ export default function SettingsPage() {
   const [transferMode, setTransferMode] = useState<TransferMode>('move');
   const [minFreeSpaceMb, setMinFreeSpaceMb] = useState(1024);
   const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(3);
+  const [warnBeforeDelete, setWarnBeforeDelete] = useState(true);
+  const [excludeDeletedVideosFromScans, setExcludeDeletedVideosFromScans] = useState(false);
   const [imvdbApiKey, setImvdbApiKey] = useState('');
 
   useEffect(() => {
@@ -358,6 +360,8 @@ export default function SettingsPage() {
       setTransferMode(settings.data.transferMode);
       setMinFreeSpaceMb(settings.data.minFreeSpaceMb);
       setMaxConcurrentDownloads(settings.data.maxConcurrentDownloads ?? 3);
+      setWarnBeforeDelete(settings.data.warnBeforeDelete ?? true);
+      setExcludeDeletedVideosFromScans(settings.data.excludeDeletedVideosFromScans ?? false);
       setImvdbApiKey('');
     }
   }, [settings.data]);
@@ -382,6 +386,8 @@ export default function SettingsPage() {
             transferMode,
             minFreeSpaceMb,
             maxConcurrentDownloads,
+            warnBeforeDelete,
+            excludeDeletedVideosFromScans,
             ...(imvdbApiKey ? { imvdbApiKey } : {}),
           });
         }}
@@ -432,6 +438,14 @@ export default function SettingsPage() {
             value={maxConcurrentDownloads} onChange={e => setMaxConcurrentDownloads(Number(e.target.value))} />
           <span className="empty-state" style={{ padding: '4px 0 0' }}>Default: 3. Additional videos wait in the queue.</span>
         </div>
+        <h3>Video deletion</h3>
+        <div className="form-row">
+          <label><input type="checkbox" checked={warnBeforeDelete} onChange={e => setWarnBeforeDelete(e.target.checked)} />Warn before delete</label>
+          <label><input type="checkbox" checked={excludeDeletedVideosFromScans} onChange={e => setExcludeDeletedVideosFromScans(e.target.checked)} />Exclude deleted videos from future scans</label>
+        </div>
+        <p>Delete permanently removes the local video bundle, confirmed matched Jellyfin/Plex copies and the Vidarr entry. Active or waiting downloads must first be removed from Queue.</p>
+        <p>Deletion starts after five minutes. Playing or paused server sessions defer removal. Failures retry 40 minutes later; the entry and next attempt stay visible until deletion finishes, including across restarts.</p>
+        <p>Exclusion is off by default. When enabled, deletion fingerprints suppress future IMVDb, YouTube and local-file rediscovery. Turning it off permits rediscovery; it does not restore deleted files. Existing catalog entries are not removed by changing this option.</p>
         <button type="submit">Save</button>
         {update.isSuccess && (
           <p className="empty-state" role="status">

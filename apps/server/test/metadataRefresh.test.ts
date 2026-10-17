@@ -57,6 +57,17 @@ describe('IMVDb catalog identities', () => {
     expect((await prisma.musicVideo.findUniqueOrThrow({ where: { imvdbVideoId: 'A' } })).id).toBe(legacy.id);
   });
 
+  it('honors scan exclusion and permits rediscovery when it is turned off', async () => {
+    await prisma.deletedVideoRecord.create({ data: { originalMusicVideoId: 999999, artistId, title: 'Song', identities: JSON.stringify(['imvdb:A']) } });
+    await prisma.settings.create({ data: { id: 1, excludeDeletedVideosFromScans: true } });
+    imvdb.videos.mockResolvedValue([candidate('A'), candidate('B')]);
+    expect(await refreshArtistMetadata(artistId)).toMatchObject({ videosAdded: 1 });
+    expect(await prisma.musicVideo.findUnique({ where: { imvdbVideoId: 'A' } })).toBeNull();
+    await prisma.settings.update({ where: { id: 1 }, data: { excludeDeletedVideosFromScans: false } });
+    expect(await refreshArtistMetadata(artistId)).toMatchObject({ videosAdded: 1 });
+    expect(await prisma.musicVideo.count()).toBe(2);
+  });
+
   it('does not assign an ambiguous pair of provider versions to an unknown legacy identity', async () => {
     const legacy = await createMusicVideo(artistId, { title: 'Song', hasFile: true });
     imvdb.videos.mockResolvedValue([candidate('A'), candidate('B')]);

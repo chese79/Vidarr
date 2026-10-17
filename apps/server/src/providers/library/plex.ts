@@ -1,6 +1,6 @@
 import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { createAuthedFetcher, isNotFound } from './util.js';
+import { assertDeletionPaths, createAuthedFetcher, isNotFound } from './util.js';
 import type {
   FetchedLibraryArtist,
   FetchedLibraryVideo,
@@ -67,7 +67,34 @@ async function resolvePlaylistItemId(config: LibraryConnector, item: PlaylistPus
   return (await findLibraryItem!(config, item))?.id ?? null;
 }
 
+async function inspectDeletion(config: LibraryConnector, item: { externalId: string; expectedPath: string }): Promise<boolean> {
+  let body;
+  try { body = await plexGet(config, `/library/metadata/${encodeURIComponent(item.externalId)}`); }
+  catch (error) { if (isNotFound(error)) return false; throw error; }
+  const metadata = body?.MediaContainer?.Metadata?.[0];
+  if (!config.videoLibraryId || String(metadata?.ratingKey) !== item.externalId || String(metadata?.librarySectionID) !== config.videoLibraryId
+    || !['movie', 'clip', 'musicvideo'].includes(metadata?.type)) throw new Error('Plex item identity/type/library changed; resync before deleting.');
+  const paths = (metadata.Media ?? []).flatMap((media: any) => (media.Part ?? []).map((part: any) => part.file).filter((p: unknown) => typeof p === 'string'));
+  assertDeletionPaths(paths, item.expectedPath);
+  return true;
+}
+
 export const plexProvider: LibraryConnectorProvider = {
+  async isVideoInUse(config, externalId) {
+    const body = await plexGet(config, '/status/sessions');
+    const sessions = body?.MediaContainer?.Metadata ?? [];
+    if (!Array.isArray(sessions)) throw new Error('Plex returned invalid playback sessions.');
+    return sessions.some((item: any) => String(item.ratingKey) === externalId);
+  },
+  async verifyVideoDeletion(config, item) { await inspectDeletion(config, item); },
+  async deleteVideo(config, item) {
+    if (!await inspectDeletion(config, item)) return;
+    try { await plexSend(config, 'DELETE', `/library/metadata/${encodeURIComponent(item.externalId)}`); }
+    catch (error) { if (!isNotFound(error)) throw error; }
+    try { await plexGet(config, `/library/metadata/${encodeURIComponent(item.externalId)}`); }
+    catch (error) { if (isNotFound(error)) return; throw error; }
+    throw new Error('Plex still reports the deleted item; retry deletion to confirm removal.');
+  },
   async fetchPlaybackSessions(config) {
     if (!config.videoLibraryId) return [];
     const body = await plexGet(config, '/status/sessions');

@@ -175,6 +175,11 @@ export const BulkMonitorArtistsResultSchema = z.object({
 export type BulkMonitorArtistsResult = z.infer<typeof BulkMonitorArtistsResultSchema>;
 
 export const MusicVideoSchema = z.object({
+  isLiveConcert: z.boolean().optional(),
+  deletionState: z.string().nullable().optional(),
+  deletionError: z.string().nullable().optional(),
+  deletionNextAttemptAt: z.string().datetime().nullable().optional(),
+  deletionAttempts: z.number().int().optional(),
   id: z.number().int(),
   artistId: z.number().int(),
   title: z.string().min(1),
@@ -249,7 +254,7 @@ export const VideoStatusSchema = z.object({
 });
 export type VideoStatus = z.infer<typeof VideoStatusSchema>;
 
-export const UpdateMusicVideoSchema = CreateMusicVideoSchema.omit({ artistId: true }).partial();
+export const UpdateMusicVideoSchema = CreateMusicVideoSchema.omit({ artistId: true }).partial().extend({ isLiveConcert: z.boolean().optional() });
 export type UpdateMusicVideo = z.infer<typeof UpdateMusicVideoSchema>;
 
 export const ValidationCategorySchema = z.enum(['imports', 'canonical', 'additional']);
@@ -267,6 +272,8 @@ export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
 };
 
 export const SettingsSchema = z.object({
+  warnBeforeDelete: z.boolean().default(true),
+  excludeDeletedVideosFromScans: z.boolean().default(false),
   defaultPlaybackConnectorId: z.number().int().positive().nullable().optional(),
   namingFormat: z.string(),
   transferMode: TransferMode,

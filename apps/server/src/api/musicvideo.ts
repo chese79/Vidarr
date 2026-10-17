@@ -5,6 +5,8 @@ import { normalizeTitle } from '../pipeline/normalize.js';
 import { queueDirectVideo, grabFromIndexer } from '../pipeline/grab.js';
 import { searchAllIndexers } from '../pipeline/search.js';
 import { autoSearchAndGrab } from '../pipeline/autoSearch.js';
+import { deleteMusicVideo, VideoDeletionError } from '../pipeline/deleteVideo.js';
+import { z } from 'zod';
 
 export async function musicVideoRoutes(app: FastifyInstance) {
   app.get('/api/v1/musicvideo', async (req) => {
@@ -55,15 +57,19 @@ export async function musicVideoRoutes(app: FastifyInstance) {
   app.put('/api/v1/musicvideo/:id', async (req) => {
     const id = Number((req.params as { id: string }).id);
     const body = UpdateMusicVideoSchema.parse(req.body);
+    const current = await prisma.musicVideo.findUnique({ where: { id }, select: { deletionState: true } });
+    if (current?.deletionState) throw new VideoDeletionError('Deletion is pending; retry Delete before editing this video.');
     const data: Record<string, unknown> = { ...body };
     if (body.title) data.normalizedTitle = normalizeTitle(body.title);
     return prisma.musicVideo.update({ where: { id }, data });
   });
 
   app.delete('/api/v1/musicvideo/:id', async (req, reply) => {
-    const id = Number((req.params as { id: string }).id);
-    await prisma.musicVideo.delete({ where: { id } });
-    reply.code(204);
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const body = z.object({ confirmed: z.boolean().optional() }).parse(req.body ?? {});
+    try { await deleteMusicVideo(id, body.confirmed === true); }
+    catch (error) { if (error instanceof VideoDeletionError) return reply.code(error.statusCode).send({ error: error.message }); throw error; }
+    reply.code(202).send({ scheduled: true });
   });
 
   app.post('/api/v1/musicvideo/:id/grab', async (req, reply) => {

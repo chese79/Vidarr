@@ -1,6 +1,7 @@
 import { prisma, logActivity } from '../db/client.js';
 import { normalizeTitle } from './normalize.js';
 import { getArtistVideos } from '../providers/metadata/imvdb.js';
+import { isScanExcluded, loadScanExclusions } from './deletedVideoScans.js';
 
 // Fetches an IMVDb-linked artist's current video list and creates any videos
 // not already known (by imvdbVideoId). `imvdbArtistId` stores the artist's
@@ -33,11 +34,17 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
     incomingTitleCounts.set(key, (incomingTitleCounts.get(key) ?? 0) + 1);
   }
   const savedIds = new Set<number>();
+  const exclusions = await loadScanExclusions(artistId);
 
   let videosAdded = 0;
   let videosUpdated = 0;
   for (const video of videos) {
     try {
+      if (isScanExcluded(exclusions, artistId, video)) {
+        const known = existingByImvdbId.get(video.imvdbVideoId);
+        if (known) savedIds.add(known.id);
+        continue;
+      }
       const titleKey = normalizeTitle(video.title);
       const byTitle = existingByTitle.get(titleKey);
       // Only adopt a title-only entry when the provider result is unambiguous.

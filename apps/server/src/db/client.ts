@@ -10,7 +10,7 @@ prisma.$use(async (params, next) => {
   if (credentialModels.has(params.model ?? '')) rememberSecrets(params.args?.data);
   const sanitize = (data: Record<string, unknown> | undefined) => {
     if (!data) return;
-    for (const key of ['error', 'lastError', 'lastPushError', 'videoInventoryError']) {
+    for (const key of ['error', 'lastError', 'lastPushError', 'videoInventoryError', 'deletionError']) {
       if (typeof data[key] === 'string') data[key] = redactMessage(data[key]);
     }
     if (params.model === 'ActivityLog' && typeof data.message === 'string') data.message = redactMessage(data.message);

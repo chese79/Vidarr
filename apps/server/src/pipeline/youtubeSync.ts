@@ -4,6 +4,7 @@ import { parseArtistAndTitle } from './bulkImport.js';
 import { excludedMusicVideoTitleReason } from './youtubeValidation.js';
 import { normalizeTitle } from './normalize.js';
 import { assessOfficialYoutubeVideo } from './youtubeOfficial.js';
+import { isScanExcluded, loadScanExclusions } from './deletedVideoScans.js';
 
 export interface YoutubeSyncResult {
   matched: number;
@@ -25,6 +26,7 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
   const isInitialSync = source.lastPolledAt === null;
   const discovery = await discoverYoutubeChannel(source.url);
   const videos = discovery.videos;
+  const exclusions = await loadScanExclusions(source.artistId);
   const existing = await prisma.musicVideo.findMany({
     where: { artistId: source.artistId }, select: { id: true, youtubeVideoId: true, sourcePublishedAt: true },
   });
@@ -43,6 +45,8 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
   const affectedMusicVideoIds: number[] = [];
 
   for (const video of videos) {
+    const parsedForExclusion = parseArtistAndTitle(video.title, source.artist.name);
+    if (isScanExcluded(exclusions, source.artistId, { youtubeVideoId: video.youtubeVideoId, title: parsedForExclusion.title })) continue;
     const catalogVideo = byYoutubeId.get(video.youtubeVideoId);
     if (catalogVideo) {
       if (video.sourcePublishedAt && !catalogVideo.sourcePublishedAt) await prisma.musicVideo.update({

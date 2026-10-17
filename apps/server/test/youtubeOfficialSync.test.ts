@@ -46,6 +46,15 @@ describe('official YouTube canonical admission', () => {
     vi.mocked(getVideoMetadata).mockResolvedValue({ title: 'Band - Song (Official)', channel: 'Label', description: '', channelIsVerified: false });
     expect(await syncYoutubeSource(source.id)).toMatchObject({ created: 1 });
   });
+  it('excludes deleted IDs before inspection and allows normal admission when exclusion is disabled', async () => {
+    const { artist, source } = await setup();
+    await prisma.deletedVideoRecord.create({ data: { originalMusicVideoId: 999999, artistId: artist.id, title: 'Song', identities: JSON.stringify(['youtube:abcdefghijk']) } });
+    await prisma.settings.create({ data: { id: 1, excludeDeletedVideosFromScans: true } });
+    expect(await syncYoutubeSource(source.id)).toMatchObject({ created: 0, pending: 0 });
+    expect(getVideoMetadata).not.toHaveBeenCalled();
+    await prisma.settings.update({ where: { id: 1 }, data: { excludeDeletedVideosFromScans: false } });
+    expect(await syncYoutubeSource(source.id)).toMatchObject({ created: 1 });
+  });
   it('rejects official audio, lyrics, live, concerts and visualizers even inside an official category', async () => {
     const { source } = await setup();
     const titles = ['Band - Song (Official Audio)', 'Band - Song (Official Lyric Video)', 'Band - Song (Live)', 'Band - Song (Official Concert Video)', 'Band - Song (Visualizer)', 'Band - Song - Live'];

@@ -1,6 +1,6 @@
 import type { LibraryConnector } from '@prisma/client';
 import { normalizeTitle } from '../../pipeline/normalize.js';
-import { createAuthedFetcher, isNotFound } from './util.js';
+import { assertDeletionPaths, createAuthedFetcher, isNotFound } from './util.js';
 import type {
   FetchedLibraryArtist,
   FetchedLibraryVideo,
@@ -85,7 +85,35 @@ async function resolvePlaylistItemId(config: LibraryConnector, item: PlaylistPus
   return (await findLibraryItem!(config, item))?.id ?? null;
 }
 
+async function inspectDeletion(config: LibraryConnector, item: { externalId: string; expectedPath: string }): Promise<boolean> {
+  if (!config.userId || !config.videoLibraryId) throw new Error('Jellyfin requires a tested user and selected video library before deletion.');
+  let found;
+  try { found = await jellyfinGet(config, `/Users/${encodeURIComponent(config.userId)}/Items/${encodeURIComponent(item.externalId)}`); }
+  catch (error) { if (isNotFound(error)) return false; throw error; }
+  if (String(found?.Id) !== item.externalId || found?.Type !== 'MusicVideo') throw new Error('Jellyfin item identity/type changed; resync before deleting.');
+  // The Ids filter bypasses ParentId: enumerate fresh membership instead.
+  playbackLibraries.delete(config.id);
+  if (!(await playbackLibraryIds(config)).has(item.externalId)) throw new Error('Jellyfin item is outside the selected video library.');
+  const paths = [...new Set([found.Path, ...(found.MediaSources ?? []).map((source: any) => source.Path)].filter((p): p is string => typeof p === 'string'))];
+  assertDeletionPaths(paths, item.expectedPath);
+  return true;
+}
+
 export const jellyfinProvider: LibraryConnectorProvider = {
+  async isVideoInUse(config, externalId) {
+    const sessions = await jellyfinGet(config, '/Sessions');
+    if (!Array.isArray(sessions)) throw new Error('Jellyfin returned invalid playback sessions.');
+    return sessions.some((session: any) => String(session.NowPlayingItem?.Id) === externalId);
+  },
+  async verifyVideoDeletion(config, item) { await inspectDeletion(config, item); },
+  async deleteVideo(config, item) {
+    if (!await inspectDeletion(config, item)) return;
+    try { await jellyfinSend(config, 'DELETE', `/Items/${encodeURIComponent(item.externalId)}`); }
+    catch (error) { if (!isNotFound(error)) throw error; }
+    try { await jellyfinGet(config, `/Users/${encodeURIComponent(config.userId!)}/Items/${encodeURIComponent(item.externalId)}`); }
+    catch (error) { if (isNotFound(error)) return; throw error; }
+    throw new Error('Jellyfin still reports the deleted item; retry deletion to confirm removal.');
+  },
   async fetchPlaybackSessions(config) {
     if (!config.videoLibraryId) return [];
     const sessions = await jellyfinGet(config, '/Sessions');

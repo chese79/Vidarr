@@ -3,6 +3,7 @@ import path from 'node:path';
 import { prisma } from '../db/client.js';
 import { artistNameHint, isUsableArtistHint } from './artistObservation.js';
 import { normalizeTitle } from './normalize.js';
+import { isScanExcluded, loadScanExclusions } from './deletedVideoScans.js';
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mkv', '.mov', '.m4v', '.avi', '.webm']);
 const MAX_FILES = 20_000;
@@ -39,6 +40,7 @@ function knownArtistVideoName(filePath: string, rootPath: string, artistByName: 
 }
 
 export async function scanLocalVideoCandidates(artistId?: number): Promise<{ scanned: number; pending: number; roots: number }> {
+  const exclusions = await loadScanExclusions(artistId);
   const roots = await prisma.rootFolder.findMany({ orderBy: { id: 'asc' } });
   const confirmedArtists = await prisma.artist.findMany({
     where: { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null } },
@@ -66,6 +68,7 @@ export async function scanLocalVideoCandidates(artistId?: number): Promise<{ sca
         if (!isUsableArtistHint(artistName) || !normalizeTitle(title)) continue;
         const matchedArtistId = artistByName.get(normalizeTitle(artistName)) ?? null;
         if (artistId != null && matchedArtistId !== artistId) continue;
+        if (matchedArtistId && isScanExcluded(exclusions, matchedArtistId, { title, filePath })) continue;
         const candidate = await prisma.videoReviewCandidate.upsert({
           where: { source_externalId: { source: 'local', externalId: filePath } },
           update: { artistName, title, artistId: matchedArtistId },

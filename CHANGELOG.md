@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — Artist video actions and deletion preferences
+
+- Put Queue and History below Genres. Collapse artist genres by default and add a Videos heading with a title search that also scopes bulk selection.
+- Add a reversible Live/Concert flag without admitting live material to discovery or changing validation rules.
+- Delete an individual video's catalog entry, owned local bundle and confirmed matched Jellyfin/Plex copies. Verify server identity, selected library and media paths before deletion and confirm removal afterward. Block active downloads; schedule deletion after five minutes, defer playing/paused server sessions, and retry failures 40 minutes later using durable state and visible deadlines.
+- Add adjacent General settings: Warn before delete (on) and Exclude deleted videos from future scans (off). Retain deletion identities so enabling exclusion suppresses IMVDb, YouTube and local-file rediscovery; disabling it permits rediscovery without restoring files.
+- Apply an additive migration preserving existing videos, queue order and settings. This release rebuilds and deploys only the local Vidarr image; public image publication is skipped for this merge.
+
 ### Added — Validation/Quality settings
 
 - Combine category validation settings and the existing quality-profile editor into one Settings page, with quality controls at the bottom and old links redirected.

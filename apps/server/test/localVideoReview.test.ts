@@ -32,6 +32,14 @@ describe('local video scan', () => {
     expect(await prisma.videoReviewCandidate.findFirst()).toMatchObject({
       source: 'local', decision: 'pending', title: 'Thunderstruck',
     });
+    await prisma.videoReviewCandidate.deleteMany();
+    await prisma.deletedVideoRecord.create({ data: { originalMusicVideoId: 999999, artistId: artist.id, title: 'Thunderstruck', identities: JSON.stringify([`local:${path.join(directory, 'AC-DC', 'AC-DC - Thunderstruck.mp4')}`]) } });
+    await prisma.settings.create({ data: { id: 1, excludeDeletedVideosFromScans: true } });
+    await scanLocalVideoCandidates();
+    expect(await prisma.videoReviewCandidate.count()).toBe(0);
+    await prisma.settings.update({ where: { id: 1 }, data: { excludeDeletedVideosFromScans: false } });
+    await scanLocalVideoCandidates();
+    expect(await prisma.videoReviewCandidate.count()).toBe(1);
   });
 
   it('recognizes a confirmed artist at the end of a flat local filename', async () => {
