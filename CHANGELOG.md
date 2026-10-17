@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — Qualified playback counts
+
+- Record a Vidarr qualified play after half the video or four minutes of observed watching, whichever comes first. Exclude pauses, buffering, seeks, duplicate observations and unobserved gaps; persist qualification once per viewing across restarts.
+- Observe confirmed, available video matches in enabled Jellyfin/Plex video libraries every 15 seconds, independently of Last.fm. Merge overlapping same-server connector sessions and retain earned counters when short-lived session diagnostics expire.
+- Show qualified counts separately from existing server-reported counts in Library and artist views. Begin qualified history at deployment without converting native counts; existing minimum-play/unwatched rules retain server history.
+- Add an authenticated Jellyfin playback webhook receiver that coalesces events into verified server reads, plus connector setup guidance. Polling remains available without installing a plugin or restarting Jellyfin.
+- Add an additive counter/session migration and preserve existing playback counts, Last.fm delivery, queue state, profiles and media. Rebuild/deploy only the local image; skip public publication for this revision.
+
 ### Added — Artist video actions and deletion preferences
 
 - Put Queue and History below Genres. Collapse artist genres by default and add a Videos heading with a title search that also scopes bulk selection.

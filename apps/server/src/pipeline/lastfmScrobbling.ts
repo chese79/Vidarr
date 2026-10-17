@@ -1,7 +1,8 @@
-import type { LastFmPlayback } from '@prisma/client';
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider, type LibraryPlaybackSession } from '../providers/library/index.js';
 import { LastFmError, lastFmCall } from '../providers/lastfmClient.js';
+import { observedPlaybackSeconds } from './playbackObservation.js';
+export { observedPlaybackSeconds } from './playbackObservation.js';
 
 // Account changes and polling share one lock so an in-flight request cannot
 // submit old queued playback to a newly linked account. Scheduler overlap is
@@ -18,16 +19,6 @@ export async function resetLastFmAccount(): Promise<void> {
     prisma.lastFmPlayback.deleteMany(),
     prisma.lastFmAccount.deleteMany(),
   ]);
-}
-
-export function observedPlaybackSeconds(previous: LastFmPlayback, current: LibraryPlaybackSession, now: Date): number {
-  const elapsed = (now.getTime() - previous.lastObservedAt.getTime()) / 1000;
-  const progress = current.positionSeconds - previous.positionSeconds;
-  // A seek never earns its skipped seconds. Discontinuous jumps and long
-  // outages earn nothing; paused/buffering endpoints are conservative too.
-  if (!previous.playing || !current.playing || elapsed <= 0 || elapsed > 45
-    || progress <= 0 || progress > elapsed + 3) return 0;
-  return Math.min(elapsed, progress);
 }
 
 function usableMetadata(value: string | undefined): value is string {

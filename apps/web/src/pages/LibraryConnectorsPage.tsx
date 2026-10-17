@@ -299,6 +299,12 @@ function ConnectorRow({
               Pick a music video library first to sync play counts.
             </span>
           )}
+          {connector.type === 'jellyfin' && connector.videoLibraryId && <details>
+            <summary>Qualified-play notifications</summary>
+            <p>Tracking works automatically by polling every 15 seconds. For faster checks, add a Generic destination in Jellyfin’s Webhook plugin and enable PlaybackStart, PlaybackProgress and PlaybackStop for music videos.</p>
+            <p>POST JSON to <code>{typeof window === 'undefined' ? 'http://your-vidarr:3434' : window.location.origin}/api/v1/libraryconnector/{connector.id}/playback-webhook</code> with the header <code>X-Api-Key</code> set to your Vidarr API key. Use a Vidarr address reachable from Jellyfin.</p>
+            <p>Template: <code>{'{"NotificationType":"{{NotificationType}}"}'}</code>. Notifications prompt a verified server read; they never increment counts directly.</p>
+          </details>}
         </td>
       </tr>
       {expanded && unmatchedVideos.length > 0 && (

@@ -130,6 +130,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
       if (!libraryIds.has(String(item.Id))) continue;
       result.push({
         sessionId: `${session.Id}:${session.PlaySessionId ?? ''}`,
+        userId: session.UserId == null ? undefined : String(session.UserId),
         externalId: String(item.Id), positionSeconds: state.PositionTicks / 10_000_000,
         durationSeconds: item.RunTimeTicks / 10_000_000, playing: state.IsPaused === false,
         artistName: item.Artists?.[0] ?? item.AlbumArtist, title: item.Name,

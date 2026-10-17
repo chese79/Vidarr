@@ -544,7 +544,7 @@ export default function ArtistDetailPage() {
             <div className="artist-meta">
               {artist.data.musicbrainzArtistId ? `MusicBrainz: ${artist.data.musicbrainzArtistId}` : `MusicBrainz: ${artist.data.musicbrainzMatchStatus}`} ·{' '}
               {artist.data.imvdbArtistId ? `IMVDb: ${artist.data.imvdbArtistId}` : 'No IMVDb match'} ·{' '}
-              {artist.data.summary.aggregatePlayCount ?? 'unknown'} plays · {artist.data.summary.available} available / {artist.data.summary.known} known ·{' '}
+              {artist.data.summary.qualifiedPlayCount ?? 0} qualified plays · {artist.data.summary.aggregatePlayCount ?? 'unknown'} server plays · {artist.data.summary.available} available / {artist.data.summary.known} known ·{' '}
               {artist.data.summary.missing} missing · {artist.data.summary.monitored} monitored
             </div>
           </div>
@@ -681,6 +681,7 @@ export default function ArtistDetailPage() {
                       deleteVideo.mutate({ id: mv.id, title: mv.title, confirmed: warning });
                     }}>{mv.deletionState === 'running' ? 'Deleting…' : mv.deletionState === 'pending' ? 'Pending deletion' : mv.deletionState === 'failed' ? 'Reschedule delete' : 'Delete'}</button>
                   {mv.isLiveConcert && <span className="status-chip">Live/Concert</span>}
+                  <span className="artist-meta"> {mv.qualifiedPlayCount ?? 0} qualified plays</span>
                   {mv.deletionError && <p role="alert">{mv.deletionError}</p>}
                   {mv.deletionNextAttemptAt && <p role="status">{mv.deletionState === 'failed' ? 'Deletion retry' : 'Deletion scheduled'}: {new Date(mv.deletionNextAttemptAt).toLocaleString()}</p>}
                   {['queued', 'downloading', 'importing', 'submissionUnknown'].includes(mv.status.acquisition ?? '') && <small> Remove or finish the download in Queue before deleting.</small>}
