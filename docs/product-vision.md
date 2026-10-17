@@ -17,7 +17,8 @@ recording/asset cutover and live acquisition remain subsequent implementation ph
 The first [live catalog increment](live-implementation.md) adds independent performances and
 unvalidated recording candidates against existing confirmed artists. Partial dates and separate
 setting/style/coverage dimensions remain explicit; candidates establish neither ownership nor
-missing-video counts. Live changes are not part of the deployed music-video release.
+missing-video counts. The unified local release includes this catalog increment; live discovery,
+acquisition and playback integration remain subsequent implementation phases.
 
 ## Canonical catalog
 
