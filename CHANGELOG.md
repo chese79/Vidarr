@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Deployment — Live review fixes
+
+- Merge `170bd6b` into local main and deploy local image `vidarr:170bd6b` after 885 passing tests
+  and the production build. Verify authenticated APIs, database integrity and container health.
+- Preserve owner credentials, API key, all media/config/staging mounts, 3,051 artists, 4,281 videos,
+  676 files, 900 queue entries and 58 staged files. Retain the verified backup and rollback
+  container; recreate only Vidarr. Keep image publishing local.
+
 ### Fixed — Live review regressions
 
 - Prevent equivalent local paths from assigning one file to multiple recordings or music videos.

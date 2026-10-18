@@ -15,6 +15,16 @@ these totals after startup. No public image was published.
 
 ## Local completion release (2026-10-18)
 
+Review fixes: application commit `170bd6b` was fast-forward merged into local main and deployed
+locally as `vidarr:170bd6b` after all 885 tests in 109 files and the production Docker build passed.
+Authenticated APIs, foreign keys, recording/queue references and Docker health were verified after
+startup. Counts remain 3,051 artists, 4,281 music videos, 676 files, 900 queue rows and 4,281 shared
+recordings. Owner username/password hash and integration API key match the pre-deployment backup.
+Configuration/media/staging mounts are unchanged; the backup verified all 58 staged files.
+Backup `vidarr-backup-20261018-live-review-fixes-170bd6b` and previous-container rollback
+`vidarr-rollback-20261018-live-review-fixes-170bd6b` are retained. Only Vidarr was recreated;
+SABnzbd remained running. The merge and image are local only; no public image was published.
+
 Application commit `2790917` was fast-forward merged into local main and deployed as
 `vidarr:2790917`. Authenticated health, built UI, artist summary and Live APIs passed; migration
 46 completed, foreign keys passed, all 4,281 music videos have shared recording references and
