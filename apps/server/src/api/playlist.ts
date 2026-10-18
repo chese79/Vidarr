@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   CreatePlaylistSchema,
@@ -8,7 +9,7 @@ import {
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { generatePlaylistWithSync, regenerateSmartPlaylistWithSync } from '../pipeline/playlistSync.js';
-import { PlaylistEditError, reorderPlaylistItems, updatePlaylist } from '../pipeline/playlistEdit.js';
+import { PlaylistEditError, reorderPlaylistItems, reorderPlaylistItemIds, updatePlaylist } from '../pipeline/playlistEdit.js';
 import {
   pushPlaylist,
   removeRemoteCopies,
@@ -21,7 +22,7 @@ const playlistInclude = {
     // `id` breaks ties between rows that share a sortOrder (legacy data from
     // before adds used max+1), so the order is always stable.
     orderBy: [{ sortOrder: 'asc' as const }, { id: 'asc' as const }],
-    include: { musicVideo: { include: { artist: true } } },
+    include: { recordingPart: { include: { recording: true } }, song: true, musicVideo: { include: { artist: true } } },
   },
   syncs: { include: { connector: true } },
 };
@@ -46,6 +47,12 @@ function serializeSyncs(syncs: Awaited<ReturnType<typeof prisma.playlistSync.fin
 }
 
 export async function playlistRoutes(app: FastifyInstance) {
+  app.put('/api/v1/playlist/:id/items/sequence', async (req, reply) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const { itemIds } = z.object({ itemIds: z.array(z.number().int().positive()).max(10000) }).strict().parse(req.body);
+    try { await reorderPlaylistItemIds(id, itemIds); } catch (error) { return sendEditError(reply, error); }
+    return { ok: true };
+  });
   async function validPlaybackConnector(id: number | null | undefined): Promise<boolean> {
     if (id == null) return true;
     const connector = await prisma.libraryConnector.findUnique({ where: { id } });

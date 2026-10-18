@@ -1,3 +1,6 @@
+import LiveClassificationPage from './pages/LiveClassificationPage';
+import LiveRecordingPage from './pages/LiveRecordingPage';
+import { LiveSettings } from './components/LiveControls';
 import LivePage from './pages/LivePage';
 import LivePerformancePage from './pages/LivePerformancePage';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
@@ -83,6 +86,9 @@ export default function App() {
           <Route path="/" element={<LibraryPage />} />
           <Route path="/artist/:id" element={<ArtistDetailPage />} />
           <Route path="/live" element={<LivePage />} />
+          <Route path="/live/recording/:id" element={<LiveRecordingPage />} />
+          <Route path="/live/classification" element={<LiveClassificationPage />} />
+          <Route path="/live/settings" element={<LiveSettings />} />
           <Route path="/artist/:id/live" element={<LivePage />} />
           <Route path="/live/performance/:id" element={<LivePerformancePage />} />
           <Route path="/genres" element={<GenresPage />} />

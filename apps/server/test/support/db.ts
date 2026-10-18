@@ -5,10 +5,27 @@ import { prisma } from '../../src/db/client.js';
 // beforeEach in any DB-backed test file so tests don't see each other's rows
 // (tests share one on-disk SQLite file — see vitest.config.ts).
 export async function resetDb(): Promise<void> {
+  await prisma.playlistItem.deleteMany();
+  await prisma.liveSongViewing.deleteMany();
+  await prisma.livePlaybackObservation.deleteMany();
+  await prisma.liveViewing.deleteMany();
+  await prisma.recordingCoverage.deleteMany();
+  await prisma.recordingServerCopy.deleteMany();
+  await prisma.recordingPart.deleteMany();
+  await prisma.recordingSource.deleteMany();
+  await prisma.liveCredit.deleteMany();
+  await prisma.liveMonitoringRule.deleteMany();
+  await prisma.liveSearchJournal.deleteMany();
+  await prisma.liveRequestBudget.deleteMany();
+  await prisma.liveExclusion.deleteMany();
+  await prisma.liveConfiguration.deleteMany();
+  await prisma.history.deleteMany();
+  await prisma.downloadQueueItem.deleteMany();
   await prisma.recordingPerformance.deleteMany();
   await prisma.recording.deleteMany();
   await prisma.liveSongPerformance.deleteMany();
   await prisma.livePerformance.deleteMany();
+  await prisma.liveOccasion.deleteMany();
   await prisma.qualifiedPlayback.deleteMany();
   await prisma.deletedVideoRecord.deleteMany();
   await prisma.lastFmPlayback.deleteMany();

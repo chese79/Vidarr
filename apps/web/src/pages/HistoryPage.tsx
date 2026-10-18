@@ -41,8 +41,8 @@ export default function HistoryPage() {
             {history.data.map((h) => (
               <tr key={h.id}>
                 <td>{new Date(h.date).toLocaleString()}</td>
-                <td>{h.musicVideo.artist.name}</td>
-                <td>{h.musicVideo.title}</td>
+                <td>{(h.musicVideo?.artist.name ?? 'Live recording')}</td>
+                <td>{(h.musicVideo?.title ?? h.recording?.title ?? 'Recording')}</td>
                 <td>{h.eventType}</td>
                 <td className="empty-state">{reasonFor(h.eventType, h.data) ?? ''}</td>
               </tr>

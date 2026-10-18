@@ -8,6 +8,7 @@ import fastifyCookie from '@fastify/cookie';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from './db/client.js';
+import { liveWorkflowRoutes } from './api/liveWorkflows.js';
 import { liveRoutes } from './api/live.js';
 import { artistRoutes } from './api/artist.js';
 import { genreRoutes } from './api/genre.js';
@@ -52,7 +53,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Populate the shared redactor before routes or background work can log provider errors.
   await Promise.all([prisma.settings.findMany(), prisma.libraryConnector.findMany(),
     prisma.recommendationProviderConfig.findMany(), prisma.downloadClient.findMany(),
-    prisma.indexer.findMany(), prisma.lastFmAccount.findMany()]);
+    prisma.indexer.findMany(), prisma.lastFmAccount.findMany(), prisma.liveConfiguration.findMany()]);
   const app = Fastify({ logger: process.env.NODE_ENV === 'test' ? false : {
     redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-api-key"]'],
     serializers: {
@@ -158,6 +159,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(localAuthRoutes);
   await app.register(artistRoutes);
   await app.register(liveRoutes);
+  await app.register(liveWorkflowRoutes);
   await app.register(genreRoutes);
   await app.register(videoReviewRoutes);
   await app.register(musicVideoRoutes);

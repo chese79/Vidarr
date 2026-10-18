@@ -681,7 +681,7 @@ export default function ArtistDetailPage() {
                       if (warning && !window.confirm(`Delete ${currentArtist.name} — ${mv.title}?\n\nThis permanently removes the local file and its metadata, all confirmed matched Jellyfin/Plex copies, and the Vidarr entry. This cannot be undone.\n\n${settings.data?.excludeDeletedVideosFromScans ? 'Future scans will exclude this video.' : 'Future scans may add this video again.'}`)) return;
                       deleteVideo.mutate({ id: mv.id, title: mv.title, confirmed: warning });
                     }}>{mv.deletionState === 'running' ? 'Deleting…' : mv.deletionState === 'pending' ? 'Pending deletion' : mv.deletionState === 'failed' ? 'Reschedule delete' : 'Delete'}</button>
-                  {mv.isLiveConcert && <span className="status-chip">Live/Concert</span>}
+                  {mv.isLiveConcert && <Link className="status-chip" to="/live/classification">Awaiting live classification</Link>}
                   <span className="artist-meta"> {mv.qualifiedPlayCount ?? 0} qualified plays</span>
                   {mv.deletionError && <p role="alert">{mv.deletionError}</p>}
                   {mv.deletionNextAttemptAt && <p role="status">{mv.deletionState === 'failed' ? 'Deletion retry' : 'Deletion scheduled'}: {new Date(mv.deletionNextAttemptAt).toLocaleString()}</p>}

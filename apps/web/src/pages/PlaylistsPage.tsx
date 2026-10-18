@@ -302,12 +302,13 @@ function PlaylistCard({ playlistId, onDeleted }: {
     mutationFn: (musicVideoId: number) => api.playlists.addItem(playlistId, musicVideoId),
     onSuccess: invalidate,
   });
+  const removeLiveItem = useMutation({ mutationFn: (id: number) => api.live.action(`playlist-items/${id}/remove`, {}), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['playlists'] }) });
   const removeItem = useMutation({
     mutationFn: (musicVideoId: number) => api.playlists.removeItem(playlistId, musicVideoId),
     onSuccess: invalidate,
   });
   const reorder = useMutation({
-    mutationFn: (musicVideoIds: number[]) => api.playlists.reorder(playlistId, musicVideoIds),
+    mutationFn: (musicVideoIds: number[]) => api.playlists.sequence(playlistId, musicVideoIds),
     onError: (err) => setNotice({ kind: 'alert', text: `Could not reorder: ${(err as Error).message}` }),
     // Refetch on failure too: a 409 means the server's list differs from ours.
     onSettled: invalidate,
@@ -363,7 +364,7 @@ function PlaylistCard({ playlistId, onDeleted }: {
   if (!playlist) return null;
   const inPlaylist = new Set(playlist.items.map((i) => i.musicVideoId));
   const isStatic = playlist.kind === 'static';
-  const orderedIds = playlist.items.map((i) => i.musicVideoId);
+  const orderedIds = playlist.items.map((i) => i.id);
   const published = playlist.syncs.filter((s) => s.remotePlaylistId);
   const publishedNames = published.map((s) => s.connectorName).join(', ');
 
@@ -470,18 +471,18 @@ function PlaylistCard({ playlistId, onDeleted }: {
           {playlist.items.map((item, index) => (
             <div className="video-row" key={item.id}>
               <span aria-hidden="true" className="empty-state" style={{ padding: 0, minWidth: 24, textAlign: 'right' }}>{index + 1}</span>
-              <VideoThumb url={item.musicVideo.thumbnailUrl} />
+              <VideoThumb url={item.musicVideo?.thumbnailUrl ?? null} />
               <div className="video-info">
-                <strong>{item.musicVideo.title}</strong>
+                <strong>{(item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Recording')}</strong>
                 <span className="empty-state" style={{ padding: 0 }}>
-                  {item.musicVideo.artist.name}
+                  {item.musicVideo?.artist.name ?? 'Live recording'}
                 </span>
               </div>
               <div className="video-actions">
                 {isStatic && <>
                   <button
                     className="secondary"
-                    aria-label={`Move ${item.musicVideo.title} up`}
+                    aria-label={`Move ${(item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Recording')} up`}
                     disabled={index === 0 || reorder.isPending}
                     onClick={() => move(index, -1)}
                   >
@@ -489,7 +490,7 @@ function PlaylistCard({ playlistId, onDeleted }: {
                   </button>
                   <button
                     className="secondary"
-                    aria-label={`Move ${item.musicVideo.title} down`}
+                    aria-label={`Move ${(item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Recording')} down`}
                     disabled={index === playlist.items.length - 1 || reorder.isPending}
                     onClick={() => move(index, 1)}
                   >
@@ -497,8 +498,8 @@ function PlaylistCard({ playlistId, onDeleted }: {
                   </button>
                   <button
                     className="secondary"
-                    aria-label={`Remove ${item.musicVideo.title} from playlist`}
-                    onClick={() => removeItem.mutate(item.musicVideoId)}
+                    aria-label={`Remove ${(item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Recording')} from playlist`}
+                    onClick={() => item.musicVideoId ? removeItem.mutate(item.musicVideoId) : removeLiveItem.mutate(item.id)}
                   >
                     Remove
                   </button>

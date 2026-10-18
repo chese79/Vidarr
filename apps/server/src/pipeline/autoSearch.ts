@@ -67,6 +67,7 @@ export async function autoSearchAndGrab(
   // which mean different things depending on the caller (a quality-upgrade
   // candidate is *expected* to already have a file, for instance) and so are
   // filtered by each caller's own candidate query instead of here.
+  if (musicVideo.catalogKind === 'liveClassified') return { musicVideoId, grabbed: false, reason: 'Managed as a live recording' };
   if (musicVideo.ignored) {
     return { musicVideoId, grabbed: false, reason: 'Video is ignored' };
   }

@@ -1,3 +1,5 @@
+import { noteRecordingFailure } from '../live/acquisitionFailure.js';
+import { assertRecordingEligible, importRecordingDownload } from '../live/acquisition.js';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { Prisma, type DownloadQueueItem } from '@prisma/client';
@@ -20,7 +22,8 @@ const waiting = new Map<number, { resolve: (result: ImportResult | undefined) =>
 // enqueue work after Delete has claimed the catalog entry.
 async function createQueueItem(data: Prisma.DownloadQueueItemUncheckedCreateInput): Promise<DownloadQueueItem> {
   return prisma.$transaction(async tx => {
-    const video = await tx.musicVideo.findUniqueOrThrow({ where: { id: data.musicVideoId }, select: { deletionState: true, ignored: true } });
+    const video = await tx.musicVideo.findUniqueOrThrow({ where: { id: data.musicVideoId! }, select: { deletionState: true, ignored: true, catalogKind: true } });
+    if (video.catalogKind === 'liveClassified') throw new Error('Use the Live recording acquisition workflow for this classified video.');
     if (video.deletionState) throw new Error('Video deletion is pending; finish Delete before downloading.');
     if (video.ignored) throw new Error('Video is ignored; unignore it before downloading.');
     return tx.downloadQueueItem.create({ data });
@@ -151,9 +154,9 @@ async function runDirectDownload(queueItem: DownloadQueueItem): Promise<void> {
     });
     await prisma.history.create({
       data: {
-        musicVideoId,
+        musicVideoId, recordingId: queueItem.recordingId,
         eventType: 'downloadFailed',
-        data: JSON.stringify({ error: (err as Error).message, downloadedPath, timings }),
+        data: JSON.stringify({ queueId: queueItem.id, error: (err as Error).message, downloadedPath, timings }),
       },
     });
     throw err;
@@ -235,7 +238,7 @@ async function submitIndexerDownload(queueItem: DownloadQueueItem): Promise<void
     });
     await prisma.history.create({
       data: {
-        musicVideoId,
+        musicVideoId, recordingId: queueItem.recordingId,
         eventType: 'downloadSubmissionUnknown',
         data: JSON.stringify({ error: (err as Error).message, downloadClient: client.name }),
       },
@@ -249,7 +252,7 @@ async function submitIndexerDownload(queueItem: DownloadQueueItem): Promise<void
   });
   await prisma.history.create({
     data: {
-      musicVideoId,
+      musicVideoId, recordingId: queueItem.recordingId,
       eventType: 'grabbed',
       data: JSON.stringify({ quality: queueItem.quality, downloadClient: client.name }),
     },
@@ -258,8 +261,9 @@ async function submitIndexerDownload(queueItem: DownloadQueueItem): Promise<void
 
 registerDownloadRunner(async item => {
   try {
-    const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: item.musicVideoId } });
-    if (video.ignored) throw new Error('Video is ignored; unignore it before downloading.');
+    if (item.musicVideoId === null && item.recordingId) await assertRecordingEligible(item.recordingId);
+    else { const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: item.musicVideoId! } });
+      if (video.ignored) throw new Error('Video is ignored; unignore it before downloading.'); }
     if (item.sourceType === 'indexer') {
       await submitIndexerDownload(item);
       waiting.get(item.id)?.resolve(undefined);
@@ -269,9 +273,10 @@ registerDownloadRunner(async item => {
     const current = await prisma.downloadQueueItem.findUnique({ where: { id: item.id } });
     if (current && !['failed', 'submissionUnknown'].includes(current.status)) {
       await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'failed', error: (err as Error).message } });
-      await prisma.history.create({ data: { musicVideoId: item.musicVideoId, eventType: 'downloadFailed',
+      await prisma.history.create({ data: { musicVideoId: item.musicVideoId, recordingId: item.recordingId, eventType: 'downloadFailed',
         data: JSON.stringify({ error: (err as Error).message }) } });
     }
+    await noteRecordingFailure(item, err).catch(error => logActivity('warn', 'live-recovery', error));
     waiting.get(item.id)?.reject(err);
     waiting.delete(item.id);
     throw err;
@@ -286,24 +291,25 @@ registerProcessingRunner(async item => {
   let importStarted: number | undefined;
   try {
     if (!item.downloadedPath) throw new Error('Downloaded file path is missing; retained for recovery.');
-    const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: item.musicVideoId } });
-    if (video.ignored) throw new Error('Video is ignored; unignore it before importing.');
-    const validation = await validationOptions(item.validationCategory);
-    await assertIsRealMusicVideo(item.downloadedPath, validation);
-    await logActivity('info', 'video-validation', JSON.stringify({ queueId: item.id, musicVideoId: item.musicVideoId, ...validation }));
+    if (item.musicVideoId !== null) {
+      const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id: item.musicVideoId! } });
+      if (video.ignored) throw new Error('Video is ignored; unignore it before importing.');
+      const validation = await validationOptions(item.validationCategory);
+      await assertIsRealMusicVideo(item.downloadedPath, validation);
+    }
     timings.validationMs = Date.now() - start;
     await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { phase: 'importing', stageTimings: JSON.stringify(timings) } });
     const importing = Date.now();
     importStarted = importing;
-    const result = await importDownloadedFile(item.musicVideoId, item.downloadedPath, item.quality ?? (item.sourceType === 'indexer' ? 'SD' : 'YouTube'), item.id);
+    const result = item.musicVideoId === null ? await importRecordingDownload(item) : await importDownloadedFile(item.musicVideoId!, item.downloadedPath, item.quality ?? (item.sourceType === 'indexer' ? 'SD' : 'YouTube'), item.id);
     imported = result;
     timings.importMs = Date.now() - importing;
     timings.totalMs = Date.now() - item.addedAt.getTime();
     // Diagnostics must never convert a committed import into a failed download.
     try {
-      const event = await prisma.history.findFirst({ where: { musicVideoId: item.musicVideoId, eventType: 'downloadFolderImported', date: { gte: item.addedAt } }, orderBy: [{ date: 'desc' }, { id: 'desc' }] });
+      const event = await prisma.history.findFirst({ where: { musicVideoId: item.musicVideoId, recordingId: item.recordingId, eventType: 'downloadFolderImported', date: { gte: item.addedAt } }, orderBy: [{ date: 'desc' }, { id: 'desc' }] });
       if (event) await prisma.history.update({ where: { id: event.id }, data: { data: JSON.stringify({ ...JSON.parse(event.data ?? '{}'), timings }) } });
-      await logActivity('info', 'download-timings', JSON.stringify({ queueId: item.id, musicVideoId: item.musicVideoId, timings }));
+      await logActivity('info', 'download-timings', JSON.stringify({ queueId: item.id, musicVideoId: item.musicVideoId, recordingId: item.recordingId, timings }));
     } catch (error) { await logActivity('warn', 'download-timings', error).catch(() => {}); }
     if (item.sourceType !== 'indexer') {
       await fs.unlink(item.downloadedPath).catch(() => {});
@@ -322,7 +328,8 @@ registerProcessingRunner(async item => {
     else timings.importMs = Date.now() - importStarted;
     timings.totalMs = Date.now() - item.addedAt.getTime();
     await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'failed', error: (error as Error).message, stageTimings: JSON.stringify(timings) } });
-    await prisma.history.create({ data: { musicVideoId: item.musicVideoId, eventType: 'downloadFailed', data: JSON.stringify({ error: (error as Error).message, downloadedPath: item.downloadedPath, timings }) } });
+    await prisma.history.create({ data: { musicVideoId: item.musicVideoId, recordingId: item.recordingId, eventType: 'downloadFailed', data: JSON.stringify({ queueId: item.id, error: (error as Error).message, downloadedPath: item.downloadedPath, timings }) } });
+    await noteRecordingFailure(item, error).catch(diagnostic => logActivity('warn', 'live-recovery', diagnostic));
     waiting.get(item.id)?.reject(error);
     throw error;
   } finally { waiting.delete(item.id); }
@@ -336,17 +343,18 @@ export async function resumeDownloadQueue(): Promise<void> {
     if (item.status === 'importing') {
       // The import transaction records its queue ID. A crash after commit must
       // not redownload a moved source or import the same bundle a second time.
-      const imported = await prisma.history.findFirst({ where: { musicVideoId: item.musicVideoId,
+      const imported = await prisma.history.findFirst({ where: { musicVideoId: item.musicVideoId, recordingId: item.recordingId,
         eventType: 'downloadFolderImported', date: { gte: item.addedAt } }, orderBy: [{ date: 'desc' }, { id: 'desc' }] });
       let committed = false;
       try {
         const data = JSON.parse(imported?.data ?? '{}');
-        committed = Boolean(item.musicVideo.file && data.path === item.musicVideo.file.path
+        committed = Boolean(item.musicVideo?.file && data.path === item.musicVideo.file.path
           && (data.queueId === item.id || item.phase === 'legacy')
           && await fs.stat(item.musicVideo.file.path).then(stat => stat.isFile(), () => false));
       } catch { /* Invalid old diagnostic data is not proof of a committed import. */ }
+      if (item.musicVideoId === null && item.recordingId && dataCommitted(imported?.data, item.id)) committed = true;
       if (committed) { await prisma.downloadQueueItem.delete({ where: { id: item.id } }); continue; }
-      if (item.downloadedPath && await fs.stat(item.downloadedPath).then(stat => stat.isFile(), () => false)) {
+      if (item.downloadedPath && await fs.stat(item.downloadedPath).then(stat => stat.isFile() || Boolean(item.musicVideoId === null && item.recordingId && stat.isDirectory()), () => false)) {
         await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { phase: 'waitingValidation', processingStartedAt: null } });
         continue;
       }
@@ -395,7 +403,7 @@ async function refreshQueueOnce() {
 
       if (status.status === 'completed' && status.contentPath) {
         try {
-          const videoPath = await locateVideoFile(status.contentPath);
+          const videoPath = item.musicVideoId === null && item.recordingId ? status.contentPath : await locateVideoFile(status.contentPath);
           await prisma.downloadQueueItem.update({ where: { id: item.id }, data: {
             status: 'importing', progress: 1, phase: 'waitingValidation', downloadedPath: videoPath, downloadedAt: new Date(),
           } });
@@ -409,7 +417,7 @@ async function refreshQueueOnce() {
       await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { status: 'failed', error: status.error ?? 'Download failed' } });
       await prisma.history.create({
         data: {
-          musicVideoId: item.musicVideoId,
+          musicVideoId: item.musicVideoId, recordingId: item.recordingId,
           eventType: 'downloadFailed',
           data: JSON.stringify({ error: status.error }),
         },
@@ -430,3 +438,5 @@ async function refreshQueueOnce() {
   pending = queueCounts.queued + queueCounts.downloading + queueCounts.importing + queueCounts.submissionUnknown;
   return { completed, failed, pending, staged, queueCounts };
 }
+
+function dataCommitted(value: string | null | undefined, queueId: number): boolean { try { return JSON.parse(value ?? '{}').queueId === queueId; } catch { return false; } }

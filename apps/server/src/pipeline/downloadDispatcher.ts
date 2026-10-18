@@ -21,9 +21,9 @@ async function startProcessing(): Promise<void> {
   try {
     // Recover a committed import whose final queue cleanup failed. Its queue ID
     // is recorded in the same transaction as ownership and completion history.
-    const cleanup = await prisma.downloadQueueItem.findMany({ where: { status: 'importing', phase: { in: ['importing', 'completed'] } }, select: { id: true, musicVideoId: true, addedAt: true } });
+    const cleanup = await prisma.downloadQueueItem.findMany({ where: { status: 'importing', phase: { in: ['importing', 'completed'] } }, select: { id: true, musicVideoId: true, recordingId: true, addedAt: true } });
     for (const item of cleanup) {
-      const event = await prisma.history.findFirst({ where: { musicVideoId: item.musicVideoId, eventType: 'downloadFolderImported', date: { gte: item.addedAt } }, orderBy: [{ date: 'desc' }, { id: 'desc' }] });
+      const event = await prisma.history.findFirst({ where: { musicVideoId: item.musicVideoId, recordingId: item.recordingId, eventType: 'downloadFolderImported', date: { gte: item.addedAt } }, orderBy: [{ date: 'desc' }, { id: 'desc' }] });
       try {
         if (JSON.parse(event?.data ?? '{}').queueId === item.id) await prisma.downloadQueueItem.deleteMany({ where: { id: item.id, status: 'importing' } });
       } catch (error) { await logActivity('warn', 'download-cleanup', error).catch(() => {}); }

@@ -219,6 +219,22 @@ export interface YoutubeVideoMetadata {
   isLivePerformance?: boolean;
 }
 
+// Source observations only. Upload/release dates and source chapters are never performance/coverage proof.
+export async function getDirectVideoMetadata(url: string) {
+  const { stdout, stderr, code } = await runYtDlp(['--dump-single-json', '--no-playlist', '--skip-download', url]);
+  if (code !== 0) throw new Error(`yt-dlp metadata fetch failed: ${ytDlpFailure(stderr, code)}`);
+  const data = JSON.parse(stdout);
+  return { title: String(data.title ?? ''), channel: String(data.channel ?? data.uploader ?? ''), description: String(data.description ?? '').slice(0, 30000),
+    creditedArtists: Array.isArray(data.artists) ? data.artists.filter((value: unknown): value is string => typeof value === 'string').slice(0, 100) : [],
+    uploadDate: typeof data.upload_date === 'string' ? data.upload_date : null, releaseDate: typeof data.release_date === 'string' ? data.release_date : null,
+    durationSeconds: Number.isFinite(data.duration) && data.duration > 0 ? Number(data.duration) : null,
+    chapters: (Array.isArray(data.chapters) ? data.chapters : []).slice(0, 500).filter((chapter: any) => Number.isFinite(chapter.start_time) && Number.isFinite(chapter.end_time) && chapter.end_time > chapter.start_time)
+      .map((chapter: any) => ({ title: String(chapter.title ?? ''), startSeconds: Number(chapter.start_time), endSeconds: Number(chapter.end_time) })),
+    sourceHasVideo: (data.formats ?? []).some((format: any) => format.vcodec && format.vcodec !== 'none'),
+    currentlyLive: data.is_live === true,
+  };
+}
+
 // A single-video metadata fetch — no download, no --flat-playlist (which
 // omits description/verification entirely). Deliberately only called once,
 // on an already-chosen top candidate, not once per search result: cheap

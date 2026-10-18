@@ -21,7 +21,7 @@ export default function DownloadProgress() {
     {loading && <small role="status">Loading download updates…</small>}
     {active.map(item => {
       const progress = Math.max(0, Math.min(1, item.progress));
-      const label = `${item.musicVideo.artist.name} — ${item.musicVideo.title}`;
+      const label = `${(item.musicVideo?.artist.name ?? 'Live recording')} — ${(item.musicVideo?.title ?? item.recording?.title ?? 'Recording')}`;
       return <div key={item.id} className="download-progress-item">
         <span title={label}>{label}</span>
         <progress aria-label={label} aria-valuetext={downloadStage(item)} max={1} value={item.status === 'downloading' ? progress : undefined} />

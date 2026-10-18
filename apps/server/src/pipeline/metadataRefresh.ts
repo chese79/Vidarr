@@ -24,7 +24,7 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
   const videos = await getArtistVideos(settings?.imvdbApiKey ?? null, artist.imvdbArtistId, artist.name);
   const existing = await prisma.musicVideo.findMany({
     where: { artistId },
-    select: { id: true, imvdbVideoId: true, title: true, normalizedTitle: true },
+    select: { id: true, imvdbVideoId: true, title: true, normalizedTitle: true, catalogKind: true },
   });
   const existingByImvdbId = new Map(existing.filter((v) => v.imvdbVideoId).map((v) => [v.imvdbVideoId as string, v]));
   const existingByTitle = new Map(existing.map((v) => [v.normalizedTitle, v]));
@@ -72,7 +72,7 @@ export async function refreshArtistMetadata(artistId: number): Promise<MetadataR
         durationSeconds: video.durationSeconds,
         youtubeVideoId: video.youtubeVideoId,
         catalogStatus: 'active',
-        catalogKind: 'official',
+        catalogKind: matched?.catalogKind === 'liveClassified' ? 'liveClassified' : 'official',
         lastSeenAt: new Date(),
         removedAt: null,
       };

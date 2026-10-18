@@ -51,6 +51,7 @@ export async function rootFolderRoutes(app: FastifyInstance) {
 
   app.delete('/api/v1/rootfolder/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
+    if (await prisma.recordingPart.count({ where: { rootFolderId: id } }) || await prisma.downloadQueueItem.count({ where: { rootFolderId: id } })) return reply.code(409).send({ error: 'This folder is referenced by live recording files, retained history or queued imports; reassign those references before removing it.' });
     await prisma.rootFolder.delete({ where: { id } });
     reply.code(204);
   });

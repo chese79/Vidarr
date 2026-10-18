@@ -5,6 +5,24 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — Unified live workflows
+
+- Complete the Live workflow in the unified application: bounded setlist.fm history and reference
+  review, YouTube/indexer discovery, scope/request-budget previews, monitoring, ordered recordings,
+  existing local/server registration, validation/import and exact playback-library confirmation.
+- Share recording facts with the music-video catalog using an atomic Prisma/SQLite compatibility
+  migration. Preserve legacy video/file/count/queue/playlist IDs, source trust and staging paths.
+- Add verified song coverage, quality priorities, pins, guest credits and concert/festival occasions;
+  keep independent events usable and preserve local identities through external corrections.
+- Add durable concert/song qualified viewing, multipart resume and Jellyfin playback start commands;
+  retain unfinished progress indefinitely and report unsupported Plex offsets/playlist segments.
+- Extend static playlists with ordered live parts and explicit whole-file song fallbacks, keeping
+  review, Push and confirmed publication separate.
+- Add reversible classification review for flagged music videos, safe scoped delayed deletion,
+  persistent exclusions/recovery and optional confirmed redundant-version cleanup suggestions.
+- Document the full music-video workflow UI review and prioritized recommendations separately.
+
+
 ### Added — Unified live catalog first increment
 
 - Deploy unified music videos and the first Live catalog locally as `vidarr:a2d53ea` (PR #26),

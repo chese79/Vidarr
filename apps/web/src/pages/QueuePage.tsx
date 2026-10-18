@@ -96,8 +96,8 @@ export default function QueuePage() {
           <tbody>
             {active.map((item) => (
               <tr key={item.id}>
-                <td>{item.musicVideo.artist.name}</td>
-                <td>{item.musicVideo.title}</td>
+                <td>{(item.musicVideo?.artist.name ?? 'Live recording')}</td>
+                <td>{(item.musicVideo?.title ?? item.recording?.title ?? 'Recording')}</td>
                 <td>{item.sourceType}<br /><small>{item.validationCategory === 'canonical' ? 'Canonical source' : 'Supplementary / additional'}</small></td>
                 <td>{item.quality ?? '—'}</td>
                 <td>{downloadStage(item)}</td>
@@ -107,7 +107,7 @@ export default function QueuePage() {
                 <td>{item.error ?? '—'}</td>
                 <td>{item.status === 'submissionUnknown' ? <ReconcileSubmission id={item.id} onDone={message => {
                   setSummary(message); queryClient.invalidateQueries({ queryKey: ['queue'] }); queryClient.invalidateQueries({ queryKey: ['queueResults'] });
-                }} /> : <Link to={`/artist/${item.musicVideo.artist.id}`}>Video details</Link>}</td>
+                }} /> : <Link to={!item.musicVideoId && item.recordingId ? `/live/recording/${item.recordingId}` : `/artist/${item.musicVideo?.artist.id}`}>Video details</Link>}</td>
                 <td>{item.status === 'queued' && <div className="form-row">
                   <button disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'top')}>Move to top</button>
                   <button disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'up')}>Move up</button>

@@ -13,6 +13,7 @@ export async function musicVideoRoutes(app: FastifyInstance) {
     const query = req.query as { artistId?: string; hasFile?: string; playable?: string; playableConnectorId?: string };
     return prisma.musicVideo.findMany({
       where: {
+        catalogKind: { not: 'liveClassified' },
         artistId: query.artistId ? Number(query.artistId) : undefined,
         hasFile: query.hasFile !== undefined ? query.hasFile === 'true' : undefined,
         OR: query.playable === 'true' ? [
@@ -57,7 +58,8 @@ export async function musicVideoRoutes(app: FastifyInstance) {
   app.put('/api/v1/musicvideo/:id', async (req) => {
     const id = Number((req.params as { id: string }).id);
     const body = UpdateMusicVideoSchema.parse(req.body);
-    const current = await prisma.musicVideo.findUnique({ where: { id }, select: { deletionState: true } });
+    const current = await prisma.musicVideo.findUnique({ where: { id }, select: { deletionState: true, catalogKind: true } });
+    if (current?.catalogKind === 'liveClassified') throw new VideoDeletionError('This entry is managed in Live; use its review workflow to return it to Music Videos.');
     if (current?.deletionState) throw new VideoDeletionError('Deletion is pending; retry Delete before editing this video.');
     const data: Record<string, unknown> = { ...body };
     if (body.title) data.normalizedTitle = normalizeTitle(body.title);

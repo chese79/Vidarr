@@ -74,6 +74,8 @@ export interface LibraryItemMatch {
 }
 
 export interface LibraryConnectorProvider {
+  listPlaybackClients?(config: LibraryConnector): Promise<Array<{ id: string; name: string; userId: string }>>;
+  startVideoPlayback?(config: LibraryConnector, request: { sessionId: string; userId: string; externalIds: string[]; positionSeconds: number }): Promise<void>;
   verifyVideoDeletion?(config: LibraryConnector, item: { externalId: string; expectedPath: string }): Promise<void>;
   isVideoInUse?(config: LibraryConnector, externalId: string): Promise<boolean>;
   deleteVideo?(config: LibraryConnector, item: { externalId: string; expectedPath: string }): Promise<void>;

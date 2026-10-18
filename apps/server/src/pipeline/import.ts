@@ -27,6 +27,7 @@ export async function importDownloadedFile(
     where: { id: musicVideoId },
     include: { artist: { include: { rootFolder: { include: { targetConnector: true } } } } },
   });
+  if (musicVideo.catalogKind === 'liveClassified') throw new Error('This video is managed as a Live recording; use that import workflow.');
   const settings = await prisma.settings.findUniqueOrThrow({ where: { id: 1 } });
   const existingFile = await prisma.musicVideoFile.findUnique({ where: { musicVideoId } });
 

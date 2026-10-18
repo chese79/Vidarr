@@ -60,7 +60,8 @@ export async function updatePlaylist(
     }
 
     if (!isSmart && next !== null && playlist.items.length) {
-      const ids = playlist.items.map((item) => item.musicVideoId);
+      const ids = playlist.items.map((item) => item.musicVideoId).filter((id): id is number => id !== null);
+      if (ids.length !== playlist.items.length) throw new PlaylistEditError('Remove live items before changing the playback library', 409);
       const availableHere = await prisma.libraryVideo.findMany({
         where: { musicVideoId: { in: ids }, connectorId: next, available: true, matchConfidence: null, connector: { enabled: true } },
         select: { musicVideoId: true },
@@ -126,4 +127,15 @@ export async function reorderPlaylistItems(id: number, musicVideoIds: number[]):
     where: { playlistId_musicVideoId: { playlistId: id, musicVideoId } },
     data: { sortOrder },
   })));
+}
+
+// Stable item IDs support mixed targets without changing the legacy music-video endpoint.
+export async function reorderPlaylistItemIds(id: number, itemIds: number[]): Promise<void> {
+  await prisma.$transaction(async tx => {
+    const playlist = await tx.playlist.findUniqueOrThrow({ where: { id }, include: { items: { select: { id: true } } } });
+    if (playlist.kind !== 'static') throw new PlaylistEditError('Smart playlist order comes from its rules', 409);
+    const current = new Set(playlist.items.map(item => item.id));
+    if (new Set(itemIds).size !== itemIds.length || current.size !== itemIds.length || itemIds.some(item => !current.has(item))) throw new PlaylistEditError('Playlist changed; reload before reordering', 409);
+    for (const [sortOrder, itemId] of itemIds.entries()) await tx.playlistItem.update({ where: { id: itemId }, data: { sortOrder } });
+  });
 }

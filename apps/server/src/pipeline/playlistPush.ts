@@ -6,7 +6,7 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
     where: { id: playlistId },
     // `id` as a tie-break keeps the pushed order deterministic even if two
     // items ever share a sortOrder (legacy rows created before add used max+1).
-    include: { items: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], include: { musicVideo: { include: { artist: true, libraryVideos: { orderBy: { id: 'asc' } } } } } } },
+    include: { items: { orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], include: { recordingPart: { include: { serverCopies: true, coverage: true, recording: true } }, song: true, musicVideo: { include: { artist: true, libraryVideos: { orderBy: { id: 'asc' } } } } } } },
   });
   if (!playlist) throw new Error('Playlist not found');
   if (playlist.targetConnectorId && playlist.targetConnectorId !== connectorId) {
@@ -21,8 +21,13 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
   const existingSync = await prisma.playlistSync.findUnique({
     where: { playlistId_connectorId: { playlistId, connectorId } },
   });
-  const playable = playlist.items.filter((item) => (!playlist.targetConnectorId && item.musicVideo.hasFile)
-    || item.musicVideo.libraryVideos.some((video) => video.connectorId === connectorId && video.available && video.matchConfidence === null));
+  const playable = playlist.items.filter(item => item.musicVideo ? ((!playlist.targetConnectorId && item.musicVideo.hasFile)
+    || item.musicVideo.libraryVideos.some(video => video.connectorId === connectorId && video.available && video.matchConfidence === null))
+    : Boolean(item.recordingPart && item.recordingPart.recording.deletionState === null && item.recordingPart.recording.reviewStatus === 'accepted'
+      && item.recordingPart.recording.identityVerified && item.recordingPart.recording.videoVerified
+      && item.recordingPart.serverCopies.some(copy => copy.connectorId === connectorId && copy.libraryId === connector.videoLibraryId && copy.available)
+      && (!item.songId || item.fullRecordingFallback)));
+  if (playlist.items.some(item => item.songId && !item.fullRecordingFallback)) throw new Error('This server cannot publish bounded song segments. Explicitly choose the whole recording or an existing clip before Push.');
   try {
     if (existingSync?.remotePlaylistId && playable.length !== playlist.items.length) {
       throw new Error(`Keeping the existing playlist: ${playlist.items.length - playable.length} item(s) are not confirmed available in this playback library`);
@@ -32,14 +37,11 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
     }
     const result = await provider.pushPlaylist(connector, {
       name: playlist.name,
-      items: playable.map((item) => ({
-        artistName: item.musicVideo.artist.name,
-        title: item.musicVideo.title,
-        // The id the library sync already settled on for this exact video, so
-        // the provider doesn't have to guess it again from the title.
-        externalId: item.musicVideo.libraryVideos.find((video) => video.connectorId === connectorId
-          && video.available && video.matchConfidence === null)?.externalId,
-      })),
+      items: playable.map(item => item.musicVideo ? ({
+        artistName: item.musicVideo.artist.name, title: item.musicVideo.title,
+        externalId: item.musicVideo.libraryVideos.find(video => video.connectorId === connectorId && video.available && video.matchConfidence === null)?.externalId,
+      }) : ({ artistName: 'Live', title: item.recordingPart!.recording.title,
+        externalId: item.recordingPart!.serverCopies.find(copy => copy.connectorId === connectorId && copy.libraryId === connector.videoLibraryId && copy.available)!.externalId })),
       existingRemoteId: existingSync?.remotePlaylistId ?? null,
     });
     await prisma.playlistSync.upsert({

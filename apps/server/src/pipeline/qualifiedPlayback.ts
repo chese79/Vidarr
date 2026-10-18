@@ -53,7 +53,7 @@ async function poll(now: Date): Promise<string> {
     if (source.failed) await prisma.qualifiedPlayback.updateMany({ where: { sourceKey, active: true }, data: { playing: false } });
     const seen: number[] = [];
     for (const [sessionId, { connectorIds, session }] of source.sessions) {
-      const matches = await prisma.libraryVideo.findMany({ where: { connectorId: { in: connectorIds }, externalId: session.externalId, available: true, matchConfidence: null }, include: { musicVideo: true, connector: { select: { videoLibraryId: true } } }, orderBy: { id: 'asc' } });
+      const matches = await prisma.libraryVideo.findMany({ where: { connectorId: { in: connectorIds }, externalId: session.externalId, available: true, matchConfidence: null, musicVideo: { catalogKind: { not: 'liveClassified' } } }, include: { musicVideo: true, connector: { select: { videoLibraryId: true } } }, orderBy: { id: 'asc' } });
       if (new Set(matches.filter(item => item.musicVideoId != null).map(item => item.musicVideoId)).size > 1) continue;
       const libraryVideo = matches.find(item => item.musicVideo != null);
       if (!libraryVideo?.available || libraryVideo.matchConfidence != null || !libraryVideo.musicVideo || libraryVideo.musicVideo.deletionState) continue;

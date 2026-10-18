@@ -1,3 +1,4 @@
+import { recoverRecordingDeletions } from './live/deletion.js';
 import './loadEnv.js';
 import { buildApp } from './app.js';
 import { ensureApiKey } from './pipeline/auth.js';
@@ -19,6 +20,8 @@ await prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL');
 await prisma.$queryRawUnsafe('PRAGMA busy_timeout=15000');
 await resumeDownloadQueue();
 await recoverInterruptedVideoDeletions();
+await recoverRecordingDeletions();
+await prisma.livePlaybackObservation.updateMany({ data: { playing: false } });
 await resetQualifiedPlaybackContinuity();
 
 const port = Number(process.env.PORT ?? 3434);

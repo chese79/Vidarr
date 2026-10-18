@@ -1,3 +1,9 @@
+import { runLiveMetadataMonitoring } from '../live/metadataMonitoring.js';
+import { expireLiveDiscovery } from '../live/retention.js';
+import { runLiveMonitoring } from '../live/discovery.js';
+import { reconcileRecordingDelivery, auditLocalRecordingAvailability } from '../live/delivery.js';
+import { pollLivePlayback } from '../live/playback.js';
+import { processRecordingDeletions } from '../live/deletion.js';
 import { prisma, logActivity } from '../db/client.js';
 import { channelVideosUrl } from '../providers/youtube/ytdlp.js';
 import { refreshQueue } from '../pipeline/grab.js';
@@ -56,6 +62,13 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  { name: 'Live Discovery Retention', defaultIntervalMs: 3600000, run: expireLiveDiscovery },
+  { name: 'Live Event Metadata', defaultIntervalMs: 300000, run: runLiveMetadataMonitoring },
+  { name: 'Live Discovery', defaultIntervalMs: 60000, run: runLiveMonitoring },
+  { name: 'Live Local Availability', defaultIntervalMs: 300000, run: auditLocalRecordingAvailability },
+  { name: 'Live Delivery', defaultIntervalMs: 60000, run: reconcileRecordingDelivery },
+  { name: 'Live Qualified Playback', defaultIntervalMs: 15000, run: pollLivePlayback },
+  { name: 'Live Deletions', defaultIntervalMs: 60000, run: processRecordingDeletions },
   { name: 'Qualified Playback Tracking', defaultIntervalMs: 15_000, run: () => pollQualifiedPlayback() },
   { name: 'Pending Video Deletions', defaultIntervalMs: 60_000, run: async () => { await processPendingVideoDeletions(); return 'Checked due video deletions'; } },
   { name: 'Last.fm Playback Scrobbling', defaultIntervalMs: 15_000, run: () => pollLastFmPlayback() },

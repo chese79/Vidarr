@@ -49,6 +49,8 @@ model Artist {
   reconciledAt     DateTime?
   addedAt          DateTime     @default(now())
 
+  liveCredits LiveCredit[]
+  liveRules LiveMonitoringRule[]
   livePerformances LivePerformance[]
   musicVideos   MusicVideo[]
   youtubeSources YoutubeSource[]
@@ -141,6 +143,8 @@ model ArtistSource {
 }
 
 model AcquisitionSource {
+  recordingId Int?
+  recording Recording? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
   id             Int        @id @default(autoincrement())
   musicVideoId   Int
   musicVideo     MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
@@ -171,6 +175,7 @@ model MusicVideoFile {
   dateAdded    DateTime   @default(now())
   playCount        Int?      // synced from a Plex/Jellyfin library connector's watch stats for the matched item — see pipeline/playCountSync.ts
   playCountSyncedAt DateTime?
+  recordingPart RecordingPart?
 }
 
 model Quality {
@@ -205,6 +210,8 @@ model QualityProfileItem {
 }
 
 model RootFolder {
+  recordingQueueItems DownloadQueueItem[]
+  recordingParts RecordingPart[]
   id             Int      @id @default(autoincrement())
   path           String   @unique
   freeSpaceBytes BigInt?
@@ -256,8 +263,17 @@ model YoutubeSource {
 
 model DownloadQueueItem {
   id               Int             @id @default(autoincrement())
-  musicVideoId     Int
-  musicVideo       MusicVideo      @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  musicVideoId     Int?
+  musicVideo       MusicVideo?     @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  recordingId Int?
+  recording Recording? @relation(fields: [recordingId], references: [id], onDelete: Restrict)
+  recordingSourceId Int?
+  recordingSource RecordingSource? @relation(fields: [recordingSourceId], references: [id], onDelete: SetNull)
+  selectedFiles String?
+  validationPolicy String?
+  rootFolderId Int?
+  rootFolder RootFolder? @relation(fields: [rootFolderId], references: [id], onDelete: Restrict)
+  partPosition Int @default(1)
   sourceType       String // "indexer" | "youtube"
   sourceRef        String
   downloadClientId Int?
@@ -281,8 +297,10 @@ model DownloadQueueItem {
 
 model History {
   id           Int        @id @default(autoincrement())
-  musicVideoId Int
-  musicVideo   MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  musicVideoId Int?
+  musicVideo   MusicVideo? @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  recordingId Int?
+  recording Recording? @relation(fields: [recordingId], references: [id], onDelete: Restrict)
   eventType    String // "grabbed" | "downloadFolderImported" | "downloadFailed" | "deleted" | "renamed"
   date         DateTime   @default(now())
   data         String? // JSON blob
@@ -349,6 +367,7 @@ model DeletedVideoRecord {
 }
 
 model LibraryConnector {
+  recordingCopies RecordingServerCopy[]
   id             Int       @id @default(autoincrement())
   name           String
   type           String // "plex" | "jellyfin" | "subsonic"
@@ -403,6 +422,8 @@ model LibraryRecording {
 // deliberately separate from MusicVideoFile: availability in a media server
 // does not prove Vidarr owns or can access the underlying local file.
 model LibraryVideo {
+  recordingId Int?
+  recording Recording? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
   id                   Int              @id @default(autoincrement())
   connectorId          Int
   connector            LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
@@ -457,11 +478,17 @@ model PlaylistItem {
   id           Int        @id @default(autoincrement())
   playlistId   Int
   playlist     Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  musicVideoId Int
-  musicVideo   MusicVideo @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
+  musicVideoId Int?
+  musicVideo   MusicVideo? @relation(fields: [musicVideoId], references: [id], onDelete: Cascade)
   sortOrder    Int
 
   @@unique([playlistId, musicVideoId])
+  recordingPartId Int?
+  recordingPart RecordingPart? @relation(fields: [recordingPartId], references: [id], onDelete: Restrict)
+  songId Int?
+  song LiveSongPerformance? @relation(fields: [songId], references: [id], onDelete: Restrict)
+  fullRecordingFallback Boolean @default(false)
+
 }
 
 // Per-connector push state for a playlist. Push is a full replace (delete
@@ -647,6 +674,12 @@ model RecommendationSourceHit {
 // Live catalog identity is separate from captures and physical ownership.
 // No title/date uniqueness: unknown details must never merge distinct shows.
 model LivePerformance {
+  removedAt DateTime?
+  occasionId Int?
+  occasion LiveOccasion? @relation(fields: [occasionId], references: [id], onDelete: Restrict)
+  localTime String?
+  timeZone String?
+  privateAddress String?
   id Int @id @default(autoincrement())
   artistId Int
   artist Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
@@ -663,9 +696,30 @@ model LivePerformance {
   updatedAt DateTime @updatedAt
   songs LiveSongPerformance[]
   recordings RecordingPerformance[]
+  setlistFmId String? @unique
+  venueExternalId String?
+  country String?
+  tour String?
+  sourceVersion String?
+  sourcePayload String?
+  correctionPayload String?
+  userEdited Boolean @default(true)
+  referenceComplete Boolean @default(false)
+  monitored Boolean @default(false)
+  ignored Boolean @default(false)
+  lastEvidenceAt DateTime @default(now())
+  lastSearchAt DateTime?
+  nextSearchAt DateTime?
+  emptySearches Int @default(0)
+  qualifiedPlayCount Int @default(0)
+  credits LiveCredit[]
+  views LiveViewing[]
+  rules LiveMonitoringRule[]
 
   @@index([artistId, performanceDate, id])
   @@index([setting, style, id])
+  @@index([monitored, ignored, lastSearchAt, id])
+  @@index([identityStatus, lastEvidenceAt])
 }
 
 model LiveSongPerformance {
@@ -676,6 +730,14 @@ model LiveSongPerformance {
   title String
   section String?
   kind String @default("unknown") // full | snippet | medleyComponent | unknown; not coverage proof
+  musicbrainzWorkId String?
+  style String @default("unknown")
+  durationSeconds Float?
+  qualifiedPlayCount Int @default(0)
+  coverage RecordingCoverage[]
+  views LiveSongViewing[]
+  playlistItems PlaylistItem[]
+  credits LiveCredit[]
 
   @@unique([performanceId, position])
 }
@@ -683,15 +745,38 @@ model LiveSongPerformance {
 // Shared capture/edit identity, suitable for either catalog. This first increment
 // records candidates only; a URL/coverage claim never creates file ownership.
 model Recording {
+  catalogType String @default("live")
+  legacySources AcquisitionSource[]
+  legacyServerObservations LibraryVideo[]
   id Int @id @default(autoincrement())
   musicVideoId Int?
-  musicVideo MusicVideo? @relation(fields: [musicVideoId], references: [id], onDelete: Restrict)
+  musicVideo MusicVideo? @relation(fields: [musicVideoId], references: [id], onDelete: SetNull)
   title String
   claimedCoverage String @default("unknown")
   origin String @default("unknown") // professional | audience | unknown
   evidenceUrl String?
   notes String @default("")
   reviewStatus String @default("pending")
+  identityVerified Boolean @default(false)
+  videoVerified Boolean @default(false)
+  pinned Boolean @default(false)
+  preferred Boolean @default(false)
+  verifiedCoverage Int?
+  audioScore Float?
+  visualScore Float?
+  resolution Int?
+  qualityVerified Boolean @default(false)
+  uninterruptedVerified Boolean @default(false)
+  evidence String @default("{}")
+  deletionState String?
+  deletionError String?
+  deletionNextAttemptAt DateTime?
+  deletionTargets String?
+  deletionAttempts Int @default(0)
+  parts RecordingPart[]
+  sources RecordingSource[]
+  queueItems DownloadQueueItem[]
+  history History[]
   createdAt DateTime @default(now())
   performances RecordingPerformance[]
 
@@ -700,6 +785,8 @@ model Recording {
 }
 
 model RecordingPerformance {
+  preferred Boolean @default(false)
+  identityVerified Boolean @default(false)
   recordingId Int
   recording Recording @relation(fields: [recordingId], references: [id], onDelete: Restrict)
   performanceId Int
@@ -707,4 +794,188 @@ model RecordingPerformance {
 
   @@id([recordingId, performanceId])
   @@index([performanceId])
+}
+
+
+model LiveConfiguration {
+  id Int @id @default(1)
+  setlistApiKey String?
+  policy String @default("{}")
+  setlistPaused Boolean @default(false)
+  providerRetryAt DateTime?
+}
+
+model LiveCredit {
+  id Int @id @default(autoincrement())
+  artistId Int
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  performanceId Int
+  performance LivePerformance @relation(fields: [performanceId], references: [id], onDelete: Restrict)
+  songId Int?
+  song LiveSongPerformance? @relation(fields: [songId], references: [id], onDelete: Restrict)
+  role String
+  @@index([performanceId, songId])
+}
+
+model RecordingSource {
+  queueItems DownloadQueueItem[]
+  id Int @id @default(autoincrement())
+  recordingId Int
+  recording Recording @relation(fields: [recordingId], references: [id], onDelete: Restrict)
+  provider String
+  externalId String?
+  url String
+  payload String @default("{}")
+  accepted Boolean @default(false)
+  available Boolean @default(true)
+  updatedAt DateTime @updatedAt
+  @@unique([provider, externalId])
+  @@unique([recordingId, url])
+}
+
+model RecordingPart {
+  id Int @id @default(autoincrement())
+  recordingId Int
+  recording Recording @relation(fields: [recordingId], references: [id], onDelete: Restrict)
+  position Int
+  rootFolderId Int?
+  rootFolder RootFolder? @relation(fields: [rootFolderId], references: [id], onDelete: Restrict)
+  path String? @unique
+  sizeBytes BigInt?
+  sha256 String?
+  storageIdentity String?
+  durationSeconds Float?
+  available Boolean @default(true)
+  importedQueueId Int?
+  legacyMusicVideoFileId Int? @unique
+  legacyMusicVideoFile MusicVideoFile? @relation(fields: [legacyMusicVideoFileId], references: [id], onDelete: SetNull)
+  registeredAt DateTime @default(now())
+  coverage RecordingCoverage[]
+  serverCopies RecordingServerCopy[]
+  playlistItems PlaylistItem[]
+  @@unique([recordingId, position])
+  @@unique([importedQueueId, position])
+  @@index([sha256])
+  @@index([rootFolderId, available, id])
+}
+
+model RecordingCoverage {
+  id Int @id @default(autoincrement())
+  partId Int
+  part RecordingPart @relation(fields: [partId], references: [id], onDelete: Restrict)
+  songId Int
+  song LiveSongPerformance @relation(fields: [songId], references: [id], onDelete: Restrict)
+  startSeconds Float?
+  endSeconds Float?
+  verified Boolean @default(false)
+  fullSong Boolean @default(false)
+  @@unique([partId, songId])
+}
+
+model RecordingServerCopy {
+  id Int @id @default(autoincrement())
+  partId Int
+  part RecordingPart @relation(fields: [partId], references: [id], onDelete: Restrict)
+  connectorId Int
+  connector LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Restrict)
+  libraryId String
+  externalId String
+  expectedPath String
+  available Boolean @default(true)
+  playCount Int?
+  confirmedAt DateTime @default(now())
+  @@unique([connectorId, libraryId, externalId])
+  @@unique([partId, connectorId])
+}
+
+model LiveMonitoringRule {
+  id Int @id @default(autoincrement())
+  artistId Int
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  performanceId Int?
+  performance LivePerformance? @relation(fields: [performanceId], references: [id], onDelete: Restrict)
+  tour String?
+  filters String @default("{}")
+  dailyBudget Int @default(50)
+  state String @default("active")
+  cursor Int @default(1)
+  lastRunAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([state, lastRunAt])
+  @@index([artistId, state, id])
+}
+
+model LiveRequestBudget {
+  key String @id
+  used Int @default(0)
+}
+
+model LiveSearchJournal {
+  key String @id
+  provider String
+  lastSearchAt DateTime?
+  retryAt DateTime?
+  failures Int @default(0)
+  emptyCount Int @default(0)
+  outcome String?
+  payload String?
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model LiveViewing {
+  id Int @id @default(autoincrement())
+  serverKey String
+  userId String
+  performanceId Int
+  performance LivePerformance @relation(fields: [performanceId], references: [id], onDelete: Restrict)
+  watchedSeconds Float @default(0)
+  durationSeconds Float?
+  lastCreditAt DateTime?
+  qualifiedAt DateTime?
+  completedAt DateTime?
+  active Boolean @default(true)
+  positionSeconds Float @default(0)
+  partId Int?
+  updatedAt DateTime @updatedAt
+  observations LivePlaybackObservation[]
+  songs LiveSongViewing[]
+  @@index([serverKey, userId, performanceId, active])
+}
+
+model LivePlaybackObservation {
+  key String @id
+  viewingId Int
+  viewing LiveViewing @relation(fields: [viewingId], references: [id], onDelete: Restrict)
+  positionSeconds Float
+  playing Boolean
+  partId Int
+  lastObservedAt DateTime
+}
+
+model LiveSongViewing {
+  id Int @id @default(autoincrement())
+  viewingId Int
+  viewing LiveViewing @relation(fields: [viewingId], references: [id], onDelete: Restrict)
+  songId Int
+  song LiveSongPerformance @relation(fields: [songId], references: [id], onDelete: Restrict)
+  watchedSeconds Float @default(0)
+  durationSeconds Float?
+  qualifiedAt DateTime?
+  @@unique([viewingId, songId])
+}
+
+model LiveExclusion {
+  id Int @id @default(autoincrement())
+  artistId Int
+  scope String
+  fingerprint String @unique
+  createdAt DateTime @default(now())
+}
+
+model LiveOccasion {
+  id Int @id @default(autoincrement())
+  title String
+  occasionDate String?
+  performances LivePerformance[]
 }

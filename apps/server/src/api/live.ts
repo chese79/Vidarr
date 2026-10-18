@@ -1,3 +1,4 @@
+import { performanceStates } from '../live/status.js';
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -26,13 +27,14 @@ export async function liveRoutes(app: FastifyInstance) {
   app.get('/api/v1/live/performances', async req => {
     const query = querySchema.parse(req.query);
     const where: Prisma.LivePerformanceWhereInput = {
-      artistId: query.artistId, setting: query.setting, style: query.style,
+      removedAt: null, artistId: query.artistId, setting: query.setting, style: query.style,
       ...(query.search ? { OR: [{ title: { contains: query.search } }, { venue: { contains: query.search } },
         { city: { contains: query.search } }, { artist: { name: { contains: query.search } } }] } : {}),
     };
     const [total, rows] = await prisma.$transaction([prisma.livePerformance.count({ where }),
       prisma.livePerformance.findMany({ where, include: summaryInclude, orderBy: { id: 'desc' }, skip: query.offset, take: query.limit })]);
-    return { total, offset: query.offset, limit: query.limit, items: rows.map(row => ({ ...row, recordingState: 'recordingUnknown' })) };
+    const states = await performanceStates(rows.map(row => row.id));
+    return { total, offset: query.offset, limit: query.limit, items: rows.map(row => ({ ...row, recordingState: states.get(row.id) })) };
   });
 
   app.post('/api/v1/live/performances', async (req, reply) => {
@@ -49,8 +51,9 @@ export async function liveRoutes(app: FastifyInstance) {
   app.get('/api/v1/live/performances/:id', async req => {
     const { id } = idParams.parse(req.params);
     const row = await prisma.livePerformance.findUniqueOrThrow({ where: { id }, include: { ...summaryInclude,
+      credits: { include: { artist: { select: artistSelect } } }, occasion: { include: { performances: { select: { id: true, title: true, artistId: true } } } },
       songs: { orderBy: { position: 'asc' } }, recordings: { take: 25, orderBy: { recordingId: 'desc' }, include: { recording: { include: recordingInclude } } } } });
-    return { ...row, recordingState: 'recordingUnknown' };
+    return { ...row, recordingState: (await performanceStates([row.id])).get(row.id) };
   });
 
   app.patch('/api/v1/live/performances/:id', async (req, reply) => {
@@ -58,17 +61,17 @@ export async function liveRoutes(app: FastifyInstance) {
     const { revision, ...data } = UpdateLivePerformance.parse(req.body);
     const row = await prisma.$transaction(async tx => {
       await tx.livePerformance.findUniqueOrThrow({ where: { id }, select: { id: true } });
-      const updated = await tx.livePerformance.updateMany({ where: { id, revision }, data: { ...data, revision: { increment: 1 } } });
+      const updated = await tx.livePerformance.updateMany({ where: { id, revision }, data: { ...data, userEdited: true, revision: { increment: 1 } } });
       if (!updated.count) return null;
       return tx.livePerformance.findUniqueOrThrow({ where: { id }, include: summaryInclude });
     });
     if (!row) return reply.code(409).send({ error: 'This performance changed; reload before saving your corrections' });
-    return { ...row, recordingState: 'recordingUnknown' };
+    return { ...row, recordingState: (await performanceStates([row.id])).get(row.id) };
   });
 
   app.get('/api/v1/live/recordings', async req => {
     const query = querySchema.parse(req.query);
-    const where: Prisma.RecordingWhereInput = { performances: { some: { performance: { artistId: query.artistId, setting: query.setting, style: query.style } } },
+    const where: Prisma.RecordingWhereInput = { catalogType: 'live', reviewStatus: { notIn: ['returnedToMusicVideos', 'deleted', 'identifiedDuplicate'] }, performances: { some: { performance: { removedAt: null, artistId: query.artistId, setting: query.setting, style: query.style } } },
       ...(query.search ? { title: { contains: query.search } } : {}) };
     const [total, items] = await prisma.$transaction([prisma.recording.count({ where }),
       prisma.recording.findMany({ where, include: recordingInclude, orderBy: { id: 'desc' }, skip: query.offset, take: query.limit })]);
@@ -78,7 +81,7 @@ export async function liveRoutes(app: FastifyInstance) {
   app.post('/api/v1/live/recordings', async (req, reply) => {
     const { performanceIds, ...data } = CreateRecordingCandidate.parse(req.body);
     const row = await prisma.$transaction(async tx => {
-      if (await tx.livePerformance.count({ where: { id: { in: performanceIds } } }) !== performanceIds.length) return null;
+      if (await tx.livePerformance.count({ where: { id: { in: performanceIds }, removedAt: null } }) !== performanceIds.length) return null;
       return tx.recording.create({ data: { ...data, performances: { create: performanceIds.map(performanceId => ({ performanceId })) } }, include: recordingInclude });
     });
     if (!row) return reply.code(404).send({ error: 'A selected performance no longer exists' });

@@ -1,3 +1,4 @@
+import { LiveDiscoveryControls } from '../components/LiveControls';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,8 +12,8 @@ export const liveLabels: Record<string, string> = {
 
 export function RecordingRow({ recording }: { recording: RecordingCandidate }) {
   return <article className="card">
-    <h3>{recording.title}</h3>
-    <p>Awaiting identity and video validation · {recording.origin} origin</p>
+    <h3><Link to={`/live/recording/${recording.id}`}>{recording.title}</Link></h3>
+    <p>{recording.reviewStatus} · {recording.origin} origin</p>
     <p>Claimed coverage: {liveLabels[recording.claimedCoverage]} · Coverage unverified</p>
     {recording.evidenceUrl && <p><a href={recording.evidenceUrl} target="_blank" rel="noreferrer">View source evidence</a></p>}
     <p>{recording.performances.map(({ performance }, index) => <span key={performance.id}>{index > 0 && ' · '}<Link to={`/live/performance/${performance.id}`}>{performance.artist.name}: {performance.title}</Link></span>)}</p>
@@ -76,10 +77,10 @@ export default function LivePage() {
   const error = recordings ? candidates.error : performances.error;
   function change(key: string, value: string) { const next = new URLSearchParams(params); if (value) next.set(key, value); else next.delete(key); next.delete('offset'); setParams(next); }
   return <>
-    <h2>Live</h2>
+    <h2>Live</h2><Link to="/live/settings">Live settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link>{artistId && <LiveDiscoveryControls artistId={artistId} />}
     {artistId && <nav aria-label="Artist catalog"><Link to={`/artist/${artistId}`}>Music Videos</Link> · <strong>Live</strong></nav>}
     <nav aria-label="Live views"><button aria-pressed={!recordings} onClick={() => change('view', '')}>Performances</button> <button aria-pressed={recordings} onClick={() => change('view', 'recordings')}>Recordings</button></nav>
-    <p>Live catalog preview: independent performances and unvalidated recording candidates. Discovery, acquisition and playback integration are not enabled in this increment.</p>
+    <p>Browse performances and recording versions. Identity review, verified coverage, acquisition and playback readiness remain distinct.</p>
     <div className="toolbar">
       <label>Search <input value={params.get('search') ?? ''} onChange={e => change('search', e.target.value)} /></label>
       <label>Setting <select value={params.get('setting') ?? ''} onChange={e => change('setting', e.target.value)}><option value="">All settings</option>{LiveSetting.options.map(value => <option key={value} value={value}>{liveLabels[value]}</option>)}</select></label>
@@ -93,8 +94,8 @@ export default function LivePage() {
     {!recordings && performances.data?.items.map(performance => <article className="card" key={performance.id}>
       <h3><Link to={`/live/performance/${performance.id}`}>{performance.title}</Link></h3>
       <p><Link to={`/artist/${performance.artistId}/live`}>{performance.artist.name}</Link> · {performance.performanceDate ?? 'Date unknown'} · {[performance.venue, performance.city].filter(Boolean).join(', ') || 'Place unknown'}</p>
-      <p>{liveLabels[performance.setting]} · {liveLabels[performance.style]} · Independent identity · Recording unknown</p>
-      <p>{performance._count.songs} song occurrences · {performance._count.recordings} unvalidated recording candidates</p>
+      <p>{liveLabels[performance.setting]} · {liveLabels[performance.style]} · {performance.identityStatus} identity · {performance.recordingState}</p>
+      <p>{performance._count.songs} song occurrences · {performance._count.recordings} recording versions</p>
     </article>)}
     {recordings && candidates.data?.items.map(recording => <RecordingRow key={recording.id} recording={recording} />)}
     {page && <div><button disabled={!offset} onClick={() => { const next = new URLSearchParams(params); next.set('offset', String(Math.max(0, offset - 25))); setParams(next); }}>Previous</button> <button disabled={offset + 25 >= page.total} onClick={() => { const next = new URLSearchParams(params); next.set('offset', String(offset + 25)); setParams(next); }}>Next</button></div>}

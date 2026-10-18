@@ -303,3 +303,28 @@ publication guidance and centralized diagnostic redaction. The default-on empty-
 the user's exact available/known/unmatched zero-count rule. Addition disables it for the reveal view.
 The baseline findings above describe the pre-change implementation. Required identity and uncertain
 video review stages remain in place; connection and Last.fm authorization/enablement remain distinct.
+
+
+## Unified Live workflows (2026-10-18)
+
+The [live implementation](live-implementation.md) extends the established flows without changing
+music-video canonical eligibility or removing required stages.
+
+| Flow | Required sequence | Complete when |
+| --- | --- | --- |
+| Discover live material | Confirm shared artist → choose bounded history/date/tour scope → preview request range and budget days → discover candidate sources → review exact event and actual moving video | Candidate identity/content are accepted for every linked performance; a setlist reference alone is insufficient. |
+| Acquire/import live recording | Accept source → check ownership, pins and exclusions → approve full indexer pack if needed → shared Queue/transfer → frozen validation choices → register original ordered parts | Import succeeds; retained staging remains available when a later part fails. |
+| Register existing live inventory | Review identity/video → choose exact local file or server item → validate eligible file or verify authoritative server inventory → register in place | Local ownership or exact server ownership is recorded honestly, without moving files or inventing local paths. |
+| Deliver live parts | Use configured live root and connector/library → import metadata bundle → refresh server → reconcile exact paths | Every intended part is confirmed by the target library; outage preserves earlier facts. |
+| Review song coverage | Choose specific occurrence and part → verify start/end/full rendition → distinguish known-song coverage, reference completeness and continuous performance | Only the verified coverage is used for song playback/counters and safe version comparisons. |
+| Use live playlist items | Choose bound static playlist → whole part or explicit unsupported-segment fallback → review mixed order → Push → confirm publication | Target server confirms publication; an unchanged previous playlist remains when a push fails. |
+| Resume live viewing | Select server user/client and original recording version → send verified part/offset command → observe actual playback | Resume command is sent; watch credit and completion depend on later observations, never the command itself. |
+| Correct classification | Flag music video → review same artist/event and moving video → reuse capture/file/count/playlist identities | Classified recording is available without file moves or reacquisition. Reverse only after normal official music-video eligibility review. |
+| Remove recording | Review exact recording/rendition/artist-set scope → honor warning/exclusion settings → five-minute delay → verify targets and idle playback → remove local/server copies → retain event/viewing history | Exact selected copies are removed; failures or playing/paused sessions retry after 40 minutes. |
+| Clean up redundant version | Explicitly enable suggestions → replacement validated and delivered → prove redundancy and check pins, coverage, playlist/resume dependencies → confirm deletion → normal delayed deletion | Older selected copy is removed only through normal deletion safeguards. |
+
+Queued recording category and destination are assigned on enqueue; optional validation choices are
+loaded when processing starts and retained throughout that attempt. Recovery retries staged bytes,
+not an uncertain external submission. Provider errors are not empty results. Reference corrections
+and later links preserve local IDs and user details until reviewed. Neither retention nor removal
+of a performance implicitly deletes media or indefinite playback history.

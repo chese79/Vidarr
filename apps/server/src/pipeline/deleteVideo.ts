@@ -22,7 +22,7 @@ function mappedPath(value: string): string {
   return process.platform !== 'win32' && windows ? path.join('/mnt', windows[1].toLowerCase(), ...windows[2].split(/[\\/]+/)) : value;
 }
 
-async function checkLocalPath(filePath: string): Promise<void> {
+export async function checkLocalPath(filePath: string): Promise<void> {
   if (!path.isAbsolute(filePath)) throw new VideoDeletionError('Local file path is not absolute; correct the root mapping before deleting.');
   const roots = await prisma.rootFolder.findMany({ select: { path: true } });
   let root: string | undefined;
@@ -38,7 +38,7 @@ async function checkLocalPath(filePath: string): Promise<void> {
   }
 }
 
-async function localBundle(filePath: string): Promise<string[]> {
+export async function localBundle(filePath: string): Promise<string[]> {
   const local = mappedPath(filePath);
   await checkLocalPath(local);
   const base = path.basename(local, path.extname(local));
@@ -62,6 +62,8 @@ export async function deleteMusicVideo(id: number, confirmed: boolean): Promise<
     file: true, acquisitionSources: true, libraryVideos: { where: { matchConfidence: null }, include: { connector: true } },
   } });
   if (!video) throw new VideoDeletionError('Music video not found', 404);
+  if (video.catalogKind === 'liveClassified') throw new VideoDeletionError('Delete this recording from Live to preserve its performance history.');
+  if (await prisma.recording.count({ where: { musicVideoId: id, catalogType: 'live', reviewStatus: { not: 'returnedToMusicVideos' } } })) throw new VideoDeletionError('This video has live recording ownership; use the Live deletion workflow.');
   if (video.deletionState === 'running' || video.deletionState === 'pending') throw new VideoDeletionError('Deletion is already scheduled or running.');
   if (await prisma.downloadQueueItem.count({ where: { musicVideoId: id, status: { in: ACTIVE } } })) {
     throw new VideoDeletionError('Remove or finish this video’s active/waiting download in Queue before deleting.');
@@ -99,6 +101,7 @@ async function performVideoDeletion(id: number, now: Date): Promise<void> {
       data: { deletionState: 'running', deletionAttempts: { increment: 1 } } });
     if (!claimed.count) return;
     const video = await prisma.musicVideo.findUniqueOrThrow({ where: { id }, include: { file: true } });
+    if (await prisma.recording.count({ where: { musicVideoId: id, catalogType: 'live', reviewStatus: { not: 'returnedToMusicVideos' } } })) throw new VideoDeletionError('Live recording ownership changed; resolve its classification before deletion.');
     const snapshot = snapshotSchema.parse(JSON.parse(video.deletionTargets ?? 'null'));
     if (video.file && !snapshot.files.includes(mappedPath(video.file.path))) throw new Error('Owned file changed after deletion was scheduled; reconcile ownership before retrying.');
     if (await prisma.downloadQueueItem.count({ where: { musicVideoId: id, status: { in: ACTIVE } } })) throw new Error('A download is active; waiting for it to finish before deletion.');
@@ -123,6 +126,14 @@ async function performVideoDeletion(id: number, now: Date): Promise<void> {
       await fs.unlink(file).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; });
     }
     await prisma.$transaction(async tx => {
+      const bridges = await tx.recording.findMany({ where: { musicVideoId: id } });
+      for (const bridge of bridges) {
+        if (bridge.catalogType === 'live' && bridge.reviewStatus !== 'returnedToMusicVideos') throw new VideoDeletionError('This entry has live recording ownership; delete it from Live.');
+        await tx.recordingServerCopy.deleteMany({ where: { part: { recordingId: bridge.id } } });
+        for (const part of await tx.recordingPart.findMany({ where: { recordingId: bridge.id } }))
+          await tx.recordingPart.update({ where: { id: part.id }, data: { available: false, path: `deleted:${part.id}:${part.path}` } });
+        await tx.recording.update({ where: { id: bridge.id }, data: { musicVideoId: null, reviewStatus: 'deleted', deletionState: 'deleted', evidence: JSON.stringify({ ...JSON.parse(bridge.evidence), retiredQualifiedPlays: video.qualifiedPlayCount, retiredNativePlays: video.file?.playCount ?? null }) } });
+      }
       await tx.deletedVideoRecord.upsert({ where: { originalMusicVideoId: id }, update: {}, create: {
         originalMusicVideoId: id, artistId: video.artistId, title: video.title, identities: JSON.stringify(snapshot.identities),
       } });

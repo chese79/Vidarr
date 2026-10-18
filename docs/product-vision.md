@@ -6,19 +6,14 @@ Vidarr is a self-hosted music-video catalog, acquisition, library-management, an
 Plex and Jellyfin are not merely export targets: their libraries are primary inputs to Vidarr's
 catalog and the playback destinations for the finished collection.
 
-Concerts and live performances have an approved design and are entering implementation. The
-[2026-10-17 design agreement](requests/2026-10-17-concerts-and-live-performances.md)
-records approved product decisions and unresolved gates; it does not enable live acquisition
-or replace the current music-video rules below.
-
-The [backend alignment plan](backend-alignment.md) separates shared media mechanics from
-catalog policies. Its first foundation refactor preserves current music-video behavior;
-recording/asset cutover and live acquisition remain subsequent implementation phases.
-The first [live catalog increment](live-implementation.md) adds independent performances and
-unvalidated recording candidates against existing confirmed artists. Partial dates and separate
-setting/style/coverage dimensions remain explicit; candidates establish neither ownership nor
-missing-video counts. The unified local release includes this catalog increment; live discovery,
-acquisition and playback integration remain subsequent implementation phases.
+Concerts and live performances follow the [approved design](requests/2026-10-17-concerts-and-live-performances.md)
+and [unified implementation](live-implementation.md). Music videos and Live share artists, recording
+facts, acquisition, inspection, import, queue, connectors and playlist publication, with separate
+catalog policies. Setlist.fm references do not establish video existence, ownership or acquisition
+eligibility. Live remains a separate category; no audio-only content is admitted. The backend
+[alignment plan](backend-alignment.md) documents the atomic compatibility bridge preserving
+music-video IDs, files, source acceptance, counters, staging and playlists. Release verification
+and local deployment status are recorded in the implementation document.
 
 ## Canonical catalog
 
@@ -33,8 +28,9 @@ existing minimum-play and Unwatched rules retain their server-history semantics.
 
 Artist detail groups genres in a disclosure closed by default. Its Videos heading includes a
 case-insensitive title filter; bulk selection follows the visible results. Queue and History
-follow Genres in navigation. A user-controlled Live/Concert boolean labels an existing video;
-it does not enable discovery, validation or acquisition of live performances or concerts.
+follow Genres in navigation. A user-controlled Live/Concert boolean sends an existing video to explicit classification review.
+Confirmed classification reuses its recording/file/count/playlist references without moving media;
+uncertain entries remain playable while awaiting review.
 
 Individual video deletion starts after five minutes and retries failures 40 minutes later. Playing or paused matched server sessions defer deletion. Pending state and deadlines survive restarts. Completion removes the Vidarr catalog entry, its owned local video/metadata bundle,
 and every confirmed matched Jellyfin/Plex copy, including the server catalog item. Unconfirmed
@@ -193,7 +189,7 @@ are future scope. An empty IMVDb catalog is valid and does not cause audio track
 videos. YouTube and local candidates are reviewed when their artist, song, or content type is
 uncertain. Only an official music video for a song enters the launch catalog. Official interviews,
 live performances, live songs, lyric videos, visualizers, and static-art or audio-only uploads do
-not enter it. Live material may receive a separate category later.
+not enter it. Live material belongs in the separate Live catalog after its own identity/content review.
 
 A whole-word `official` (case-insensitive) in a linked Music shelf/playlist category or a video's
 title supplies official authority evidence, including when a playlist member has a bare `(Video)`
@@ -202,7 +198,8 @@ validation remain required. Passing videos enter the canonical official catalog 
 uncertain identity, metadata or visual results remain in Video Review. A conflicting explicit artist
 credit is never overridden by playlist membership. Official audio, live performances, concerts,
 lyrics and visualizers remain excluded even inside an official playlist. Recorded livestreams are
-also excluded; a separate live/concert category is future scope, not a current catalog kind.
+also excluded from the music-video catalog. Completed moving-video recordings can enter the
+separate Live review workflow; active streams do not establish an eligible acquired recording.
 New automatically admitted videos start unmonitored and collection never queues a full acquisition.
 
 Confirming an artist collects a source record for that artist: every IMVDb artist-credit video,

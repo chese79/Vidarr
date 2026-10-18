@@ -33,6 +33,21 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe('jellyfinProvider', () => {
+  it('sends a starting offset and ordered exact-library parts only to the selected server user client', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (String(url).includes('/Sessions') && !String(url).includes('/Playing')) return jsonResponse([{ Id: 'client', UserId: 'viewer', DeviceName: 'TV', SupportsRemoteControl: true, PlayableMediaTypes: ['Video'] }]);
+      if (String(url).includes('/Items?')) return jsonResponse({ Items: [{ Id: 'part1' }, { Id: 'part2' }], TotalRecordCount: 2 });
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await jellyfinProvider.startVideoPlayback!(connector(), { sessionId: 'client', userId: 'viewer', externalIds: ['part1', 'part2'], positionSeconds: 123.5 });
+    const command = fetchMock.mock.calls.find(call => String(call[0]).includes('/Playing?'));
+    expect(command?.[1].method).toBe('POST');
+    const url = new URL(command![0]);
+    expect(url.searchParams.get('startPositionTicks')).toBe('1235000000'); expect(url.searchParams.get('itemIds')).toBe('part1,part2');
+    await expect(jellyfinProvider.startVideoPlayback!(connector(), { sessionId: 'client', userId: 'another-user', externalIds: ['part1'], positionSeconds: 0 })).rejects.toThrow('no longer available');
+    await expect(jellyfinProvider.startVideoPlayback!(connector(), { sessionId: 'client', userId: 'viewer', externalIds: ['outside-library'], positionSeconds: 0 })).rejects.toThrow('selected playback library');
+  });
   it('refreshes only the selected video library and preserves existing metadata and images', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([
       { ItemId: 'video library', Locations: ['/media/music-videos'] },

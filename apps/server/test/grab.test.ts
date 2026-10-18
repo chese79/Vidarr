@@ -281,9 +281,11 @@ describe('DownloadQueueItem partial unique index (migration 20260921045136_grab_
     const video = await createMusicVideo(artist.id);
     const finalIndexSql = `CREATE UNIQUE INDEX "DownloadQueueItem_active_musicVideoId_key"
       ON "DownloadQueueItem"("musicVideoId")
-      WHERE "status" IN ('queued', 'downloading', 'submissionUnknown')`;
+      WHERE "status" IN ('queued', 'downloading', 'submissionUnknown', 'importing')`;
 
     await prisma.$executeRawUnsafe('DROP INDEX "DownloadQueueItem_active_musicVideoId_key"');
+    // This fixture deliberately recreates the pre-reservation schema.
+    await prisma.$executeRawUnsafe('DROP INDEX "DownloadQueueItem_active_recordingId_key"');
     try {
       const older = await prisma.downloadQueueItem.create({
         data: { musicVideoId: video.id, sourceType: 'indexer', sourceRef: 'older', status: 'downloading' },
@@ -316,6 +318,7 @@ describe('DownloadQueueItem partial unique index (migration 20260921045136_grab_
     } finally {
       await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS "DownloadQueueItem_active_musicVideoId_key"');
       await prisma.$executeRawUnsafe(finalIndexSql);
+      await prisma.$executeRawUnsafe("CREATE UNIQUE INDEX DownloadQueueItem_active_recordingId_key ON DownloadQueueItem(recordingId) WHERE status IN ('queued','downloading','submissionUnknown','importing')");
     }
   });
 });

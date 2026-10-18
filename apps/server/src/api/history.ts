@@ -7,7 +7,7 @@ export async function historyRoutes(app: FastifyInstance) {
     return prisma.history.findMany({
       orderBy: { date: 'desc' },
       take: limit,
-      include: { musicVideo: { include: { artist: true } } },
+      include: { recording: { select: { id: true, title: true } }, musicVideo: { include: { artist: true } } },
     });
   });
 }

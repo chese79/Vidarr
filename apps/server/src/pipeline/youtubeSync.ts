@@ -158,7 +158,7 @@ async function admitOfficialVideo(artistId: number, songTitle: string, video: Di
       title = `${songTitle} (Version ${version})`;
     }
     const saved = existing ? await tx.musicVideo.update({ where: { id: existing.id }, data: {
-      catalogKind: 'official', ...(!existing.youtubeVideoId ? { youtubeVideoId: video.youtubeVideoId } : {}),
+      catalogKind: existing.catalogKind === 'liveClassified' ? 'liveClassified' : 'official', ...(!existing.youtubeVideoId ? { youtubeVideoId: video.youtubeVideoId } : {}),
       ...(!existing.sourcePublishedAt && publishedAt ? { sourcePublishedAt: publishedAt } : {}),
     } }) : await tx.musicVideo.create({ data: {
       artistId, title, normalizedTitle: normalizeTitle(title), catalogKind: 'official', monitored: false,

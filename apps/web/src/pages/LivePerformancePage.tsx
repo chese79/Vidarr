@@ -1,3 +1,6 @@
+import LivePerformanceTools from '../components/LivePerformanceTools';
+import LiveViewingPanel from '../components/LiveViewingPanel';
+import { LiveDiscoveryControls } from '../components/LiveControls';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,18 +27,22 @@ export default function LivePerformancePage() {
   return <>
     <p><Link to={`/artist/${row.artistId}/live`}>{row.artist.name} / Live</Link></p>
     <h2>{row.title}</h2>
+    {row.removedAt && <p role="status">Removed from the visible catalog. Retained history remains available; restore it under Setlist, credits and occasion.</p>}
     <p>{row.performanceDate ?? 'Date unknown'} · {[row.venue, row.city].filter(Boolean).join(', ') || 'Place unknown'}</p>
-    <p>{liveLabels[row.setting]} · {liveLabels[row.style]} · Independent identity</p>
-    <p>Recording unknown. Candidate metadata does not establish an eligible video, ownership or complete coverage.</p>
+    <p>{liveLabels[row.setting]} · {liveLabels[row.style]} · {row.identityStatus} identity</p>
+    <p>{row.recordingState}. Candidate metadata alone does not establish ownership or complete coverage.</p>
+    <LiveDiscoveryControls artistId={row.artistId} performanceId={id} />
     {row.notes && <p>{row.notes}</p>}
     <LiveMetadataEditor key={row.revision} performance={row} onSaved={() => {
       client.invalidateQueries({ queryKey: ['live-performance', id] });
       client.invalidateQueries({ queryKey: ['live-performances'] });
       client.invalidateQueries({ queryKey: ['live-recordings'] });
     }} />
+    <LivePerformanceTools performance={row} />
+    <LiveViewingPanel performanceId={id} />
     <h3>Song occurrences</h3>
     <p>Known order; setlist completeness and recording coverage are unverified.</p>
-    <ol>{row.songs.map(song => <li key={song.id}>{song.title}{song.section && ` (${song.section})`} · {song.kind}</li>)}</ol>
+    <ol>{row.songs.map(song => <li key={song.id}>{song.title} (occurrence {song.id}){song.section && ` (${song.section})`} · {song.kind}</li>)}</ol>
     <h3>Recording candidates ({row._count.recordings})</h3>
     {row._count.recordings > 25 && <p>Showing the latest 25. <Link to="/live?view=recordings">Browse recordings</Link>.</p>}
     {row.recordings.map(link => <RecordingRow key={link.recording.id} recording={link.recording} />)}

@@ -188,3 +188,32 @@ in this music-video deployment. Earlier scope restrictions above describe their 
 Release completed: PR #25 merged as `1e2eb2b`; local `vidarr:1e2eb2b` is healthy, with backup
 and rollback retained and no public image publication. The subsequently authorized first live
 catalog increment is tracked separately in [live implementation](live-implementation.md).
+
+
+## Recording cutover and unified workflows (2026-10-18)
+
+The completion migration implements phases B/C using a typed shared Recording and RecordingPart
+bridge for ordinary music videos as well as live captures. MusicVideo remains the authoritative
+compatibility writer for existing endpoints; SQLite triggers mirror its identity/file/source/
+server/queue/history facts atomically, rather than synchronizing a second writer later. Null
+physical paths distinguish logical file-less parts from ownership. Existing probable matches
+remain probable. See [implementation and migration contract](live-implementation.md).
+
+Queue target selection tests the typed musicVideoId, not the mere presence of recordingId: an
+ordinary queue row carries both compatible references to one capture. Partial reservation indexes
+cover both identities across all active states, and target guards reject mismatched references.
+New live acquisitions use the registered shared runners/dispatcher, inspection worker, import
+bundle and connectors. Live services supply catalog eligibility, ordered coverage, preferences,
+thresholds and recovery policies; they do not create a second downloader or server client.
+
+Mixed playlists use typed targets and stable PlaylistItem identity. Existing music-video IDs and
+API shapes remain available. Shared ownership/acquisition mechanics remain independent of the
+catalog's canonical/missing rules. Playback observations share elapsed-time mechanics, while
+music-video/song and concert thresholds remain policy-specific.
+
+The private-copy rehearsal preserved all original rows/columns across 34 tables and bridged
+4,281 music videos without media writes, with integrity/FK checks passing. The migration also
+preserves deleted-row AUTOINCREMENT high-water marks. Future Prisma table rebuilds must retain
+compatibility triggers, target guards and partial unique indexes. Rollback after new data exists
+requires a compatible forward fix or explicit data recovery; an old binary is not safe against
+new live queue targets. Deployment remains local only with offline backup and all mounts preserved.

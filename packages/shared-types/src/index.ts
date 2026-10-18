@@ -763,11 +763,13 @@ export type ActivityLogEntry = z.infer<typeof ActivityLogEntrySchema>;
 export const HistoryEntrySchema = z.object({
   deliveryStatus: z.enum(['awaitingServerCataloging', 'readyToPlay', 'localOnly']).optional(),
   id: z.number().int(),
-  musicVideoId: z.number().int(),
+  musicVideoId: z.number().int().nullable(),
+  recordingId: z.number().int().nullable().optional(),
+  recording: z.object({ id: z.number(), title: z.string() }).nullable().optional(),
   eventType: z.string(),
   date: z.string(),
   data: z.string().nullable(),
-  musicVideo: z.object({ title: z.string(), artist: z.object({ id: z.number().int().optional(), name: z.string() }) }),
+  musicVideo: z.object({ title: z.string(), artist: z.object({ id: z.number().int().optional(), name: z.string() }) }).nullable(),
 });
 export type HistoryEntry = z.infer<typeof HistoryEntrySchema>;
 
@@ -798,14 +800,18 @@ export type PlaylistSync = z.infer<typeof PlaylistSyncSchema>;
 
 export const PlaylistItemSchema = z.object({
   id: z.number().int(),
-  musicVideoId: z.number().int(),
+  musicVideoId: z.number().int().nullable(),
+  recordingPartId: z.number().int().nullable().optional(),
+  recordingPart: z.object({ id: z.number(), recording: z.object({ id: z.number(), title: z.string() }) }).nullable().optional(),
+  songId: z.number().nullable().optional(),
+  fullRecordingFallback: z.boolean().optional(),
   sortOrder: z.number().int(),
   musicVideo: z.object({
     title: z.string(),
     thumbnailUrl: z.string().nullable(),
     hasFile: z.boolean(),
     artist: z.object({ name: z.string() }),
-  }),
+  }).nullable(),
 });
 export type PlaylistItem = z.infer<typeof PlaylistItemSchema>;
 

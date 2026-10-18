@@ -22,6 +22,13 @@ const { get: jellyfinGet, send: jellyfinSend, getBinary: jellyfinGetBinary } = c
 );
 
 const playbackLibraries = new Map<number, { signature: string; expiresAt: number; ids: Set<string> }>();
+async function playbackClients(config: LibraryConnector) {
+  const sessions = await jellyfinGet(config, '/Sessions');
+  if (!Array.isArray(sessions)) throw new Error('Jellyfin returned invalid playback clients');
+  return sessions.filter((session: any) => session.Id && session.UserId && session.SupportsRemoteControl === true
+    && session.PlayableMediaTypes?.includes('Video')).map((session: any) => ({ id: String(session.Id),
+      name: `${session.DeviceName ?? session.Client ?? 'Jellyfin client'} (${session.UserName ?? session.UserId})`, userId: String(session.UserId) }));
+}
 async function playbackLibraryIds(config: LibraryConnector): Promise<Set<string>> {
   const signature = JSON.stringify([config.host, config.authToken, config.videoLibraryId]);
   const cached = playbackLibraries.get(config.id);
@@ -100,6 +107,16 @@ async function inspectDeletion(config: LibraryConnector, item: { externalId: str
 }
 
 export const jellyfinProvider: LibraryConnectorProvider = {
+  listPlaybackClients: playbackClients,
+  async startVideoPlayback(config, request) {
+    const client = (await playbackClients(config)).find(value => value.id === request.sessionId && value.userId === request.userId);
+    if (!client) throw new Error('The selected Jellyfin user/client is no longer available for remote playback');
+    const ids = await playbackLibraryIds(config);
+    if (!request.externalIds.length || request.externalIds.some(id => !ids.has(id))) throw new Error('A requested part is not confirmed in the selected playback library');
+    if (!Number.isFinite(request.positionSeconds) || request.positionSeconds < 0) throw new Error('Invalid playback position');
+    const query = new URLSearchParams({ playCommand: 'PlayNow', itemIds: request.externalIds.join(','), startPositionTicks: String(Math.round(request.positionSeconds * 10000000)) });
+    await jellyfinSend(config, 'POST', `/Sessions/${encodeURIComponent(client.id)}/Playing?${query}`);
+  },
   async isVideoInUse(config, externalId) {
     const sessions = await jellyfinGet(config, '/Sessions');
     if (!Array.isArray(sessions)) throw new Error('Jellyfin returned invalid playback sessions.');

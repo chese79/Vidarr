@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DEFAULT_VALIDATION_SETTINGS, type ValidationCategory, type ValidationSettings } from '@vidarr/shared-types';
@@ -61,6 +62,7 @@ export default function ValidationQualityPage() {
       {message && <p role="status">{message}</p>}
       {save.isError && <p role="alert">Save failed: {(save.error as Error).message}</p>}
     </form>
+    <p><Link to="/live/settings">Configure live performance validation, destinations and quality preferences</Link></p>
     <section className="validation-quality-profiles" aria-label="Quality profiles">
       <p>Quality profiles choose allowed formats and upgrade cutoffs. Existing profiles and artist assignments are retained.</p>
       <QualityProfilesPage />

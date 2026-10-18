@@ -390,6 +390,7 @@ export async function artistRoutes(app: FastifyInstance) {
         LEFT JOIN library_stats ls ON ls."musicVideoId" = mv."id"
         LEFT JOIN queue_stats qs ON qs."musicVideoId" = mv."id"
         LEFT JOIN "MusicVideoFile" f ON f."musicVideoId" = mv."id"
+        WHERE mv."catalogKind" <> 'liveClassified'
         -- Library counts describe the same preserved inventory as expanded rows.
         -- Catalog review status does not erase ownership or missing-video facts.
       ),
@@ -654,6 +655,7 @@ export async function artistRoutes(app: FastifyInstance) {
       select: {
         monitored: true,
         musicVideos: {
+          where: { catalogKind: { not: 'liveClassified' } },
           orderBy: [{ releaseYear: { sort: 'asc', nulls: 'last' } }, { title: 'asc' }],
           select: {
             id: true,
@@ -711,6 +713,7 @@ export async function artistRoutes(app: FastifyInstance) {
       where: { id },
       include: {
         musicVideos: {
+          where: { catalogKind: { not: 'liveClassified' } },
           orderBy: { releaseYear: { sort: 'asc', nulls: 'last' } },
           include: {
             libraryVideos: {
@@ -935,7 +938,7 @@ export async function artistRoutes(app: FastifyInstance) {
 
   app.delete('/api/v1/artist/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
-    if (await prisma.livePerformance.count({ where: { artistId: id } })) {
+    if (await prisma.livePerformance.count({ where: { artistId: id } }) || await prisma.liveCredit.count({ where: { artistId: id } })) {
       return reply.code(409).send({ error: 'Artist has live performances; preserve or reassign them before removing the artist' });
     }
     await prisma.artist.delete({ where: { id } });

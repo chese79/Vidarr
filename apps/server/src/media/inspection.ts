@@ -59,7 +59,7 @@ export async function assertHasVideoStream(filePath: string, minimumDimension = 
   }
 }
 
-async function getVideoProbe(filePath: string): Promise<{ duration: number; width: number; height: number }> {
+export async function getVideoProbe(filePath: string): Promise<{ duration: number; width: number; height: number }> {
   const output = await new Promise<string>((resolve, reject) => {
     const child = spawn(FFPROBE_PATH, [
       '-v',
@@ -96,21 +96,23 @@ export const MAX_STATIC_FRACTION = 0.8; // >80% frozen ⇒ treat as a still imag
 // both callers instead of two copies of the same ffmpeg-invocation logic.
 // Returns null (rather than 0) when duration can't be determined, so a
 // caller can tell "couldn't check" apart from "checked, found no freezing."
-export async function computeFrozenFraction(filePath: string): Promise<number | null> {
-  return withValidationWorker(() => computeFrozenFractionOnce(filePath));
+export async function computeFrozenFraction(filePath: string, sampleSeconds?: number, startSeconds = 0): Promise<number | null> {
+  return withValidationWorker(() => computeFrozenFractionOnce(filePath, sampleSeconds, startSeconds));
 }
 
-async function computeFrozenFractionOnce(filePath: string): Promise<number | null> {
+async function computeFrozenFractionOnce(filePath: string, sampleSeconds?: number, startSeconds = 0): Promise<number | null> {
   const probe = await getVideoProbe(filePath);
-  const duration = probe.duration;
+  const duration = sampleSeconds ? Math.min(Math.max(0, probe.duration - startSeconds), sampleSeconds) : probe.duration;
   if (!duration) return null;
 
   const stderr = await new Promise<string>((resolve, reject) => {
     const child = spawn(FFMPEG_PATH, [
       '-threads', String(validationThreads(probe.width, probe.height)),
       '-filter_threads', '1',
+      ...(startSeconds ? ['-ss', String(startSeconds)] : []),
       '-i',
       filePath,
+      ...(sampleSeconds ? ['-t', String(sampleSeconds)] : []),
       '-an',
       '-vf',
       'freezedetect=n=-60dB:d=2',
@@ -151,8 +153,8 @@ async function computeFrozenFractionOnce(filePath: string): Promise<number | nul
 // on screen for the whole song — passes the video-stream/dimension check above
 // but has no actual motion. ffmpeg's freezedetect filter flags frozen spans;
 // if they cover most of the runtime, this isn't a real music video.
-export async function assertHasMotion(filePath: string, maximumStaticFraction = MAX_STATIC_FRACTION): Promise<void> {
-  const frozenFraction = await computeFrozenFraction(filePath);
+export async function assertHasMotion(filePath: string, maximumStaticFraction = MAX_STATIC_FRACTION, sampleSeconds?: number): Promise<void> {
+  const frozenFraction = await computeFrozenFraction(filePath, sampleSeconds);
   if (frozenFraction == null) return; // can't determine — don't block the import over this alone
 
   if (frozenFraction > maximumStaticFraction) {
@@ -165,4 +167,28 @@ export async function assertHasMotion(filePath: string, maximumStaticFraction = 
 export async function assertVideoMedia(filePath: string, options?: { checkVideoFile: boolean; checkVideoMotion: boolean; minimumDimension: number; maximumStaticFraction: number }): Promise<void> {
   if (!options || options.checkVideoFile) await assertHasVideoStream(filePath, options?.minimumDimension);
   if (!options || options.checkVideoMotion) await assertHasMotion(filePath, options?.maximumStaticFraction);
+}
+
+// Optional deep inspection for long-form recordings. A header probe alone cannot establish integrity.
+export async function assertFileIntegrity(filePath: string): Promise<void> {
+  await withValidationWorker(() => new Promise<void>((resolve, reject) => {
+    const child = spawn(FFMPEG_PATH, ['-v', 'error', '-xerror', '-threads', '2', '-filter_threads', '1', '-i', filePath,
+      '-map', '0:v:0', '-map', '0:a?', '-f', 'null', '-']);
+    processDeadline(child, positiveTimeout(process.env.LIVE_INTEGRITY_TIMEOUT_MS, 60 * 60000), 'Full-file integrity inspection', reject);
+    let diagnostic = '';
+    child.stderr.on('data', data => { diagnostic = (diagnostic + data.toString()).slice(-2000); });
+    child.once('error', reject);
+    child.once('close', code => code === 0 ? resolve() : reject(new NotAVideoError(`File decode failed; retained for recovery: ${diagnostic.trim() || code}`)));
+  }));
+}
+
+// Optional deep motion scanning can be disabled without accepting a static-image audio upload.
+export async function assertMovingVideoSamples(filePath: string): Promise<void> {
+  const probe = await getVideoProbe(filePath);
+  if (probe.duration <= 0) throw new NotAVideoError('Cannot establish moving-video eligibility without usable sample timing; retain for review');
+  for (const fraction of (probe.duration < 10 ? [0] : [0.1, 0.5, 0.8])) {
+    const frozen = await computeFrozenFraction(filePath, 20, probe.duration * fraction);
+    if (frozen !== null && frozen <= MAX_STATIC_FRACTION) return;
+  }
+  throw new NotAVideoError('Distributed samples contain only static imagery; audio-only/static-image recordings are excluded');
 }

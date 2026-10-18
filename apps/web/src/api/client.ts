@@ -1,3 +1,4 @@
+import type { LiveRecordingDetail, LiveConfigurationView } from '@vidarr/shared-types';
 import type { UpdateLivePerformance, CreateLivePerformance, CreateRecordingCandidate, LiveArtist, LivePerformanceSummary, LivePerformanceDetail, LivePage, RecordingCandidate } from '@vidarr/shared-types';
 import type {
   ValidationSettings,
@@ -89,7 +90,9 @@ export interface ArtistSummaryParams {
 export interface QueueItem {
   validationCategory?: string;
   id: number;
-  musicVideoId: number;
+  musicVideoId: number | null;
+  recordingId?: number | null;
+  recording?: { id: number; title: string; performances: { performance: { artist: { name: string } } }[] } | null;
   sourceType: string;
   status: string;
   progress: number;
@@ -98,7 +101,7 @@ export interface QueueItem {
   addedAt: string;
   phase?: string | null;
   stageTimings?: Record<string, number> | null;
-  musicVideo: { title: string; artist: { id: number; name: string } };
+  musicVideo: { title: string; artist: { id: number; name: string } } | null;
 }
 
 const API_KEY_STORAGE_KEY = 'vidarr_api_key';
@@ -154,6 +157,11 @@ async function requestBlob(path: string): Promise<Blob> {
 
 export const api = {
   live: {
+    read: <T>(path: string) => request<T>(`/live/${path}`),
+    recording: (id: number) => request<LiveRecordingDetail>(`/live/recordings/${id}`),
+    action: <T = { ok: boolean }>(path: string, data: unknown, method = 'POST') => request<T>(`/live/${path}`, { method, body: JSON.stringify(data) }),
+    configuration: () => request<LiveConfigurationView>('/live/configuration'),
+    monitoring: () => request<Array<{id: number; artistId: number; dailyBudget: number; state: string}>>('/live/monitoring'),
     artists: (search: string, artistId?: number) => request<LivePage<LiveArtist>>(`/live/artists?search=${encodeURIComponent(search)}${artistId ? `&artistId=${artistId}` : ''}`),
     performances: (query: string) => request<LivePage<LivePerformanceSummary>>(`/live/performances?${query}`),
     performance: (id: number) => request<LivePerformanceDetail>(`/live/performances/${id}`),
@@ -399,6 +407,7 @@ export const api = {
     rejectMatch: (id: number) => request<LibraryVideo>(`/libraryvideo/${id}/reject-match`, { method: 'POST' }),
   },
   playlists: {
+    sequence: (id: number, itemIds: number[]) => request(`/playlist/${id}/items/sequence`, { method: 'PUT', body: JSON.stringify({ itemIds }) }),
     list: () => request<Playlist[]>('/playlist'),
     generate: (data: GeneratePlaylistBody) =>
       request<GeneratePlaylistResult>('/playlist/generate', { method: 'POST', body: JSON.stringify(data) }),
@@ -515,6 +524,7 @@ export const api = {
       }),
   },
   queue: {
+    retry: (id: number, action: 'retryStaged' | 'retryDirect') => request(`/queue/${id}/retry`, { method: 'POST', body: JSON.stringify({ action }) }),
     move: (id: number, direction: 'up' | 'down' | 'top' | 'bottom') =>
       request<{ ok: boolean }>(`/queue/${id}/move`, { method: 'POST', body: JSON.stringify({ direction }) }),
     reconcile: (id: number, body: { action: 'attach'; externalRef: string; verified: true } | { action: 'notSubmitted'; verified: true }) =>
