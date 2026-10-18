@@ -149,21 +149,35 @@ key under Settings → Integration API key, but it is not needed for normal web 
 
 ### Recovering a forgotten owner login
 
-If the owner username/password is lost and Google Sign-On is not configured, run the factory-reset
-script with container/host shell access:
+Select **Forgot password?** on the sign-in page. Enter this installation's existing integration
+API key, choose the owner username and a new password, and confirm the password. After the reset,
+sign in normally. The key is proof of ownership; it is sent only in the protected API header,
+never in a reset URL or stored by the recovery form. Your library, API key and configured services
+are preserved. An incorrect key leaves the existing login unchanged.
+
+If another browser is signed in, find the key under Settings → General → Integration API key.
+Configured Google Sign-On can also get you back to Settings → General → Owner account.
+
+If you have lost both the password and API key, run the owner recovery command with container/host
+shell access:
 
 ```bash
 # Docker:
-docker exec vidarr node dist/scripts/factoryReset.js --yes
+docker exec vidarr node dist/scripts/recoverOwnerLogin.js --yes
 
-# Local dev:
-npm run --workspace apps/server factory-reset -- --yes
+# Local development (from the repository root):
+npx tsx apps/server/src/scripts/recoverOwnerLogin.ts --yes
 ```
 
-This clears the owner login, API key, and Google Sign-On configuration. On the next page load,
-create a new owner account. Recovery is deliberately not exposed as an unauthenticated reset
-button, since that would let anyone who can reach Vidarr take over an already-claimed instance.
-The owner can change the username/password later under Settings → Owner account.
+The command replaces only the existing owner's password and prints the username and a generated
+recovery password. Sign in and choose your own password under Settings → General → Owner account.
+The API key, Google Sign-On configuration, library and connected services remain intact. Without
+`--yes` it prints instructions and makes no change. Recovery does not create an owner account on
+an unclaimed installation, and the console operation has no unauthenticated HTTP equivalent.
+
+The older `factoryReset.js --yes` command remains available for an explicit authentication factory
+reset. It rotates the API key and clears owner/Google sign-in, invalidating existing API clients;
+use owner recovery above when only the password is lost.
 
 ### Optional: Google Sign-On
 

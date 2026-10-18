@@ -328,3 +328,27 @@ loaded when processing starts and retained throughout that attempt. Recovery ret
 not an uncertain external submission. Provider errors are not empty results. Reference corrections
 and later links preserve local IDs and user details until reviewed. Neither retention nor removal
 of a performance implicitly deletes media or indefinite playback history.
+
+
+## Owner password recovery (2026-10-18)
+
+Sign in → Forgot password? → provide the existing integration API key as ownership proof → enter
+owner username, new password and matching confirmation → authenticated credentials update →
+return to sign-in with an explicit success message → sign in using the new password. Invalid proof
+or a failed request stays in recovery with an actionable error; no success is implied. Recovery
+proof remains in form memory, is sent only in the protected API header and is cleared on completion
+or leaving the form. Passwords remain salted hashes on the server. No unauthenticated reset route,
+email link, new bootstrap window or API-key rotation is introduced.
+
+If the key is also lost, a server administrator can run `recoverOwnerLogin.js --yes` in the local
+console → generate a replacement password for the existing owner → sign in → choose a personal
+password under Owner account. The command preserves library, API key, Google sign-in and connector
+configuration; it makes no change without explicit `--yes`, and never claims a new installation.
+Required ownership proof and successful normal login remain distinct stages. Authentication
+factory reset remains a separate, broader recovery operation.
+
+Verification: 62 focused authentication/recovery tests pass under Node 22, including invalid
+ownership proof and preservation of settings/library identity. The production server/web image
+build passes. A disposable runtime verifies CLI refusal without `--yes`, replacement password
+login and rejection of the previous password; browser checks verify the reset form and return
+to sign-in. Production deployment preserves the existing configuration volume and credentials.

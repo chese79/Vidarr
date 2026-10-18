@@ -5,6 +5,16 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Added — Owner password recovery
+
+- Add Forgot password? to sign-in, with API-key ownership proof, password confirmation, actionable
+  failures and a return to normal sign-in after reset. Preserve library, API key and integrations.
+- Add an explicit local-console owner recovery command for losing both password and API key.
+  Generate a new password without clearing owner identity, Google sign-in or connected services.
+- Keep recovery credentials out of URLs/browser storage and retain authenticated API protection;
+  no unauthenticated password-reset endpoint or database migration is introduced.
+
+
 ### Deployment — Unified live completion
 
 - Fast-forward merge application commit `2790917` into local main and deploy local image

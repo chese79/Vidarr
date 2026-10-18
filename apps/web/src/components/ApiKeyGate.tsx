@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, clearStoredApiKey, getStoredApiKey, setStoredApiKey } from '../api/client';
+import PasswordResetForm from './PasswordResetForm';
 
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
   state_mismatch: 'That sign-in link expired or was invalid — try again.',
@@ -27,6 +28,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [recovering, setRecovering] = useState(false), [notice, setNotice] = useState('');
 
   async function tryKey(key: string) {
     setStoredApiKey(key);
@@ -198,6 +200,11 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
     );
   }
 
+  if (recovering) return <PasswordResetForm initialUsername={username} onCancel={() => { setRecovering(false); setError(null); }} onComplete={name => {
+    setRecovering(false); setUsername(name); setPassword(''); setConfirmPassword(''); setError(null);
+    setNotice('Password reset. Sign in with your new password.');
+  }} />;
+
   const isSetup = !localLoginConfigured && localSetupAllowed;
   const isApiKeyMigration = !localLoginConfigured && !localSetupAllowed;
   return (
@@ -268,6 +275,9 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
             <button type="submit">{isSetup ? 'Create owner account' : 'Sign in'}</button>
           </div>
         </form>
+
+        {localLoginConfigured && <p><a href="#reset-password" onClick={e => { e.preventDefault(); setNotice(''); setError(null); setPassword(''); setRecovering(true); }}>Forgot password?</a></p>}
+        {notice && <p role="status">{notice}</p>}
 
         {error && (
           <p className="empty-state" role="alert">

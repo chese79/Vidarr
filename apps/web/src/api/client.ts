@@ -555,6 +555,18 @@ export const api = {
     status: () => fetch('/api/v1/auth/google/status').then((r) => r.json() as Promise<GoogleAuthStatus>),
   },
   localAuth: {
+    resetPassword: async (recoveryKey: string, username: string, password: string) => {
+      // Recovery proof is sent only to the protected credentials endpoint. Never save
+      // it in browser storage or put it in a URL before a successful normal sign-in.
+      const res = await fetch('/api/v1/auth/login/credentials', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Api-Key': recoveryKey.trim() },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 401) throw new Error('The recovery API key is incorrect. Check the key and try again.');
+      if (!res.ok) throw new Error(body.error ?? 'Password reset failed.');
+      return body as { adminUsername: string };
+    },
     // These routes work before the browser has its internal API credential.
     status: async () => {
       const res = await fetch('/api/v1/auth/login/status');
