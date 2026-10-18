@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Deployment — Unified live completion
+
+- Fast-forward merge application commit `2790917` into local main and deploy local image
+  `vidarr:2790917`, preserving config/media/staging mounts with verified offline backup retained.
+- Verify authenticated API health, migration 46, recording backfill, queue targets and foreign keys.
+  Retain 3,051 artists, 4,281 music videos, 676 files and 900 queue rows at post-start verification.
+- Keep public images and GitHub unchanged: automatic approval review rejected source push because
+  destination authorization was unverified. Only Vidarr was recreated during deployment.
+
 ### Added — Unified live workflows
 
 - Complete the Live workflow in the unified application: bounded setlist.fm history and reference

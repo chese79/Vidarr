@@ -13,6 +13,28 @@ rows, 48,023 review candidates, 676 files and 58 staged files. Background downlo
 these totals after startup. No public image was published.
 
 
+## Local completion release (2026-10-18)
+
+Application commit `2790917` was fast-forward merged into local main and deployed as
+`vidarr:2790917`. Authenticated health, built UI, artist summary and Live APIs passed; migration
+46 completed, foreign keys passed, all 4,281 music videos have shared recording references and
+all legacy-target queue rows have their matching shared target. Post-start counts were
+3,051 artists, 4,281 music videos, 676 files, 900 queue rows, zero live performances and
+4,281 shared recordings. No events or recordings were inferred from Live/Concert flags.
+
+The offline backup verified the same artist/video/file/queue counts, 48,035 review candidates
+and 58 staged files. Backup volume `vidarr-backup-20261018-unified-live-completion-2790917`
+and stopped previous container `vidarr-rollback-20261018-unified-live-completion-2790917`
+are retained. All existing configuration, media and staging mounts were preserved. Only Vidarr
+was recreated for deployment; SABnzbd remained running during that deployment. Docker Desktop
+had required recovery beforehand after its engine became unavailable during the final rebuild.
+
+Public image publishing was skipped. Automatic approval review rejected the attempted GitHub
+push because source-egress authorization for that destination was not verified. No GitHub push,
+PR or remote merge occurred; the merge and release are local only. Local main is ahead of origin.
+Set the setlist.fm key and independent live destinations explicitly in Live settings before
+provider discovery/acquisition. No key was extracted from the supplied screenshot.
+
 ## Completion implementation (2026-10-18)
 
 The unified application now implements the approved live workflow in the same server, web app,
