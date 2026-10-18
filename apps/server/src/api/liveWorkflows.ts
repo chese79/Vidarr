@@ -16,6 +16,7 @@ import { discoverSetlists, linkSetlistReference } from '../live/setlist.js';
 import { exactLiveMatch, coverageSummary } from '../live/evidence.js';
 import { discoverRecordings, MonitoringInput, monitoringWhere, previewMonitoring } from '../live/discovery.js';
 import { enqueueRecording } from '../live/acquisition.js';
+import { liveScanExcluded } from '../live/exclusions.js';
 
 const idParams = z.object({ id: z.coerce.number().int().positive() });
 export async function liveWorkflowRoutes(app: FastifyInstance) {
@@ -225,8 +226,7 @@ export async function liveWorkflowRoutes(app: FastifyInstance) {
       const recording = await tx.recording.findUniqueOrThrow({ where: { id, catalogType: 'live' }, include: { performances: true, parts: true } });
       if (recording.catalogType === 'musicVideo' || recording.reviewStatus === 'returnedToMusicVideos') throw new LiveError('Use the music video classification review to return this entry to Live');
       const target = await tx.livePerformance.findUniqueOrThrow({ where: { id: body.performanceId }, include: { artist: true, songs: true } });
-      if (body.action !== 'reject' && (await tx.liveExclusion.count({ where: { fingerprint: `artistSet:${target.artistId}:${target.id}` } })
-        || body.songId && await tx.liveExclusion.count({ where: { fingerprint: `rendition:${body.songId}` } }))) throw new LiveError('This performance or rendition is excluded from future scans; remove that exclusion before accepting it');
+      if (body.action !== 'reject' && await liveScanExcluded([`artistSet:${target.artistId}:${target.id}`, ...(body.songId ? [`rendition:${body.songId}`] : [])], tx)) throw new LiveError('This performance or rendition is excluded from future scans; remove that exclusion before accepting it');
       if (body.songId && !target.songs.some(song => song.id === body.songId)) throw new LiveError('Choose a song occurrence in this performance');
       if (target.removedAt) throw new LiveError('Restore this performance before accepting a recording');
       if (body.action !== 'reject' && (target.artist.musicbrainzMatchStatus !== 'confirmed' || !target.artist.musicbrainzArtistId)) throw new LiveError('Confirm the shared MusicBrainz artist before accepting this recording');

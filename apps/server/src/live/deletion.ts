@@ -6,6 +6,7 @@ import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import { redactMessage } from '../security/redact.js';
 import { LiveError } from './policy.js';
+import { assertExclusiveLocalFiles } from '../media/localFileOwnership.js';
 
 const snapshotSchema = z.object({ files: z.array(z.string()), partIds: z.array(z.number()), targets: z.array(z.object({ connectorId: z.number(), host: z.string(), type: z.string(), libraryId: z.string(), externalId: z.string(), expectedPath: z.string() })),
   exclusions: z.array(z.object({ artistId: z.number(), scope: z.string(), fingerprint: z.string() })) });
@@ -28,6 +29,7 @@ export async function scheduleRecordingDeletion(id: number, confirmed: boolean, 
     for (const copy of part.serverCopies) targets.push({ connectorId: copy.connectorId, host: copy.connector.host, type: copy.connector.type, libraryId: copy.libraryId, externalId: copy.externalId, expectedPath: copy.expectedPath });
   }
   const selectedEvent = performanceId ?? (recording.performances.length === 1 ? recording.performances[0].performanceId : undefined);
+  await assertExclusiveLocalFiles(files, { recordingId: id, musicVideoId: recording.musicVideoId });
   if (scope === 'artistSet' && !recording.performances.some(link => link.performanceId === selectedEvent)) throw new LiveError('Choose the particular artist performance to exclude; a compilation must not exclude unrelated sets');
   const exclusions: z.infer<typeof snapshotSchema>['exclusions'] = [];
   if (settings?.excludeDeletedVideosFromScans) {
@@ -74,6 +76,9 @@ export async function processRecordingDeletions(now = new Date()) {
         remotes.push({ connector, provider, target });
       }
       for (const file of snapshot.files) await checkLocalPath(file);
+      // Recheck before any remote deletion: an older registration may contain
+      // an alias, or ownership may have changed during the five-minute delay.
+      await assertExclusiveLocalFiles(snapshot.files, { recordingId: row.id, musicVideoId: row.musicVideoId });
       for (const remote of remotes) await remote.provider.deleteVideo!(remote.connector, remote.target);
       for (const file of snapshot.files) { await checkLocalPath(file); await fs.unlink(file).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }); }
       await prisma.$transaction(async tx => {

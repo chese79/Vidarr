@@ -71,7 +71,12 @@ async function poll() {
         if (seen.has(key)) continue; seen.add(key);
         await observeLivePlayback(serverKey, matches[0].partId, session); observed++;
       }
-    } catch (error) { await logActivity('warn', 'live-playback', error); }
+    } catch (error) {
+      // A failed observation cannot prove uninterrupted watching. Preserve the
+      // viewing and earned credit, but make the next good snapshot a baseline.
+      await prisma.livePlaybackObservation.updateMany({ where: { viewing: { serverKey } }, data: { playing: false } });
+      await logActivity('warn', 'live-playback', error);
+    }
   }
   return `${observed} live playback observations; unfinished viewing retained`;
 }

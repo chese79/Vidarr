@@ -8,6 +8,7 @@ import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { accessibleRootPath } from './localVideoReview.js';
 import { isPathWithinRoot } from './pathContainment.js';
 import { normalizeTitle } from './normalize.js';
+import { assertExclusiveLocalFiles } from '../media/localFileOwnership.js';
 
 const ACTIVE = [...ACTIVE_DOWNLOAD_STATUSES];
 const INITIAL_DELAY_MS = 5 * 60_000;
@@ -85,6 +86,7 @@ export async function deleteMusicVideo(id: number, confirmed: boolean): Promise<
   };
   for (const target of targets) if (!snapshot.targets.some(t => t.connectorId === target.connectorId && t.externalId === target.externalId)) snapshot.targets.push(target);
   for (const identity of identities) if (!snapshot.identities.includes(identity)) snapshot.identities.push(identity);
+  await assertExclusiveLocalFiles(snapshot.files, { musicVideoId: id });
   if (video.file && await prisma.musicVideoFile.count({ where: { path: video.file.path, musicVideoId: { not: id } } })) throw new VideoDeletionError('Another video owns the same local path; resolve ownership before deleting.');
   await prisma.$transaction(async tx => {
     const claimed = await tx.musicVideo.updateMany({ where: { id, OR: [{ deletionState: null }, { deletionState: 'failed' }] },
@@ -116,6 +118,7 @@ async function performVideoDeletion(id: number, now: Date): Promise<void> {
     }
     // Validate every target before any destructive action; retry is idempotent.
     for (const file of snapshot.files) await checkLocalPath(file);
+    await assertExclusiveLocalFiles(snapshot.files, { musicVideoId: id });
     for (const remote of remotes) await remote.provider.verifyVideoDeletion!(remote.connector, remote.target);
     for (const remote of remotes) if (await remote.provider.isVideoInUse!(remote.connector, remote.target.externalId)) {
       throw new Error('Video is in a playback session (playing or paused); deletion deferred.');

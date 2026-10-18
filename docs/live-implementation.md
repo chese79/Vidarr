@@ -37,6 +37,30 @@ provider discovery/acquisition. No key was extracted from the supplied screensho
 
 ## Completion implementation (2026-10-18)
 
+### Review corrections (2026-10-18)
+
+The post-release review identified eight correctness gaps. Physical file ownership now compares
+resolved paths across both catalogs, including aliases already stored by older versions, and
+deletion repeats the ownership check before deleting any copy. Registrations store resolved paths;
+existing references are not rewritten, merged or removed. Conflicts remain recoverable and do not
+authorize cleanup. Classified compatibility entries no longer enter newly generated music-video
+playlists. Existing static snapshots keep their references.
+
+Delivery restores exact returning server-only copies independently of local-file availability.
+Delivery and local absence audits use stable ID pages through all eligible parts. Playback-poll
+failures clear observation continuity without clearing viewing, earned-time or counter records.
+Live exclusion consumers share the existing global setting, leaving their ledger intact while
+disabled. Monitoring acquisition honors its selected direct source. Upper-bound-only metadata
+scopes page full history with local date filtering, including automatic repair of older cursors;
+scopes with lower bounds retain bounded year traversal. These corrections require no new schema,
+file move or reinterpretation of historical plays.
+
+Verification: all 885 tests in 109 files pass under the isolated Node 22 environment, including
+12 regression cases for the review findings, existing-alias deletion protection across catalogs,
+exclusion toggles and availability checks beyond 500 files. The production Docker server/web build
+and whitespace checks pass. Tests use disposable databases and fixture media, never production
+configuration or media mounts.
+
 The unified application now implements the approved live workflow in the same server, web app,
 queue, transfer dispatcher, validation worker, importer, connector adapters and playlist publisher
 as music videos. Catalog policy remains separate: an official music video is not a live event,

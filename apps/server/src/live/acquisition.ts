@@ -12,16 +12,19 @@ import { accessibleRootPath } from '../pipeline/localVideoReview.js';
 import { isPathWithinRoot } from '../pipeline/pathContainment.js';
 import { wakeDownloadQueue } from '../pipeline/downloadDispatcher.js';
 import { LiveError, directVideoUrl, liveConfiguration } from './policy.js';
+import { liveScanExcluded } from './exclusions.js';
 
 export async function assertRecordingEligible(id: number) {
-  const recording = await prisma.recording.findUniqueOrThrow({ where: { id }, include: { performances: { include: { performance: { select: { removedAt: true, artist: { select: { name: true } } } } } } } });
+  const recording = await prisma.recording.findUniqueOrThrow({ where: { id }, include: { performances: { include: { performance: { select: { removedAt: true, artistId: true, artist: { select: { name: true } } } } } } } });
   if (recording.catalogType !== 'live' || !recording.identityVerified || !recording.videoVerified || recording.reviewStatus !== 'accepted' || recording.deletionState) throw new LiveError('Complete identity and video review before acquisition');
   if (!recording.performances.length || recording.performances.some(link => !link.identityVerified || link.performance.removedAt)) throw new LiveError('Review every linked event before acquiring this recording');
+  if (await liveScanExcluded(recording.performances.map(link => `artistSet:${link.performance.artistId}:${link.performanceId}`))) throw new LiveError('This performance is excluded from future acquisition');
   return recording;
 }
 export async function enqueueRecording(recordingId: number, sourceId: number, downloadClientId?: number, packApproval?: { totalSizeBytes: number; contents: string[]; selected: string[]; approved: true }, partPosition = 1) {
   const recording = await assertRecordingEligible(recordingId);
   const source = await prisma.recordingSource.findFirstOrThrow({ where: { id: sourceId, recordingId, accepted: true, available: true } });
+  if (await liveScanExcluded([`${source.provider}:${source.externalId ?? source.url}`])) throw new LiveError('This source was excluded from future acquisition');
   const inspection = JSON.parse(source.payload).inspection;
   if (inspection?.currentlyLive || inspection?.sourceHasVideo === false) throw new LiveError('Wait for a completed moving-video recording; live streams and audio-only sources are ineligible');
   const { policy } = await liveConfiguration();
@@ -104,7 +107,7 @@ export async function importRecordingDownload(item: DownloadQueueItem) {
     await fs.mkdir(path.dirname(destination), { recursive: true });
     if (!isPathWithinRoot(rootPath, await fs.realpath(path.dirname(destination)))) throw new LiveError('Destination directory escaped through a symlink');
     if (await fs.lstat(destination).then(() => true, () => false)) throw new LiveError('Unregistered destination exists; retain both files for recovery');
-    if (await prisma.liveExclusion.count({ where: { fingerprint: `sha256:${sha256}` } })) throw new LiveError('This exact recording was excluded from future imports');
+    if (await liveScanExcluded([`sha256:${sha256}`])) throw new LiveError('This exact recording was excluded from future imports');
     if (files.length === 1) {
       const identical = await prisma.recordingPart.findFirst({ where: { sha256, available: true, recordingId: { not: recording.id } }, include: { recording: { include: { performances: true, parts: true } } } });
       if (identical?.path && identical.sizeBytes !== null && identical.recording.parts.length === 1) {

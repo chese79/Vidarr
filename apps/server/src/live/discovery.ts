@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { PerformanceDate, LiveSetting, RecordingCoverage } from '@vidarr/shared-types';
 import { enqueueRecording } from './acquisition.js';
 import { verifiedImprovement } from './evidence.js';
+import { liveScanExcluded } from './exclusions.js';
 
 export const MonitoringInput = z.object({ artistId: z.number().int().positive(), performanceId: z.number().int().positive().nullable().default(null),
   tour: z.string().trim().max(200).nullable().default(null), from: PerformanceDate.optional(),
@@ -68,7 +69,7 @@ export function discoverRecordings(performanceId: number, ruleId?: number, force
 async function discover(performanceId: number, ruleId?: number, force = false) {
   const performance = await prisma.livePerformance.findUniqueOrThrow({ where: { id: performanceId }, include: { artist: true } });
   if (performance.ignored) throw new LiveError('This performance is excluded from monitoring');
-  if (await prisma.liveExclusion.count({ where: { fingerprint: `artistSet:${performance.artistId}:${performance.id}` } })) return { candidates: 0, deferred: false, errors: [] };
+  if (await liveScanExcluded([`artistSet:${performance.artistId}:${performance.id}`])) return { candidates: 0, deferred: false, errors: [] };
   const indexers = await prisma.indexer.findMany({ where: { enabled: true }, orderBy: { id: 'asc' } });
   const rule = ruleId ? await prisma.liveMonitoringRule.findUniqueOrThrow({ where: { id: ruleId } }) : null;
   const selectedSources = rule ? MonitoringInput.parse(JSON.parse(rule.filters)).sources : ['youtube', 'indexer'];
@@ -86,7 +87,7 @@ async function discover(performanceId: number, ruleId?: number, force = false) {
         url: `https://www.youtube.com/watch?v=${value.youtubeVideoId}`, payload: value }))
         : (await searchIndexer(indexers.find(value => provider === `indexer:${value.id}`)!, query)).map(value => ({ title: value.title, externalId: value.downloadUrl, url: value.downloadUrl, payload: value }));
       for (const result of results.slice(0, 100)) {
-        if (await prisma.liveExclusion.count({ where: { fingerprint: `${provider}:${result.externalId}` } })) continue;
+        if (await liveScanExcluded([`${provider}:${result.externalId}`])) continue;
         await prisma.$transaction(async tx => {
           const existing = await tx.recordingSource.findUnique({ where: { provider_externalId: { provider, externalId: result.externalId } } });
           if (existing) return; // Same provider item is identity; a similar title is not.
@@ -127,7 +128,10 @@ export async function runLiveMonitoring() {
         queueItems: { where: { OR: [{ status: { in: ['queued', 'downloading', 'importing', 'submissionUnknown'] } }, { status: 'failed', downloadedPath: { not: null } }] } } } });
       if (recordings.some(recording => recording.queueItems.length)) continue;
       const owned = recordings.filter(recording => recording.parts.some(part => part.available || part.serverCopies.some(copy => copy.available)));
-      const candidates = recordings.filter(recording => !owned.some(item => item.id === recording.id) && recording.sources.some(source => !source.provider.startsWith('indexer:')));
+      // Indexer acquisitions still require explicit pack approval. A scoped rule
+      // must not fall back to an accepted direct provider the user did not select.
+      const allowedDirectSource = (source: { provider: string }) => input.sources.includes('youtube') && source.provider === 'youtube';
+      const candidates = recordings.filter(recording => !owned.some(item => item.id === recording.id) && recording.sources.some(allowedDirectSource));
       const { policy } = await liveConfiguration();
       const eligible = owned.length ? candidates.filter(candidate => owned.every(current => verifiedImprovement(candidate, current, policy.qualityOrder))) : candidates;
       const pinned = eligible.filter(candidate => candidate.preferred || candidate.pinned);
@@ -143,7 +147,7 @@ export async function runLiveMonitoring() {
       }
       // Unknown comparisons and multiple unranked versions remain reviewable, rather than guessing quality.
       if (chosen && await prisma.liveMonitoringRule.count({ where: { id: rule.id, state: 'active' } })) {
-        const source = chosen.sources.find(source => !source.provider.startsWith('indexer:'));
+        const source = chosen.sources.find(allowedDirectSource);
         const cooldown = await prisma.liveSearchJournal.findUnique({ where: { key: `acquisition:${chosen.id}` } });
         if (cooldown?.retryAt && cooldown.retryAt > new Date()) continue;
         if (source) try { await enqueueRecording(chosen.id, source.id); }

@@ -22,33 +22,48 @@ export async function reconcileRecordingDelivery() {
       const videos = await provider.fetchVideos(connector);
       const section = (await provider.listSections?.(connector))?.find(value => value.id === libraryId);
       if (!section) throw new Error('The configured playback library is unavailable; ownership was retained');
-      const existingCopies = await prisma.recordingServerCopy.findMany({ where: { connectorId, libraryId, available: true }, include: { part: true } });
+      const existingCopies = await prisma.recordingServerCopy.findMany({ where: { connectorId, libraryId,
+        part: { recording: { catalogType: 'live', deletionState: null } } }, include: { part: true } });
       for (const copy of existingCopies) {
-        const same = videos.find(video => video.externalId === copy.externalId && video.path === copy.expectedPath);
-        if (!same) await prisma.recordingServerCopy.update({ where: { id: copy.id }, data: { available: false } });
+        const matches = videos.filter(video => video.externalId === copy.externalId && video.path === copy.expectedPath
+          && (copy.part.durationSeconds == null || video.durationSeconds == null || Math.abs(copy.part.durationSeconds - video.durationSeconds) <= 10));
+        const same = matches.length === 1 ? matches[0] : undefined;
+        // Server-only parts deliberately have no local path. Recover their exact
+        // retained server identity independently of the local delivery matcher.
+        if (Boolean(same) !== copy.available) {
+          const changed = await prisma.recordingServerCopy.updateMany({ where: { id: copy.id, part: { recording: { catalogType: 'live', deletionState: null } } },
+            data: { available: Boolean(same), ...(same ? { confirmedAt: new Date(), playCount: same.playCount } : {}) } });
+          if (same) confirmed += changed.count;
+        }
       }
-      const parts = await prisma.recordingPart.findMany({ where: { available: true,
-        recording: { catalogType: 'live', deletionState: null, claimedCoverage: kind === 'song' ? 'individualSong' : { not: 'individualSong' } },
-        serverCopies: { none: { connectorId, libraryId, available: true } } }, include: { rootFolder: true, recording: true }, take: 100 });
-      for (const part of parts) {
-        if (!part.path || !part.rootFolder) continue;
-        const partPath = part.path, rootPath = part.rootFolder.path;
-        // Exact mapped file identity is authoritative; Plex may display a filename-derived
-        // part title because it does not consume music-video NFO titles.
-        const matches = videos.filter(video => serverDeliveryPathMatches(partPath, rootPath, video.path)
-          && (part.durationSeconds == null || video.durationSeconds == null || Math.abs(part.durationSeconds - video.durationSeconds) <= 10));
-        if (matches.length !== 1 || !matches[0].path) continue;
-        const video = matches[0];
-        const existing = await prisma.recordingServerCopy.findUnique({ where: { connectorId_libraryId_externalId: { connectorId, libraryId, externalId: video.externalId } } });
-        if (existing && existing.partId !== part.id) continue;
-        const saved = await prisma.$transaction(async tx => {
-          if (!await tx.recording.count({ where: { id: part.recordingId, deletionState: null, catalogType: 'live' } })) return false;
-          await tx.recordingServerCopy.upsert({ where: { partId_connectorId: { partId: part.id, connectorId } }, create: {
-          partId: part.id, connectorId, libraryId, externalId: video.externalId, expectedPath: video.path!, playCount: video.playCount,
-        }, update: { libraryId, externalId: video.externalId, expectedPath: video.path!, available: true, confirmedAt: new Date(), playCount: video.playCount } });
-          return true;
-        });
-        if (saved) confirmed++;
+      let afterId = 0;
+      for (;;) {
+        const parts = await prisma.recordingPart.findMany({ where: { available: true,
+          id: { gt: afterId },
+          recording: { catalogType: 'live', deletionState: null, claimedCoverage: kind === 'song' ? 'individualSong' : { not: 'individualSong' } },
+          serverCopies: { none: { connectorId, libraryId, available: true } } }, include: { rootFolder: true, recording: true }, orderBy: { id: 'asc' }, take: 100 });
+        for (const part of parts) {
+          if (!part.path || !part.rootFolder) continue;
+          const partPath = part.path, rootPath = part.rootFolder.path;
+          // Exact mapped file identity is authoritative; Plex may display a filename-derived
+          // part title because it does not consume music-video NFO titles.
+          const matches = videos.filter(video => serverDeliveryPathMatches(partPath, rootPath, video.path)
+            && (part.durationSeconds == null || video.durationSeconds == null || Math.abs(part.durationSeconds - video.durationSeconds) <= 10));
+          if (matches.length !== 1 || !matches[0].path) continue;
+          const video = matches[0];
+          const existing = await prisma.recordingServerCopy.findUnique({ where: { connectorId_libraryId_externalId: { connectorId, libraryId, externalId: video.externalId } } });
+          if (existing && existing.partId !== part.id) continue;
+          const saved = await prisma.$transaction(async tx => {
+            if (!await tx.recording.count({ where: { id: part.recordingId, deletionState: null, catalogType: 'live' } })) return false;
+            await tx.recordingServerCopy.upsert({ where: { partId_connectorId: { partId: part.id, connectorId } }, create: {
+              partId: part.id, connectorId, libraryId, externalId: video.externalId, expectedPath: video.path!, playCount: video.playCount,
+            }, update: { libraryId, externalId: video.externalId, expectedPath: video.path!, available: true, confirmedAt: new Date(), playCount: video.playCount } });
+            return true;
+          });
+          if (saved) confirmed++;
+        }
+        if (parts.length < 100) break;
+        afterId = parts[parts.length - 1].id;
       }
     } catch (error) { await logActivity('warn', 'live-delivery', error); }
   }
@@ -65,15 +80,20 @@ export async function auditLocalRecordingAvailability() {
       if (!stat.isDirectory()) continue;
       const identity = await storageIdentity(accessible);
       if (!identity) continue;
-      const parts = await prisma.recordingPart.findMany({ where: { rootFolderId: root.id, storageIdentity: identity, available: true }, take: 500 });
-      for (const part of parts) {
-        if (!part.path) continue;
-        try { await fs.stat(part.path); }
-        catch (error) {
-          // Only a successful root check and explicit missing-file result establish local loss.
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') continue;
-          await prisma.recordingPart.update({ where: { id: part.id }, data: { available: false } }); lost++;
+      let afterId = 0;
+      for (;;) {
+        const parts = await prisma.recordingPart.findMany({ where: { rootFolderId: root.id, storageIdentity: identity, available: true, id: { gt: afterId } }, orderBy: { id: 'asc' }, take: 500 });
+        for (const part of parts) {
+          if (!part.path) continue;
+          try { await fs.stat(part.path); }
+          catch (error) {
+            // Only a successful root check and explicit missing-file result establish local loss.
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') continue;
+            await prisma.recordingPart.update({ where: { id: part.id }, data: { available: false } }); lost++;
+          }
         }
+        if (parts.length < 500) break;
+        afterId = parts[parts.length - 1].id;
       }
     } catch { /* An unmounted/inaccessible root is not proof that its files were deleted. */ }
   }

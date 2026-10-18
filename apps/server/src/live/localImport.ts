@@ -10,6 +10,8 @@ import { isPathWithinRoot } from '../pipeline/pathContainment.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { LiveError, liveConfiguration } from './policy.js';
 import { assertRecordingEligible } from './acquisition.js';
+import { assertExclusiveLocalFiles, canonicalLocalPath } from '../media/localFileOwnership.js';
+import { liveScanExcluded } from './exclusions.js';
 
 export async function registerExistingRecordingFile(recordingId: number, rootFolderId: number, filePath: string) {
   const recording = await assertRecordingEligible(recordingId);
@@ -17,6 +19,7 @@ export async function registerExistingRecordingFile(recordingId: number, rootFol
   const realRoot = await fs.realpath(await accessibleRootPath(root.path));
   const stat = await fs.lstat(filePath);
   if (!stat.isFile() || stat.isSymbolicLink() || !isPathWithinRoot(realRoot, await fs.realpath(filePath))) throw new LiveError('Choose a regular file inside the accessible configured media root');
+  filePath = await fs.realpath(filePath);
   const { policy } = await liveConfiguration();
   const checks = recording.claimedCoverage === 'unknown' ? { file: true, motion: true } : recording.claimedCoverage === 'individualSong' ? policy.song : policy.full;
   await assertHasVideoStream(filePath);
@@ -26,15 +29,20 @@ export async function registerExistingRecordingFile(recordingId: number, rootFol
   if (!probe.duration) throw new LiveError('Unable to establish file duration; retain it for review');
   const hash = createHash('sha256'); for await (const chunk of createReadStream(filePath)) hash.update(chunk);
   const sha256 = hash.digest('hex'), identity = await storageIdentity(realRoot, true);
-  if (await prisma.liveExclusion.count({ where: { fingerprint: `sha256:${sha256}` } })) throw new LiveError('This exact recording was excluded from future imports');
+  if (await liveScanExcluded([`sha256:${sha256}`])) throw new LiveError('This exact recording was excluded from future imports');
   return prisma.$transaction(async tx => {
     const current = await tx.recording.findUniqueOrThrow({ where: { id: recordingId } });
     if (current.deletionState) throw new LiveError('Deletion is pending');
+    try { await assertExclusiveLocalFiles([filePath], { recordingId, musicVideoId: recording.musicVideoId }, tx); }
+    catch (error) { throw new LiveError((error as Error).message); }
     const existing = await tx.recordingPart.findUnique({ where: { path: filePath } });
     if (existing) {
       if (existing.recordingId !== recordingId) throw new LiveError('This file already belongs to another recording; link that recording instead');
       return existing;
     }
+    const identityPath = await canonicalLocalPath(filePath);
+    for (const part of await tx.recordingPart.findMany({ where: { recordingId, path: { not: null } } }))
+      if (await canonicalLocalPath(part.path!) === identityPath) return part;
     if (await tx.musicVideoFile.count({ where: { path: filePath } })) throw new LiveError('This file belongs to a music video; use the reversible classification workflow');
     const last = await tx.recordingPart.aggregate({ where: { recordingId }, _max: { position: true } });
     const part = await tx.recordingPart.create({ data: { recordingId, rootFolderId, path: filePath, sizeBytes: BigInt(stat.size), storageIdentity: identity, durationSeconds: probe.duration, sha256, position: (last._max.position ?? 0) + 1 } });

@@ -329,6 +329,24 @@ not an uncertain external submission. Provider errors are not empty results. Ref
 and later links preserve local IDs and user details until reviewed. Neither retention nor removal
 of a performance implicitly deletes media or indefinite playback history.
 
+Review recovery corrections (2026-10-18): existing-file registration resolves the physical path
+before ownership checks. Both music-video and Live deletion verify other catalog owners of every
+local target before remote deletion or unlinking; aliases stored by older versions block deletion
+for review rather than silently changing ownership. The normal five-minute delay and 40-minute
+retry remain in force. New music-video filter generation/regeneration excludes classified Live
+compatibility rows; saved playlist references remain intact until explicitly edited/regenerated.
+
+Delivery checks revisit retained server-only identities even without local paths and restore only
+an exact unique item/path match with compatible known duration. Local pending deliveries and
+availability audits page by stable ID, so unmatched first batches do not hide later entries.
+Failed playback observations clear continuity, retaining earned time and resume state; the next
+successful snapshot establishes a baseline before further watch credit. Automatic acquisition
+uses the monitoring rule's selected source; indexer packs still require their normal approval.
+The global exclude-deleted toggle also controls Live discovery, review and import checks without
+discarding its ledger. Upper-bound-only history monitoring pages complete provider history and
+filters dates locally, repairing older upper-year cursors; bounded year ranges retain their
+year-by-year traversal, provider cache, budgets and retry behavior.
+
 
 ## Owner password recovery (2026-10-18)
 

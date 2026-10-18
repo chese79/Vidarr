@@ -36,12 +36,12 @@ function orderedIds(ids: number[], sortMode: string, shuffleSeed: number | null)
 // playlist. Push applies the selected connector's availability boundary.
 async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'any', targetConnectorId?: number | null): Promise<number[]> {
   const candidates = await prisma.musicVideo.findMany({
-    where: targetConnectorId ? { libraryVideos: { some: {
+    where: { catalogKind: { not: 'liveClassified' }, ...(targetConnectorId ? { libraryVideos: { some: {
       connectorId: targetConnectorId, available: true, matchConfidence: null, connector: { enabled: true },
     } } } : { OR: [
       { hasFile: true },
       { libraryVideos: { some: { available: true, matchConfidence: null, connector: { enabled: true } } } },
-    ] },
+    ] }) },
     include: { artist: true, file: true, libraryVideos: {
       where: { available: true, matchConfidence: null, connector: { enabled: true }, connectorId: targetConnectorId ?? undefined },
     } },

@@ -5,6 +5,22 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Fixed — Live review regressions
+
+- Prevent equivalent local paths from assigning one file to multiple recordings or music videos.
+  Recheck existing aliases before delayed deletion; ownership conflicts retain files for review.
+- Exclude classified Live entries from new music-video playlist generation and smart regeneration.
+- Restore returning exact server-only copies and page delivery/local-availability checks beyond
+  their first batch, so unmatched entries cannot indefinitely block later files.
+- Break Live playback continuity after server-poll failures while retaining earned watching,
+  qualified counters and unfinished viewings.
+- Restrict automatic Live direct acquisitions to the rule's selected YouTube source. Indexer
+  packs continue to require explicit approval; manually reviewed Vimeo transfers remain available.
+- Honor the shared exclude-deleted setting in Live discovery, review and imports. Preserve the
+  exclusion ledger when disabled so it applies again if re-enabled.
+- Load older performances for monitoring with only an upper date bound; repair old upper-year
+  cursors without sending empty requests for every earlier year. No schema migration is needed.
+
 ### Added — Owner password recovery
 
 - Add Forgot password? to sign-in, with API-key ownership proof, password confirmation, actionable

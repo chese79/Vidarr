@@ -17,16 +17,21 @@ export async function runLiveMetadataMonitoring() {
     const input = MonitoringInput.parse(JSON.parse(rule.filters)), key = `metadata-cursor:${rule.id}`;
     const journal = await prisma.liveSearchJournal.findUnique({ where: { key } });
     await prisma.liveSearchJournal.upsert({ where: { key }, create: { key, provider: 'metadata-cursor', lastSearchAt: new Date(), expiresAt: new Date(Date.now() + 365 * DAY) }, update: { lastSearchAt: new Date() } });
+    const initialYear = input.from ? Number(input.to?.slice(0, 4) ?? new Date().getFullYear()) : undefined;
     const state = journal?.payload ? JSON.parse(journal.payload) as { year?: number; page: number; refreshAfter?: string } : {
-      year: input.to ? Number(input.to.slice(0, 4)) : input.from ? new Date().getFullYear() : undefined, page: 1,
+      year: initialYear, page: 1,
     };
+    // With no lower bound, page the complete history and apply the upper date
+    // locally. Do not issue thousands of empty, year-by-year requests. Repair
+    // cursors left at the upper year by earlier releases as well.
+    if (!input.from && state.year !== undefined) { delete state.year; state.page = 1; delete state.refreshAfter; }
     if (state.refreshAfter && new Date(state.refreshAfter) > new Date()) continue;
     try {
       const result = await discoverSetlists(rule.artistId, state.page, undefined, { year: state.year, tour: rule.tour ?? undefined, from: input.from, to: input.to, ruleId: rule.id });
       pages++;
       if (result.hasMore) state.page++;
       else if (state.year && input.from && state.year > Number(input.from.slice(0, 4))) { state.year--; state.page = 1; }
-      else { state.page = 1; state.year = input.to ? Number(input.to.slice(0, 4)) : input.from ? new Date().getFullYear() : undefined; state.refreshAfter = new Date(Date.now() + DAY).toISOString(); }
+      else { state.page = 1; state.year = initialYear; state.refreshAfter = new Date(Date.now() + DAY).toISOString(); }
       await prisma.liveSearchJournal.upsert({ where: { key }, create: { key, provider: 'metadata-cursor', payload: JSON.stringify(state), expiresAt: new Date(Date.now() + 365 * DAY) }, update: { payload: JSON.stringify(state), expiresAt: new Date(Date.now() + 365 * DAY) } });
       await prisma.livePerformance.updateMany({ where: monitoringWhere(input), data: { monitored: true } });
     } catch (error) { await logActivity('warn', `live-metadata-rule:${rule.id}`, error); }
