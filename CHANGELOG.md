@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Deployment — Local action feedback release (2026-10-22)
+
+- Integrate the native client source and application changes on local `main`; deploy only
+  Vidarr as `vidarr-feedback-20261022:local` at its existing address. Jellyfin client installs
+  remain separate. Preserve Full media tools by reusing the verified runtime after checking
+  that all 100 production dependency entries are unchanged; rebuild application outputs.
+- Pass production compilation, 884 server tests and 67 web tests under Node 22. Verify healthy
+  service, protected APIs, new assets, browser loading, database integrity and unchanged settings.
+- Preserve configuration/media/staging mounts, environment, port and restart policy, and every
+  original catalog/queue row. Retain an offline backup and rollback container; leave SABnzbd running.
+
 ### Changed — Application-wide button feedback
 
 - Acknowledge enabled button clicks with a temporary cyan color and Clicked message. Show

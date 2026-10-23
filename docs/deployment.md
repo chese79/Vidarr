@@ -1,5 +1,44 @@
 # Deployment
 
+### Local action feedback release — 2026-10-22
+
+Integrated the optional native client source in `43f47cc` and the application changes in
+`a69ae4d` on local `main`. Deployed `vidarr-feedback-20261022:local`, manifest
+`sha256:934ce7b3b14b9ee71a305bd81cc5fbc13662beb52746e26cd65c9935c6724352`,
+at `http://192.168.0.8:3434`. This includes shared button engagement/pending/failure feedback,
+compact artist video actions and the monitoring selectors' vertical right-hand column.
+Native Jellyfin web/Roku installation remains a separate client deployment, as described below.
+
+The initial clean image build hit a dependency download reset, then slow Debian downloads.
+The local release therefore reuses the running Full runtime `vidarr-full-20261019:release`
+(`sha256:c1bc6ea9a1c3811b045010c7c2f59f6b113003966c1503d9829dc72d454648eb`)
+after comparing all 100 non-development dependency entries and finding them unchanged. It cleans
+the image's application output directories and copies freshly compiled server, shared types,
+Prisma client/schema/migrations and web assets. The canonical Dockerfile remains available for
+clean builds. Node 22.23.2, uid 1000, static FFmpeg/ffprobe, Debian sample FFmpeg and yt-dlp remain
+available. The added jsdom dependency is for browser tests only. No schema migration was added.
+
+Verification: server/web production compilation, 884 server tests across 112 files, and 67 web
+tests across 18 files passed under Node 22. Post-cutover checks passed for nine HTTP routes,
+authenticated APIs, rejection of unauthenticated API access, the new JS/CSS assets, SQLite quick
+and foreign-key checks, and an identical settings/authentication fingerprint. Reloading the
+existing browser session displayed the library successfully.
+
+Only Vidarr was recreated. Its four configuration/media/D-drive/staging mounts, environment,
+explicit `192.168.0.8:3434` port binding and `unless-stopped` restart policy were preserved;
+SABnzbd stayed running. The verified offline backup `vidarr-backup-20261022-feedback` contains
+the database/recovery files and configuration archive. Keep the backup private. Preservation
+checks found every original row: 3,051 artists, 4,296 videos, 677 owned file records, 48,049 review
+candidates and 3,156 queue entries. Staging had 58 files at backup and retains its existing volume.
+
+The previous container is retained stopped as `vidarr-rollback-20261022-feedback` with the old
+Full image. For rollback, recreate only Vidarr from that image using the current preserved
+mounts/environment/restart policy and explicitly publish `192.168.0.8:3434:3434`. Verify the
+binding before starting: the retained stopped container currently inspects with a loopback,
+dynamically assigned binding, so simply renaming and starting it would not preserve the address.
+The database backup is for recovery; do not overwrite subsequent work with a blind restore.
+No media files, other services or public repositories were changed by deployment.
+
 ### Native MTV overlay direction
 
 The undeployed pre-render component and its migration were removed after the user selected a
