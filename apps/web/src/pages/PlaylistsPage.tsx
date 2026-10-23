@@ -1,6 +1,9 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useCatalogMode } from '../components/CatalogMode';
+import { matchesCatalog } from '../catalogMode';
 import VideoThumb from '../components/VideoThumb';
 import type { DeletePlaylistResult, LibraryConnector, Playlist, UpdatePlaylist } from '@vidarr/shared-types';
 import {
@@ -11,6 +14,7 @@ import {
   type RuleDraft,
 } from './playlistRules';
 import { describeSync } from './playlistSyncText';
+import { nextPlaylistName } from './playlistNames';
 
 interface Notice {
   kind: 'status' | 'alert';
@@ -57,7 +61,9 @@ function ScheduleSelect({ value, onChange }: { value: number | null; onChange: (
 function GeneratePlaylistPanel() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(true);
-  const [name, setName] = useState('');
+  const [nameDraft, setName] = useState<string | null>(null);
+  const playlists = useQuery({ queryKey: ['playlists'], queryFn: api.playlists.list });
+  const name = nameDraft ?? nextPlaylistName(playlists.data ?? []);
   const [smart, setSmart] = useState(false);
   const [regenerateIntervalMinutes, setRegenerateIntervalMinutes] = useState<number | null>(null);
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
@@ -72,8 +78,10 @@ function GeneratePlaylistPanel() {
   const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list, enabled: open });
 
   const generate = useMutation({
-    mutationFn: () => api.playlists.generate({
-      name,
+    mutationFn: async () => {
+      const resolvedName = nameDraft === null ? nextPlaylistName(await api.playlists.list()) : name.trim();
+      const result = await api.playlists.generate({
+      name: resolvedName,
       filters: draftToFilters(draft),
       matchMode: draft.matchMode,
       smart,
@@ -81,11 +89,13 @@ function GeneratePlaylistPanel() {
       targetConnectorId: targetConnectorId || null,
       sortMode,
       maxVideos: maxVideos || 20,
-    }),
+      });
+      return { ...result, name: resolvedName };
+    },
     onSuccess: (r) => {
-      setResult([`Created "${name}" with ${r.matchedCount} video(s). Next: open the playlist and Push to your playback library to publish it.`, describeSync(r.sync)].filter(Boolean).join(' '));
+      setResult([`Created "${r.name}" with ${r.matchedCount} video(s). Review it below, then Push to your playback library to publish it.`, describeSync(r.sync)].filter(Boolean).join(' '));
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
-      setName('');
+      setName(null);
     },
     onError: (err) => setResult(`Failed: ${(err as Error).message}`),
   });
@@ -97,23 +107,23 @@ function GeneratePlaylistPanel() {
     generate.mutate();
   }
 
-  if (!open) {
-    return (
-      <button className="secondary" onClick={() => setOpen(true)}>
-        Generate from filters…
-      </button>
-    );
-  }
-
   return (
-    <form className="card" onSubmit={handleGenerate}>
+    <>
+    <div className="form-row playlist-top-actions">
+      <ActionButton type="submit" form="playlist-generator" disabled={!name.trim() || !maxVideos || generate.isPending || playlists.isPending || playlists.isError}>
+        {generate.isPending ? 'Generating…' : 'Generate playlist'}
+      </ActionButton>
+      <PlaylistPushAction generatedId={generate.data?.playlistId} busy={generate.isPending} />
+    </div>
+    <ActionForm className="card" id="playlist-generator" onSubmit={handleGenerate}>
       <div className="page-header" style={{ marginBottom: 8 }}>
         <h3 style={{ margin: 0 }}>Generate playlist from filters</h3>
-        <button type="button" className="secondary" onClick={() => setOpen(false)}>
-          Close
-        </button>
+        <ActionButton type="button" className="secondary" onClick={() => setOpen(value => !value)} aria-expanded={open}>
+          {open ? 'Hide filters' : 'Show filters'}
+        </ActionButton>
       </div>
 
+      <div hidden={!open}>
       <div className="form-row">
         <input
           placeholder="Playlist name"
@@ -132,7 +142,7 @@ function GeneratePlaylistPanel() {
       </div>
 
       <div className="form-row">
-        <button type="button" className="secondary" disabled={!targetConnectorId || defaults.save.isPending} onClick={() => targetConnectorId && defaults.save.mutate(targetConnectorId)}>Use as default playback library</button>
+        <ActionButton type="button" className="secondary" disabled={!targetConnectorId || defaults.save.isPending} onClick={() => targetConnectorId && defaults.save.mutate(targetConnectorId)}>Use as default playback library</ActionButton>
         {defaults.save.isSuccess && <span role="status">Default playback library saved.</span>}
         {defaults.save.isError && <span role="alert">{(defaults.save.error as Error).message}</span>}
       </div>
@@ -148,16 +158,50 @@ function GeneratePlaylistPanel() {
 
       <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix="generate" />
 
-      <button type="submit" disabled={!name.trim() || !maxVideos || generate.isPending}>
-        {generate.isPending ? 'Generating…' : 'Generate Playlist'}
-      </button>
+      </div>
       {result && (
         <p className="empty-state" role="status">
           {result}
         </p>
       )}
-    </form>
+    </ActionForm>
+    </>
   );
+}
+
+function PlaylistPushAction({ generatedId, busy = false }: { generatedId?: number; busy?: boolean }) {
+  const client = useQueryClient();
+  const { mode } = useCatalogMode();
+  const playlists = useQuery({ queryKey: ['playlists'], queryFn: api.playlists.list });
+  const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list });
+  const defaults = useDefaultPlaybackLibrary();
+  const [selectedId, setSelectedId] = useState<number>();
+  const [connectorId, setConnectorId] = useState<number>();
+  useEffect(() => { if (generatedId) setSelectedId(generatedId); }, [generatedId]);
+  const choices = (playlists.data ?? []).filter(p => !p.items.length || p.items.some(item => matchesCatalog(mode, item)));
+  const playlist = selectedId ? choices.find(p => p.id === selectedId) : choices[0];
+  const targetId = playlist?.targetConnectorId ?? connectorId ?? defaults.preferred;
+  const target = playbackConnectors(connectors.data).find(c => c.id === targetId);
+  const push = useMutation({
+    mutationFn: () => api.playlists.push(playlist!.id, target!.id),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['playlists'] }),
+  });
+  return <>
+    <ActionButton type="button" className="secondary" disabled={!playlist || !target || busy || push.isPending || playlists.isError}
+      onClick={() => push.mutate()}>{push.isPending ? 'Pushing…' : `Push to ${target?.name ?? 'media server'}`}</ActionButton>
+    <select aria-label="Playlist to push" value={playlist?.id ?? ''} disabled={!choices.length || busy || push.isPending}
+      onChange={event => { setSelectedId(Number(event.target.value)); push.reset(); }}>
+      <option value="">{choices.length ? 'Select playlist' : 'No playlist exists'}</option>
+      {choices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+    </select>
+    <select aria-label="Media server for playlist push" value={target?.id ?? ''} disabled={Boolean(playlist?.targetConnectorId) || busy || push.isPending}
+      onChange={event => { setConnectorId(Number(event.target.value)); push.reset(); }}>
+      <option value="">Choose media server</option>
+      {playbackConnectors(connectors.data).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
+    {push.isSuccess && <span role="status">{push.data.unmatchedTitles.length ? `Published ${push.data.matchedCount} items; ${push.data.unmatchedTitles.length} were not found in the server library.` : `Published ${push.data.matchedCount} items.`}</span>}
+    {push.isError && <span role="alert">Push failed: {push.error.message}</span>}
+  </>;
 }
 
 function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
@@ -224,7 +268,7 @@ function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
   const current = connectors?.find((c) => c.id === playlist.targetConnectorId);
 
   return (
-    <form className="card" aria-label={`Edit playlist ${playlist.name}`} onSubmit={handleSubmit}>
+    <ActionForm className="card" aria-label={`Edit playlist ${playlist.name}`} onSubmit={handleSubmit}>
       <div className="form-row">
         <input
           aria-label="Playlist name"
@@ -262,13 +306,13 @@ function PlaylistEditPanel({ playlist, connectors, onClose, onSaved }: {
       )}
 
       <div className="form-row">
-        <button type="submit" disabled={save.isPending || !name.trim()}>
+        <ActionButton type="submit" disabled={save.isPending || !name.trim()}>
           {save.isPending ? 'Saving…' : 'Save changes'}
-        </button>
-        <button type="button" className="secondary" onClick={onClose}>Cancel</button>
+        </ActionButton>
+        <ActionButton type="button" className="secondary" onClick={onClose}>Cancel</ActionButton>
       </div>
       {save.isError && <p className="empty-state" role="alert">Could not save: {(save.error as Error).message}</p>}
-    </form>
+    </ActionForm>
   );
 }
 
@@ -276,6 +320,7 @@ function PlaylistCard({ playlistId, onDeleted }: {
   playlistId: number;
   onDeleted: (name: string, result: DeletePlaylistResult, keptRemote: boolean) => void;
 }) {
+  const { mode } = useCatalogMode();
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -394,33 +439,33 @@ function PlaylistCard({ playlistId, onDeleted }: {
       <div className="page-header" style={{ marginBottom: 8 }}>
         <h3 style={{ margin: 0 }}>{playlist.name}{playlist.kind === 'smart' ? ' · Smart' : ''}</h3>
         <div style={{ display: 'flex', gap: 6 }}>
-          {playlist.kind === 'smart' && <button className="secondary" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
+          {playlist.kind === 'smart' && <ActionButton className="secondary" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
             {regenerate.isPending ? 'Regenerating…' : 'Regenerate'}
-          </button>}
-          <button
+          </ActionButton>}
+          <ActionButton
             className="secondary"
             aria-expanded={editing}
             aria-label={`Edit playlist ${playlist.name}`}
             onClick={() => { setEditing((v) => !v); setNotice(null); }}
           >
             {editing ? 'Close editor' : 'Edit'}
-          </button>
-          {isStatic && <button
+          </ActionButton>
+          {isStatic && mode !== 'live' && <ActionButton
             className="secondary"
             aria-expanded={adding}
             aria-controls={`playlist-${playlistId}-add-videos`}
             onClick={() => setAdding((v) => !v)}
           >
             {adding ? 'Done adding' : 'Add videos'}
-          </button>}
-          <button
+          </ActionButton>}
+          <ActionButton
             className="secondary"
             aria-label={`Delete playlist ${playlist.name}`}
             aria-expanded={confirmingDelete}
             onClick={() => setConfirmingDelete((v) => !v)}
           >
             Delete playlist
-          </button>
+          </ActionButton>
         </div>
       </div>
 
@@ -433,15 +478,15 @@ function PlaylistCard({ playlistId, onDeleted }: {
             {published.length > 0 && ` It is published to ${publishedNames}; deleting also removes it there.`}
           </p>
           <div className="form-row">
-            <button onClick={() => removePlaylist.mutate(false)} disabled={removePlaylist.isPending}>
+            <ActionButton onClick={() => removePlaylist.mutate(false)} disabled={removePlaylist.isPending}>
               {removePlaylist.isPending ? 'Deleting…' : 'Delete playlist'}
-            </button>
+            </ActionButton>
             {published.length > 0 && (
-              <button className="secondary" onClick={() => removePlaylist.mutate(true)} disabled={removePlaylist.isPending}>
+              <ActionButton className="secondary" onClick={() => removePlaylist.mutate(true)} disabled={removePlaylist.isPending}>
                 Delete, keep it on {publishedNames}
-              </button>
+              </ActionButton>
             )}
-            <button className="secondary" onClick={() => setConfirmingDelete(false)}>Cancel</button>
+            <ActionButton className="secondary" onClick={() => setConfirmingDelete(false)}>Cancel</ActionButton>
           </div>
         </div>
       )}
@@ -466,9 +511,10 @@ function PlaylistCard({ playlistId, onDeleted }: {
       </p>}
       {playlist.sortMode === 'shuffle' && <p className="empty-state" style={{ padding: '0 0 8px' }}>Shuffled order is kept when this playlist regenerates.</p>}
 
-      {playlist.items.length ? (
+      {mode !== 'both' && playlist.items.some(item => !matchesCatalog(mode, item)) && <p role="status">Only matching items are shown. Push and playlist-wide actions include the complete saved playlist. Select Both to reorder all items.</p>}
+      {playlist.items.some(item => matchesCatalog(mode, item)) ? (
         <div className="video-list">
-          {playlist.items.map((item, index) => (
+          {playlist.items.map((item, index) => matchesCatalog(mode, item) && (
             <div className="video-row" key={item.id}>
               <span aria-hidden="true" className="empty-state" style={{ padding: 0, minWidth: 24, textAlign: 'right' }}>{index + 1}</span>
               <VideoThumb url={item.musicVideo?.thumbnailUrl ?? null} />
@@ -480,29 +526,29 @@ function PlaylistCard({ playlistId, onDeleted }: {
               </div>
               <div className="video-actions">
                 {isStatic && <>
-                  <button
+                  <ActionButton
                     className="secondary"
                     aria-label={`Move ${(item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Recording')} up`}
-                    disabled={index === 0 || reorder.isPending}
+                    disabled={mode !== 'both' && playlist.items.some(item => !matchesCatalog(mode, item)) || index === 0 || reorder.isPending}
                     onClick={() => move(index, -1)}
                   >
                     ↑
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
                     className="secondary"
                     aria-label={`Move ${(item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Recording')} down`}
-                    disabled={index === playlist.items.length - 1 || reorder.isPending}
+                    disabled={mode !== 'both' && playlist.items.some(item => !matchesCatalog(mode, item)) || index === playlist.items.length - 1 || reorder.isPending}
                     onClick={() => move(index, 1)}
                   >
                     ↓
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
                     className="secondary"
                     aria-label={`Remove ${(item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Recording')} from playlist`}
                     onClick={() => item.musicVideoId ? removeItem.mutate(item.musicVideoId) : removeLiveItem.mutate(item.id)}
                   >
                     Remove
-                  </button>
+                  </ActionButton>
                 </>}
               </div>
             </div>
@@ -512,7 +558,7 @@ function PlaylistCard({ playlistId, onDeleted }: {
         <p className="empty-state">No videos in this playlist yet.</p>
       )}
 
-      {adding && (
+      {adding && mode !== 'live' && (
         <div className="video-list" id={`playlist-${playlistId}-add-videos`} style={{ marginTop: 8 }}>
           {(downloaded.data ?? [])
             .filter((v) => !inPlaylist.has(v.id))
@@ -525,9 +571,9 @@ function PlaylistCard({ playlistId, onDeleted }: {
                   </span>
                 </div>
                 <div className="video-actions">
-                  <button aria-label={`Add ${v.title} to playlist`} onClick={() => addItem.mutate(v.id)}>
+                  <ActionButton aria-label={`Add ${v.title} to playlist`} onClick={() => addItem.mutate(v.id)}>
                     Add
-                  </button>
+                  </ActionButton>
                 </div>
               </div>
             ))}
@@ -546,14 +592,14 @@ function PlaylistCard({ playlistId, onDeleted }: {
             return (
               <div className="form-row" key={row.id} style={{ alignItems: 'center' }}>
                 {row.canPush
-                  ? <button className="secondary" onClick={() => handlePush(row.id)} disabled={!row.hasLibrary}>
+                  ? <ActionButton className="secondary" onClick={() => handlePush(row.id)} disabled={!row.hasLibrary}>
                     {isPublished ? `Update on ${row.name}` : `Push to ${row.name}`}
-                  </button>
+                  </ActionButton>
                   : <span>{row.name}</span>}
                 {isPublished && (
-                  <button className="secondary" aria-label={`Remove playlist from ${row.name}`} onClick={() => handleUnpublish(row.id)}>
+                  <ActionButton className="secondary" aria-label={`Remove playlist from ${row.name}`} onClick={() => handleUnpublish(row.id)}>
                     Remove from {row.name}
-                  </button>
+                  </ActionButton>
                 )}
                 {row.canPush && !row.hasLibrary && (
                   <span className="empty-state" style={{ padding: 0, fontSize: 12 }}>
@@ -575,8 +621,9 @@ function PlaylistCard({ playlistId, onDeleted }: {
 }
 
 export default function PlaylistsPage() {
+  const { mode } = useCatalogMode();
   const queryClient = useQueryClient();
-  const [name, setName] = useState('');
+  const [nameDraft, setName] = useState<string | null>(null);
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
   const defaults = useDefaultPlaybackLibrary();
   const [libraryChosen, setLibraryChosen] = useState(false);
@@ -584,13 +631,14 @@ export default function PlaylistsPage() {
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const playlists = useQuery({ queryKey: ['playlists'], queryFn: api.playlists.list });
+  const name = nameDraft ?? nextPlaylistName(playlists.data ?? []);
   const connectors = useQuery({ queryKey: ['libraryConnectors'], queryFn: api.libraryConnectors.list });
 
   const createPlaylist = useMutation({
     mutationFn: api.playlists.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
-      setName('');
+      setName(null);
     },
   });
 
@@ -621,9 +669,10 @@ export default function PlaylistsPage() {
 
       {notice && <p className="empty-state" role={notice.kind === 'alert' ? 'alert' : 'status'}>{notice.text}</p>}
 
-      <GeneratePlaylistPanel />
+      {mode !== 'live' && <GeneratePlaylistPanel />}
+      {mode === 'live' && <><div className="form-row playlist-top-actions"><ActionButton disabled>Generate playlist</ActionButton><PlaylistPushAction /></div><p>Add reviewed Live &amp; Concerts recordings to a static playlist from their recording pages. Automatic filter generation is available for Music Videos.</p></>}
       <details style={{ marginTop: 16, marginBottom: 16 }}><summary>Create an empty playlist manually</summary>
-      <form className="form-row" onSubmit={handleSubmit}>
+      <ActionForm className="form-row" onSubmit={handleSubmit}>
         <input
           placeholder="Playlist name"
           aria-label="Playlist name"
@@ -636,13 +685,13 @@ export default function PlaylistsPage() {
           <option value="">Any playback library</option>
           {playbackConnectors(connectors.data).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <button type="submit">Create Playlist</button>
-      </form>
+        <ActionButton type="submit">Create Playlist</ActionButton>
+      </ActionForm>
 
       </details>
 
       {playlists.data?.length ? (
-        playlists.data.map((p) => <PlaylistCard key={p.id} playlistId={p.id} onDeleted={handleDeleted} />)
+        playlists.data.filter(p => !p.items.length || p.items.some(item => matchesCatalog(mode, item))).map((p) => <PlaylistCard key={p.id} playlistId={p.id} onDeleted={handleDeleted} />)
       ) : (
         <p className="empty-state">No playlists yet.</p>
       )}

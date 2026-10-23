@@ -135,7 +135,7 @@ async function performVideoDeletion(id: number, now: Date): Promise<void> {
         await tx.recordingServerCopy.deleteMany({ where: { part: { recordingId: bridge.id } } });
         for (const part of await tx.recordingPart.findMany({ where: { recordingId: bridge.id } }))
           await tx.recordingPart.update({ where: { id: part.id }, data: { available: false, path: `deleted:${part.id}:${part.path}` } });
-        await tx.recording.update({ where: { id: bridge.id }, data: { musicVideoId: null, reviewStatus: 'deleted', deletionState: 'deleted', evidence: JSON.stringify({ ...JSON.parse(bridge.evidence), retiredQualifiedPlays: video.qualifiedPlayCount, retiredNativePlays: video.file?.playCount ?? null }) } });
+        await tx.recording.update({ where: { id: bridge.id }, data: { musicVideoId: null, reviewStatus: 'deleted', deletionState: 'deleted', evidence: JSON.stringify({ ...JSON.parse(bridge.evidence), retiredNativePlays: video.file?.playCount ?? null }) } });
       }
       await tx.deletedVideoRecord.upsert({ where: { originalMusicVideoId: id }, update: {}, create: {
         originalMusicVideoId: id, artistId: video.artistId, title: video.title, identities: JSON.stringify(snapshot.identities),

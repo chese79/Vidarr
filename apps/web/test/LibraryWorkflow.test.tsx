@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import LibraryPage from '../src/pages/LibraryPage';
+import App from '../src/App';
 import { isNewArtist } from '../src/components/ArtistProgress';
 
 function render(url: string, hide: boolean) {
@@ -13,17 +14,17 @@ function render(url: string, hide: boolean) {
       knownVideoCount: 0, availableVideoCount: 0, monitoredVideoCount: 0, missingVideoCount: 0, qualifiedPlayCount: 2, aggregatePlayCount: 7 }],
     total: 1, availableLetters: ['N'],
   });
-  return renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}><LibraryPage /></MemoryRouter></QueryClientProvider>);
+  return renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}><App /></MemoryRouter></QueryClientProvider>);
 }
 
-it('defaults empty-artist hiding on next to the count, highlights it and exposes source/review progress', () => {
-  const html = render('/library', true);
-  expect(html).toMatch(/class="hide-empty-artists enabled"[^>]*><input type="checkbox" checked=""\/>Hide Artists w\/o Videos/);
-  expect(html.indexOf('1 artist(s)')).toBeLessThan(html.indexOf('Hide Artists w/o Videos'));
+it('keeps empty-artist hiding on the global bar and exposes only server plays and review progress', () => {
+  const html = render('/', true);
+  expect(html).toContain('class="hide-empty-artists enabled"');
+  expect(html).toContain('Hide Artists w/o Videos');
   expect(html).toContain('status-chip new-artist'); expect(html).toContain('Collecting video sources');
-  expect(html).toContain('2 qualified plays'); expect(html).toContain('7 server plays');
+  expect(html).not.toContain('qualified plays'); expect(html).toContain('7 server plays');
   expect(html).toContain('2 videos need review'); expect(html).toContain('/video-review?artistId=1');
-  const off = render('/library?hideWithoutVideos=false', false);
+  const off = render('/?hideWithoutVideos=false', false);
   expect(off).toContain('class="hide-empty-artists"'); expect(off).not.toContain('class="hide-empty-artists enabled"');
 });
 

@@ -72,7 +72,7 @@ describe('live workflow invariants', () => {
     expect(await prisma.liveSongPerformance.findMany({ where: { performanceId: id } })).toEqual(before);
     expect(await prisma.livePerformance.findUnique({ where: { id } })).toMatchObject({ venue: 'User corrected hall', performanceDate: '2025-01-02', identityStatus: 'correctionPending' });
   });
-  it('retains watched time across pauses, outages and devices, counts songs separately, and never invents a play on Mark finished', async () => {
+  it('retains resume time across devices without creating performance or song play counts', async () => {
     const performance = await prisma.livePerformance.create({ data: { artistId, title: 'Live', songs: { create: { position: 1, title: 'Song', kind: 'full' } } }, include: { songs: true } });
     const recording = await prisma.recording.create({ data: { title: 'Full show', claimedCoverage: 'entirePerformance', identityVerified: true, videoVerified: true,
       uninterruptedVerified: true, performances: { create: { performanceId: performance.id, identityVerified: true } } } });
@@ -86,12 +86,12 @@ describe('live workflow invariants', () => {
     await observeLivePlayback('server', part.id, { ...session, sessionId: 'device-b', positionSeconds: 60 }, new Date(now + 60000));
     const view = await prisma.liveViewing.findFirstOrThrow();
     expect(view.watchedSeconds).toBe(60);
-    expect(view.qualifiedAt).not.toBeNull();
+    expect(view.qualifiedAt).toBeNull();
     expect(view.completedAt).toBeNull();
-    expect((await prisma.livePerformance.findUniqueOrThrow({ where: { id: performance.id } })).qualifiedPlayCount).toBe(1);
-    expect((await prisma.liveSongPerformance.findFirstOrThrow()).qualifiedPlayCount).toBe(1);
+    expect((await prisma.livePerformance.findUniqueOrThrow({ where: { id: performance.id } })).qualifiedPlayCount).toBe(0);
+    expect((await prisma.liveSongPerformance.findFirstOrThrow()).qualifiedPlayCount).toBe(0);
     await changeViewing(view.id, 'markFinished');
-    expect((await prisma.livePerformance.findUniqueOrThrow({ where: { id: performance.id } })).qualifiedPlayCount).toBe(1);
+    expect((await prisma.livePerformance.findUniqueOrThrow({ where: { id: performance.id } })).qualifiedPlayCount).toBe(0);
   });
   it('imports only explicitly selected pack files and rejects escapes and symlinks', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vidarr-live-pack-'));

@@ -5,7 +5,7 @@ import { regenerateAllLibraryMetadata } from '../pipeline/libraryConvention.js';
 
 export async function systemRoutes(app: FastifyInstance) {
   app.get('/api/v1/system/task', async () => {
-    const tasks = await prisma.scheduledTask.findMany({ orderBy: { name: 'asc' } });
+    const tasks = await prisma.scheduledTask.findMany({ where: { name: { notIn: ['Qualified Playback Tracking', 'Live Qualified Playback'] } }, orderBy: { name: 'asc' } });
     return tasks.map((t) => ({
       ...t,
       nextRunAt: t.lastRunAt ? new Date(t.lastRunAt.getTime() + t.intervalMs).toISOString() : null,

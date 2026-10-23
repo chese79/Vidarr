@@ -1,3 +1,4 @@
+import { ActionButton } from '../components/ButtonFeedback';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,8 +24,8 @@ function ReconcileSubmission({ id, onDone }: { id: number; onDone: (message: str
     <label><input type="checkbox" checked={verified} disabled={busy} onChange={e => setVerified(e.target.checked)} /> I checked the client's queue and history</label>
     <input aria-label="Existing client job ID or torrent hash" placeholder="Job ID / torrent hash" value={externalRef} disabled={busy} onChange={e => setExternalRef(e.target.value)} />
     <div className="form-row">
-      <button disabled={!verified || !externalRef.trim() || busy} onClick={() => resolve('attach')}>Link existing job</button>
-      <button className="secondary" disabled={!verified || busy} onClick={() => resolve('notSubmitted')}>Verified not submitted · release slot</button>
+      <ActionButton disabled={!verified || !externalRef.trim() || busy} onClick={() => resolve('attach')}>Link existing job</ActionButton>
+      <ActionButton className="secondary" disabled={!verified || busy} onClick={() => resolve('notSubmitted')}>Verified not submitted · release slot</ActionButton>
     </div>
     {error && <p role="alert">{error}</p>}
   </details>;
@@ -62,9 +63,9 @@ export default function QueuePage() {
     <div>
       <div className="page-header">
         <h2>Queue</h2>
-        <button onClick={handleRefresh} disabled={refreshing}>
+        <ActionButton onClick={handleRefresh} disabled={refreshing}>
           {refreshing ? 'Refreshing…' : 'Refresh Now'}
-        </button>
+        </ActionButton>
       </div>
 
       <p className="empty-state">
@@ -109,10 +110,10 @@ export default function QueuePage() {
                   setSummary(message); queryClient.invalidateQueries({ queryKey: ['queue'] }); queryClient.invalidateQueries({ queryKey: ['queueResults'] });
                 }} /> : <Link to={!item.musicVideoId && item.recordingId ? `/live/recording/${item.recordingId}` : `/artist/${item.musicVideo?.artist.id}`}>Video details</Link>}</td>
                 <td>{item.status === 'queued' && <div className="form-row">
-                  <button disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'top')}>Move to top</button>
-                  <button disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'up')}>Move up</button>
-                  <button disabled={moving || waiting[waiting.length - 1]?.id === item.id} onClick={() => move(item.id, 'down')}>Move down</button>
-                  <button disabled={moving || waiting[waiting.length - 1]?.id === item.id} onClick={() => move(item.id, 'bottom')}>Move to bottom</button>
+                  <ActionButton disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'top')}>Move to top</ActionButton>
+                  <ActionButton disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'up')}>Move up</ActionButton>
+                  <ActionButton disabled={moving || waiting[waiting.length - 1]?.id === item.id} onClick={() => move(item.id, 'down')}>Move down</ActionButton>
+                  <ActionButton disabled={moving || waiting[waiting.length - 1]?.id === item.id} onClick={() => move(item.id, 'bottom')}>Move to bottom</ActionButton>
                 </div>}</td>
               </tr>
             ))}

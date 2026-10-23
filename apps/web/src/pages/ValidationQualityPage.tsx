@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -37,7 +38,7 @@ export default function ValidationQualityPage() {
     </div>
     {query.isLoading && <p role="status">Loading validation settings…</p>}
     {query.isError && <p role="alert">Could not load validation settings: {(query.error as Error).message}</p>}
-    <form onSubmit={event => { event.preventDefault(); save.mutate(settings); }}>
+    <ActionForm onSubmit={event => { event.preventDefault(); save.mutate(settings); }}>
       <fieldset disabled={!query.isSuccess || save.isPending} className="validation-fieldset">
         {categories.map(category => <div className="validation-policy" key={category.key}>
           <div><strong>{category.name}</strong><p>{category.explanation}</p></div>
@@ -57,11 +58,11 @@ export default function ValidationQualityPage() {
         <p>These inspections do not guarantee audio integrity or detect every damaged file. A motion check with an undetermined duration currently allows import.</p>
         <h3>When updated settings apply</h3>
         <p>Newly downloaded videos use the saved choices when validation starts. Queued videos retain the category assigned from their selected source and use the settings in effect when validation starts. Checks already running keep their current settings.</p>
-        <button type="submit" disabled={!draft || save.isPending}>{save.isPending ? 'Saving…' : 'Save validation settings'}</button>
+        <ActionButton type="submit" disabled={!draft || save.isPending}>{save.isPending ? 'Saving…' : 'Save validation settings'}</ActionButton>
       </fieldset>
       {message && <p role="status">{message}</p>}
       {save.isError && <p role="alert">Save failed: {(save.error as Error).message}</p>}
-    </form>
+    </ActionForm>
     <p><Link to="/live/settings">Configure live performance validation, destinations and quality preferences</Link></p>
     <section className="validation-quality-profiles" aria-label="Quality profiles">
       <p>Quality profiles choose allowed formats and upgrade cutoffs. Existing profiles and artist assignments are retained.</p>

@@ -23,10 +23,10 @@ export async function classifyExistingVideo(musicVideoId: number, performanceId:
     if (await tx.downloadQueueItem.count({ where: { musicVideoId, status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } } })) throw new LiveError('Finish or resolve the active download before reclassifying');
     const previous = await tx.recording.findFirst({ where: { musicVideoId }, include: { parts: true } });
     if (previous && previous.catalogType !== 'musicVideo' && previous.reviewStatus !== 'returnedToMusicVideos') throw new LiveError('This video already has a recording classification');
-    const recording = previous ? await tx.recording.update({ where: { id: previous.id }, data: { catalogType: 'live', reviewStatus: 'accepted', identityVerified: true, videoVerified: true, evidence: JSON.stringify({ ...JSON.parse(previous.evidence), originalCatalogKind: video.catalogKind, existingQualifiedPlays: video.qualifiedPlayCount, existingNativePlays: video.file?.playCount ?? null }),
+    const recording = previous ? await tx.recording.update({ where: { id: previous.id }, data: { catalogType: 'live', reviewStatus: 'accepted', identityVerified: true, videoVerified: true, evidence: JSON.stringify({ ...JSON.parse(previous.evidence), originalCatalogKind: video.catalogKind, existingNativePlays: video.file?.playCount ?? null }),
       performances: { connectOrCreate: { where: { recordingId_performanceId: { recordingId: previous.id, performanceId } }, create: { performanceId, identityVerified: true } } } } })
       : await tx.recording.create({ data: { musicVideoId, title: video.title, reviewStatus: 'accepted', identityVerified: true, videoVerified: true,
-      evidence: JSON.stringify({ originalCatalogKind: video.catalogKind, existingVideoId: video.id, existingQualifiedPlays: video.qualifiedPlayCount }),
+      evidence: JSON.stringify({ originalCatalogKind: video.catalogKind, existingVideoId: video.id }),
       performances: { create: { performanceId, identityVerified: true } } } });
     if (video.file) {
       const oldPart = previous?.parts.find(part => part.legacyMusicVideoFileId === video.file!.id);

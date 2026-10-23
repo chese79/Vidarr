@@ -1,3 +1,4 @@
+import { ActionButton } from '../components/ButtonFeedback';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import type { MatchMode, PlaylistFilters } from '@vidarr/shared-types';
@@ -129,7 +130,7 @@ export function PlaylistRuleFields({ draft, onChange, targetConnectorId, idPrefi
     <>
       <datalist id={`${idPrefix}-genres`}>{genres.map((g) => <option key={g} value={g} />)}</datalist>
       <datalist id={`${idPrefix}-directors`}>{directors.map((d) => <option key={d} value={d} />)}</datalist>
-      {draft.qualityIds.length > 0 && <p>This playlist retains a legacy Quality filter. <button type="button" className="secondary" onClick={() => set({ qualityIds: [] })}>Remove legacy filter</button></p>}
+      {draft.qualityIds.length > 0 && <p>This playlist retains a legacy Quality filter. <ActionButton type="button" className="secondary" onClick={() => set({ qualityIds: [] })}>Remove legacy filter</ActionButton></p>}
       <div className="form-row">
         <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <input

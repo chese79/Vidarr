@@ -1,3 +1,4 @@
+import { ActionButton } from './ButtonFeedback';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -53,9 +54,9 @@ export function QueueResultsPage({ section }: { section: 'completed' | 'failures
       {results.data.items.length ? <QueueResultsTable items={results.data.items} failed={section === 'failures'} /> :
         <p className="empty-state">No {section} on this page.</p>}
       <div className="form-row" style={{ marginTop: 16 }}>
-        <button className="secondary" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
+        <ActionButton className="secondary" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</ActionButton>
         <span>Page {page} · {results.data.total} results</span>
-        <button className="secondary" disabled={page * 50 >= results.data.total} onClick={() => setPage(page + 1)}>Next</button>
+        <ActionButton className="secondary" disabled={page * 50 >= results.data.total} onClick={() => setPage(page + 1)}>Next</ActionButton>
       </div>
     </>}
   </div>;

@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from './ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -27,18 +28,18 @@ export default function AddArtistForm({ onDone }: { onDone: (artist: Awaited<Ret
   return <div className="card">
     <h3>Search MusicBrainz</h3>
     <p>Choose the artist's MusicBrainz identity. Video sources are collected after addition.</p>
-    <form className="form-row" onSubmit={(e) => { e.preventDefault(); if (!query.trim()) return; setSelected(null); setMatches(null); search.mutate(query.trim()); }}>
+    <ActionForm className="form-row" onSubmit={(e) => { e.preventDefault(); if (!query.trim()) return; setSelected(null); setMatches(null); search.mutate(query.trim()); }}>
       <input aria-label="MusicBrainz artist name" placeholder="Artist name" value={query} disabled={add.isPending} onChange={(e) => setQuery(e.target.value)} />
-      <button type="submit" disabled={!query.trim() || search.isPending || add.isPending}>{search.isPending ? 'Searching…' : 'Search'}</button>
-    </form>
+      <ActionButton type="submit" disabled={!query.trim() || search.isPending || add.isPending}>{search.isPending ? 'Searching…' : 'Search'}</ActionButton>
+    </ActionForm>
     {search.isError && <p role="alert">{(search.error as Error).message}</p>}
-    {matches && <div className="form-row">{matches.map((artist) => <button key={artist.id} type="button" className="secondary" disabled={add.isPending} aria-pressed={selected?.id === artist.id} onClick={() => setSelected(artist)}>
+    {matches && <div className="form-row">{matches.map((artist) => <ActionButton key={artist.id} type="button" className="secondary" disabled={add.isPending} aria-pressed={selected?.id === artist.id} onClick={() => setSelected(artist)}>
       {artist.name}{artist.disambiguation ? ` — ${artist.disambiguation}` : ''}{artist.country ? ` (${artist.country})` : ''}
-    </button>)}{!matches.length && <p>No MusicBrainz matches found. Check the artist name.</p>}</div>}
+    </ActionButton>)}{!matches.length && <p>No MusicBrainz matches found. Check the artist name.</p>}</div>}
     <div className="form-row">
       <select aria-label="Root folder" value={effectiveRoot} disabled={add.isPending} onChange={(e) => setRootFolderId(e.target.value)}><option value="">Root folder…</option>{roots.data?.map((root) => <option key={root.id} value={root.id}>{root.path}</option>)}</select>
       <select aria-label="Quality profile" value={effectiveProfile} disabled={add.isPending} onChange={(e) => setQualityProfileId(e.target.value)}><option value="">Quality profile…</option>{profiles.data?.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select>
-      <button disabled={!selected || !effectiveRoot || !effectiveProfile || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Adding…' : 'Add Artist'}</button>
+      <ActionButton disabled={!selected || !effectiveRoot || !effectiveProfile || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Adding…' : 'Add Artist'}</ActionButton>
     </div>
     {add.isError && <p role="alert">{(add.error as Error).message}</p>}
   </div>;

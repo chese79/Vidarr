@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from './ButtonFeedback';
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { LiveSetting, LiveStyle, type LivePerformanceDetail } from '@vidarr/shared-types';
@@ -20,7 +21,7 @@ export default function LiveMetadataEditor({ performance, onSaved }: { performan
     venue: venue.trim() || null, city: city.trim() || null, setting, style, notes, localTime: time || null, timeZone: zone || null, privateAddress: address.trim() || null,
   }), onSuccess: onSaved });
   return <details className="card"><summary>Edit performance details</summary>
-    <form onSubmit={event => { event.preventDefault(); save.mutate(); }}>
+    <ActionForm onSubmit={event => { event.preventDefault(); save.mutate(); }}>
       <label>Title <input required maxLength={300} value={title} onChange={e => setTitle(e.target.value)} /></label>
       <label>Performance date <input placeholder="YYYY, YYYY-MM or YYYY-MM-DD" value={date} onChange={e => setDate(e.target.value)} /></label>
       <label>Venue or public location label <input maxLength={300} value={venue} onChange={e => setVenue(e.target.value)} /></label>
@@ -34,7 +35,7 @@ export default function LiveMetadataEditor({ performance, onSaved }: { performan
       <label>Notes <textarea maxLength={5000} value={notes} onChange={e => setNotes(e.target.value)} /></label>
       <p>Corrections keep song and recording links intact. Reference corrections and recording identity are reviewed separately; a metadata edit does not establish recorded coverage.</p>
       {save.isError && <p role="alert">{save.error.message}</p>}
-      <button disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save corrections'}</button>
-    </form>
+      <ActionButton disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save corrections'}</ActionButton>
+    </ActionForm>
   </details>;
 }

@@ -3,7 +3,9 @@ import LiveRecordingPage from './pages/LiveRecordingPage';
 import { LiveSettings } from './components/LiveControls';
 import LivePage from './pages/LivePage';
 import LivePerformancePage from './pages/LivePerformancePage';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import { CatalogModeContext, CatalogModeSwitch, useCatalogMode } from './components/CatalogMode';
+import { CATALOG_MODE_KEY, isUnfilteredScreen, parseCatalogMode, type CatalogMode } from './catalogMode';
 import LibraryPage from './pages/LibraryPage';
 import ArtistDetailPage from './pages/ArtistDetailPage';
 import ValidationQualityPage from './pages/ValidationQualityPage';
@@ -23,13 +25,12 @@ import HistoryPage from './pages/HistoryPage';
 import SystemTasksPage from './pages/SystemTasksPage';
 import GenresPage from './pages/GenresPage';
 import DownloadProgress from './components/DownloadProgress';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { scrollContentTo } from './contentScroll';
 import { QueueResultsPage } from './components/QueueResults';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', end: true },
-  { to: '/live', label: 'Live' },
   { to: '/playlists', label: 'Playlists' },
   { to: '/discover', label: 'Discover' },
   { to: '/match-review', label: 'Artist Review' },
@@ -53,9 +54,16 @@ const SETTINGS_NAV_ITEMS = [
 
 export default function App() {
   const location = useLocation();
+  const [mode, setMode] = useState<CatalogMode>(() => {
+    try { return parseCatalogMode(localStorage.getItem(CATALOG_MODE_KEY) ?? (location.pathname.includes('/live') ? 'live' : null)); }
+    catch { return 'musicVideos'; }
+  });
+  useEffect(() => { try { localStorage.setItem(CATALOG_MODE_KEY, mode); } catch { /* Session selection still works when storage is unavailable. */ } }, [mode]);
+  const unfiltered = isUnfilteredScreen(location.pathname);
   useEffect(() => { scrollContentTo(0); }, [location.pathname]);
   return (
-    <div className="app-shell">
+    <CatalogModeContext.Provider value={{ mode, setMode }}>
+    <div className={`app-shell${mode === 'live' && !unfiltered ? ' catalog-live' : ''}`}>
       <aside className="sidebar">
         <h1 className="brand"><img src="/vidarr-rune-mark.png" alt="" /><span>VID<span className="brand-arr">ARR</span></span></h1>
         <nav aria-label="Primary">
@@ -82,23 +90,24 @@ export default function App() {
         <DownloadProgress />
       </aside>
       <main className="content" id="main-content">
+        <div className="global-catalog-bar"><CatalogModeSwitch /><HideEmptyArtists /></div>
         <Routes>
-          <Route path="/" element={<LibraryPage />} />
-          <Route path="/artist/:id" element={<ArtistDetailPage />} />
-          <Route path="/live" element={<LivePage />} />
-          <Route path="/live/recording/:id" element={<LiveRecordingPage />} />
-          <Route path="/live/classification" element={<LiveClassificationPage />} />
+          <Route path="/" element={<CatalogLibrary />} />
+          <Route path="/artist/:id" element={<ArtistCatalog />} />
+          <Route path="/live" element={<CatalogLibrary />} />
+          <Route path="/live/recording/:id" element={<LiveOnly><LiveRecordingPage /></LiveOnly>} />
+          <Route path="/live/classification" element={<LiveOnly><LiveClassificationPage /></LiveOnly>} />
           <Route path="/live/settings" element={<LiveSettings />} />
-          <Route path="/artist/:id/live" element={<LivePage />} />
-          <Route path="/live/performance/:id" element={<LivePerformancePage />} />
+          <Route path="/artist/:id/live" element={<ArtistCatalog />} />
+          <Route path="/live/performance/:id" element={<LiveOnly><LivePerformancePage /></LiveOnly>} />
           <Route path="/genres" element={<GenresPage />} />
           <Route path="/quality-profiles" element={<Navigate to="/validation-quality" replace />} />
           <Route path="/validation-quality" element={<ValidationQualityPage />} />
           <Route path="/root-folders" element={<RootFoldersPage />} />
           <Route path="/discover" element={<DiscoverPage />} />
           <Route path="/match-review" element={<MatchReviewPage />} />
-          <Route path="/video-review" element={<VideoReviewPage />} />
-          <Route path="/import" element={<ImportPage />} />
+          <Route path="/video-review" element={<CatalogWorkflow music={<VideoReviewPage />} />} />
+          <Route path="/import" element={<CatalogWorkflow music={<ImportPage />} />} />
           <Route path="/playlists" element={<PlaylistsPage />} />
           <Route path="/connectors" element={<LibraryConnectorsPage />} />
           <Route path="/indexers" element={<IndexersPage />} />
@@ -106,12 +115,41 @@ export default function App() {
           <Route path="/queue" element={<QueuePage />} />
           <Route path="/queue/completed" element={<QueueResultsPage section="completed" />} />
           <Route path="/queue/failures" element={<QueueResultsPage section="failures" />} />
-          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/calendar" element={<CatalogWorkflow music={<CalendarPage />} />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/system" element={<SystemTasksPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>
+    </CatalogModeContext.Provider>
   );
+}
+
+function CatalogLibrary() {
+  const { mode } = useCatalogMode();
+  return <>{mode !== 'live' && <LibraryPage />}{mode !== 'musicVideos' && <section className="catalog-live"><LivePage embedded={mode === 'both'} /></section>}</>;
+}
+function ArtistCatalog() {
+  const { mode } = useCatalogMode();
+  return <>{mode !== 'live' && <ArtistDetailPage />}{mode !== 'musicVideos' && <section className="catalog-live"><LivePage embedded={mode === 'both'} /></section>}</>;
+}
+function CatalogWorkflow({ music }: { music: React.ReactNode }) {
+  const { mode } = useCatalogMode();
+  return <>{mode !== 'live' && music}{mode !== 'musicVideos' && <section className="catalog-live"><LivePage embedded={mode === 'both'} /></section>}</>;
+}
+function LiveOnly({ children }: { children: React.ReactNode }) {
+  const { mode } = useCatalogMode();
+  return mode === 'musicVideos' ? <p role="status">This entry is in Live &amp; Concerts. Select Live &amp; Concerts or Both to view it.</p> : <>{children}</>;
+}
+function HideEmptyArtists() {
+  const { mode } = useCatalogMode();
+  const location = useLocation();
+  const [params, setParams] = useSearchParams();
+  if (mode === 'live' || !['/', '/live'].includes(location.pathname)) return null;
+  const hidden = params.get('hideWithoutVideos') !== 'false';
+  return <label className={`hide-empty-artists${hidden ? ' enabled' : ''}`} title="Hide artists with 0 available, 0 known and 0 unmatched music videos">
+    <input type="checkbox" checked={hidden} onChange={event => { const next = new URLSearchParams(params); next.set('hideWithoutVideos', String(event.target.checked)); next.delete('page'); setParams(next, { replace: true }); }} />
+    Hide Artists w/o Videos
+  </label>;
 }

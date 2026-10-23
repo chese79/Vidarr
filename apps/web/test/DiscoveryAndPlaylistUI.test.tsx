@@ -13,6 +13,14 @@ function render(page: React.ReactNode, url: string, client = new QueryClient()) 
 }
 
 describe('Discover and playlist controls', () => {
+  it('puts Generate and disabled Push above filters and supplies the numbered default name', () => {
+    const client = new QueryClient();
+    client.setQueryData(['playlists'], []);
+    const html = render(<PlaylistsPage />, '/playlists', client);
+    expect(html).toMatch(/Generate playlist<\/button><button[^>]*disabled=""[^>]*>Push to media server<\/button>/);
+    expect(html).toContain('value="Awesome playlist #1"');
+    expect(html.indexOf('Generate playlist</button>')).toBeLessThan(html.indexOf('Generate playlist from filters'));
+  });
   it('identifies the steps after a successful connector test and playlist generation', () => {
     const connector = render(<LibraryConnectorsPage />, '/library-connectors');
     expect(connector).toContain('A successful connection test does not load the library.');

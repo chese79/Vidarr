@@ -5,6 +5,25 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — Application-wide button feedback
+
+- Acknowledge enabled button clicks with a temporary cyan color and Clicked message. Show
+  amber Working… feedback during associated requests, mutations and asynchronous handlers;
+  preserve existing action-specific progress labels and prevent repeated pending activation.
+- Restore current labels after settlement; show red Failed feedback on rejected actions,
+  with accessible status announcements. Background job completion remains in existing task
+  and Queue status. Native form validation and required confirmation stages remain intact.
+
+### Changed — Compact video row controls
+
+- Reduce the artist video rows' Live/Concert flag and Delete buttons to compact inline controls,
+  with smaller text and padding to match the surrounding title and metadata.
+
+### Changed — Monitoring panel layout
+
+- Stack all five monitoring dropdowns in an aligned column on the right, with tour, date and
+  budget inputs and preview actions on the left. Stack the sections on narrow screens.
+
 ### Changed — Native MTV overlay direction
 
 - Remove the abandoned, undeployed pre-render renderer, migration, jobs/settings APIs, scheduler
@@ -20,6 +39,61 @@ under **Unreleased** in the same commit as the change.
 - Verify 10 overlay/lifecycle/metadata/installer tests under Node 22, the full Roku client build,
   and the web client's complete TypeScript check plus minified production bundle under Node 24.
   Package local source and client artifacts; actual server/device installation remains separate.
+
+### Deployment — Local Full application (2026-10-19)
+
+- Deploy current source locally as `vidarr-full-20261019:release`, retaining the complete
+  media-tool and configurable validation functionality. Component installation remains planned.
+- Pass the Node 22 production build, 884 server tests and 58 web tests; repair the validation
+  page test's missing router context. Verify service health, APIs/assets and database integrity.
+- Preserve authentication, settings, catalog, queue, media/configuration/staging mounts and the
+  existing address. Retain a verified offline configuration backup and the previous container.
+  Recreate only Vidarr; no public publication or MTV overlay processing.
+
+### Documentation — Planned build editions
+
+- Record future Slim and Full editions: Slim retains full functionality except video-file
+  and motion validation (types 1 and 2), without FFmpeg; Full includes everything.
+- Preserve shared workflow/data requirements and record media-tool dependencies to resolve.
+  No build, runtime or deployment changes; MTV pre-rendered overlays remain on hold.
+- Clarify Slim/Full as installation presets using shared application code and optional feature
+  components with declared dependencies; component implementation remains future work.
+
+### Changed — Server play counts only
+
+- Remove Vidarr play qualification, counter polling, thresholds, public counter fields and UI.
+  Use only synchronized Jellyfin/Plex play counts; unknown remains unknown, including filters.
+- Retain Live resume/viewing progress and independent Last.fm reporting without creating plays.
+  Retire the old playback-notification endpoint with HTTP 410 and hide obsolete scheduler tasks.
+- Preserve historical database columns and rows as inactive rollback data. No database/media
+  deletion or schema migration is required; historical counters are never exposed or used.
+
+### Changed — Playlist creation actions
+
+- Put Generate playlist and Push to the selected media server together above the filter editor.
+  Disable Push until a playlist and usable server exist; select newly generated playlists.
+- Default new names to Awesome playlist #1, incrementing past existing names and checking again
+  before automatic generation. Keep edited names and require explicit publication after review.
+
+### Changed — Global media filter
+
+- Add persistent Music Videos / Live & Concerts / Both controls above navigation content and move
+  Hide Artists w/o Videos to the right of the Library navigation bar.
+- Apply the selection to Library, artist catalogs, review/import/calendar browsing and playlist
+  browsing. Both retains separate labeled catalog sections and independent Live query filters.
+- Use an inverted light palette for Live & Concerts, preserving original video and artist images.
+- Queue and History always show every category; deselect and disable all three filter buttons
+  there with an explicit scope label. Restore the previous filter on leaving these pages.
+- Filter playlist display without changing stored membership or publication. Disable reordering
+  while a category hides items; playlist-wide actions clearly retain the complete saved list.
+
+### Changed — Confirm library-wide searches
+
+- Preview the number of eligible video searches before Search all eligible and require explicit
+  confirmation. Cancel and empty previews start no searches; preview failures remain visible.
+- Recheck eligibility at execution and limit manual searches to the approved video IDs. Newly
+  eligible videos cannot expand the confirmed scope. Scheduled backlog searches are unchanged.
+- Add read-only preview and confirmed search endpoints; preserve the existing automation API.
 
 ### Deployment — Live review fixes
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { prisma } from '../src/db/client.js';
-import { runBacklogSearch } from '../src/pipeline/autoSearch.js';
+import { previewBacklogSearch, runBacklogSearch } from '../src/pipeline/autoSearch.js';
 import {
   resetDb,
   createRootFolder,
@@ -28,6 +28,21 @@ describe('runBacklogSearch — library-match exclusion filter', () => {
     rootFolderId = (await createRootFolder()).id;
     const quality = await createQuality();
     qualityProfileId = (await createQualityProfile(quality.id)).id;
+  });
+
+  it('previews without searching and never expands the approved set after eligibility changes', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const first = await createMusicVideo(artist.id, { title: 'Approved' });
+    const removed = await createMusicVideo(artist.id, { title: 'Now owned' });
+    await createMusicVideo(artist.id, { title: 'Ignored', ignored: true });
+    const preview = await previewBacklogSearch();
+    expect(preview.searches).toBe(2);
+    expect(preview.videoIds.sort()).toEqual([first.id, removed.id].sort());
+    expect(await prisma.downloadQueueItem.count()).toBe(0);
+    await prisma.musicVideo.update({ where: { id: removed.id }, data: { hasFile: true } });
+    await createMusicVideo(artist.id, { title: 'Added after preview' });
+    expect(await runBacklogSearch(preview.videoIds)).toEqual({ grabbed: 0, skipped: 1 });
+    expect(await runBacklogSearch([])).toEqual({ grabbed: 0, skipped: 0 });
   });
 
   it('still attempts a video whose only library match is an unconfirmed probable/ambiguous suggestion', async () => {

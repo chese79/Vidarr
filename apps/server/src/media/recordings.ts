@@ -2,7 +2,7 @@ import { prisma } from '../db/client.js';
 import { deriveMediaLifecycle } from './lifecycle.js';
 
 // One factual repository for compatibility music videos and new live captures.
-// Trust, monitoring, coverage and qualified-play rules remain catalog policy decisions.
+// Trust, monitoring and coverage remain catalog policy decisions; plays are server facts.
 export async function recordingFacts(id: number) {
   const row = await prisma.recording.findUniqueOrThrow({ where: { id }, include: {
     parts: { include: { legacyMusicVideoFile: true, serverCopies: { include: { connector: true } } } },

@@ -1,4 +1,6 @@
+import { ActionButton } from '../components/ButtonFeedback';
 import AddArtistForm from '../components/AddArtistForm';
+import { confirmEligibleSearch } from '../utils/confirmEligibleSearch';
 import { ArtistProgress, NewArtistBadge } from '../components/ArtistProgress';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -66,7 +68,7 @@ function LetterRail({
         const enabled = availableLetters.includes(letter);
         const isActive = active === letter;
         return (
-          <button
+          <ActionButton
             key={letter}
             type="button"
             disabled={!enabled}
@@ -75,7 +77,7 @@ function LetterRail({
             onClick={() => onSelect(isActive ? null : letter)}
           >
             {letter}
-          </button>
+          </ActionButton>
         );
       })}
     </nav>
@@ -134,7 +136,7 @@ function ArtistAccordion({ artistId }: { artistId: number }) {
             {mv.title}
           </span>
           <span className="artist-meta">
-            {mv.qualifiedPlayCount ?? 0} qualified plays ·{' '}
+            {mv.effectivePlayCount != null ? `${mv.effectivePlayCount} server plays · ` : ''}
             {mv.director ? `Dir. ${mv.director}` : 'Director unknown'}
             {mv.durationSeconds != null ? ` · ${Math.floor(mv.durationSeconds / 60)}:${String(mv.durationSeconds % 60).padStart(2, '0')}` : ''}
           </span>
@@ -223,7 +225,7 @@ function ArtistRow({
           <span className="artist-meta">MusicBrainz: {artist.musicbrainzMatchStatus}</span>
           {artist.musicbrainzCandidateId && <span className="artist-meta">
             Suggested: {artist.musicbrainzCandidateName} ({Math.round((artist.musicbrainzCandidateScore ?? 0) * 100)}%)
-            {' '}<button type="button" className="secondary" onClick={() => confirmMusicbrainz.mutate()} disabled={confirmMusicbrainz.isPending}>Confirm</button>
+            {' '}<ActionButton type="button" className="secondary" onClick={() => confirmMusicbrainz.mutate()} disabled={confirmMusicbrainz.isPending}>Confirm</ActionButton>
           </span>}
         </div>
         <div className="artist-counts">
@@ -238,7 +240,7 @@ function ArtistRow({
           {artist.downloadingVideoCount > 0 && (
             <span className="downloading">{artist.downloadingVideoCount} downloading</span>
           )}
-          <span>{artist.qualifiedPlayCount ?? 0} qualified plays · {artist.aggregatePlayCount != null ? `${artist.aggregatePlayCount} server plays` : 'server plays unknown'}</span>
+          <span>{artist.aggregatePlayCount != null ? `${artist.aggregatePlayCount} server plays` : 'server plays unknown'}</span>
         </div>
         <div className="artist-row-actions">
           <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13 }}>
@@ -250,7 +252,7 @@ function ArtistRow({
             />
             Monitored
           </label>
-          <button
+          <ActionButton
             type="button"
             className="secondary"
             aria-expanded={expanded}
@@ -258,7 +260,7 @@ function ArtistRow({
             onClick={() => onToggleExpand(artist.id)}
           >
             {expanded ? '▾' : '▸'}
-          </button>
+          </ActionButton>
         </div>
       </div>
       {expanded && <ArtistAccordion artistId={artist.id} />}
@@ -414,11 +416,13 @@ export default function LibraryPage() {
     },
   });
   const searchAll = useMutation({
-    mutationFn: api.artists.searchAllMissing,
+    mutationFn: () => confirmEligibleSearch(api.artists.previewSearchAllMissing, message => window.confirm(message), api.artists.searchAllMissing),
     onSuccess: (result) => {
+      if (!result) return;
       setBulkMessage(`${result.grabbed} grabbed, ${result.skipped} skipped across all eligible videos`);
       queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
     },
+    onError: (error) => setBulkMessage(`Could not search eligible videos: ${error instanceof Error ? error.message : 'Please try again.'}`),
   });
 
   function clearAllFilters() {
@@ -430,16 +434,12 @@ export default function LibraryPage() {
     <div>
       <div className="page-header">
         <div className="form-row" style={{ alignItems: 'center' }}>
-          <h2>Library</h2>
+          <h2>Music Videos</h2>
           <span className="library-result-count">{summary.isLoading ? 'Loading…' : `${summary.data?.total ?? 0} artist(s)`}</span>
-          <label className={`hide-empty-artists${hideWithoutVideos ? ' enabled' : ''}`} title="Hide artists with 0 available, 0 known and 0 unmatched videos">
-            <input type="checkbox" checked={hideWithoutVideos} onChange={(e) => updateParams({ hideWithoutVideos: String(e.target.checked), page: null })} />
-            Hide Artists w/o Videos
-          </label>
         </div>
         <div className="form-row">
-          <button className="secondary" onClick={() => searchAll.mutate()} disabled={searchAll.isPending}>Search all eligible</button>
-          <button onClick={() => setShowAdd((v) => !v)} disabled={!canAdd}>Add Artist</button>
+          <ActionButton className="secondary" onClick={() => searchAll.mutate()} disabled={searchAll.isPending}>Search all eligible</ActionButton>
+          <ActionButton onClick={() => setShowAdd((v) => !v)} disabled={!canAdd}>Add Artist</ActionButton>
         </div>
       </div>
 
@@ -555,40 +555,40 @@ export default function LibraryPage() {
               />
             </label>
             {anyFilterActive && (
-              <button type="button" className="secondary" onClick={clearAllFilters}>
+              <ActionButton type="button" className="secondary" onClick={clearAllFilters}>
                 Clear all
-              </button>
+              </ActionButton>
             )}
           </div>
 
           {selectedIds.size > 0 && (
             <div className="bulk-action-bar">
               <span>{selectedIds.size} selected</span>
-              <button
+              <ActionButton
                 type="button"
                 className="secondary"
                 onClick={() => bulkMonitor.mutate(true)}
                 disabled={bulkMonitor.isPending}
               >
                 Monitor
-              </button>
-              <button
+              </ActionButton>
+              <ActionButton
                 type="button"
                 className="secondary"
                 onClick={() => bulkMonitor.mutate(false)}
                 disabled={bulkMonitor.isPending}
               >
                 Unmonitor
-              </button>
-              <button type="button" onClick={() => bulkSearch.mutate()} disabled={bulkSearch.isPending}>
+              </ActionButton>
+              <ActionButton type="button" onClick={() => bulkSearch.mutate()} disabled={bulkSearch.isPending}>
                 Search missing
-              </button>
-              <button type="button" className="secondary" onClick={() => bulkDiscoverMusicbrainz.mutate()} disabled={bulkDiscoverMusicbrainz.isPending}>
+              </ActionButton>
+              <ActionButton type="button" className="secondary" onClick={() => bulkDiscoverMusicbrainz.mutate()} disabled={bulkDiscoverMusicbrainz.isPending}>
                 Find MusicBrainz matches
-              </button>
-              <button type="button" className="secondary" onClick={() => setSelectedIds(new Set())}>
+              </ActionButton>
+              <ActionButton type="button" className="secondary" onClick={() => setSelectedIds(new Set())}>
                 Clear selection
-              </button>
+              </ActionButton>
             </div>
           )}
 
@@ -623,25 +623,25 @@ export default function LibraryPage() {
 
           {totalPages > 1 && (
             <div className="form-row" style={{ alignItems: 'center', marginTop: 12 }}>
-              <button
+              <ActionButton
                 type="button"
                 className="secondary"
                 disabled={page <= 1}
                 onClick={() => updateParams({ page: String(page - 1) })}
               >
                 Previous
-              </button>
+              </ActionButton>
               <span className="empty-state" style={{ padding: 0 }}>
                 Page {page} of {totalPages}
               </span>
-              <button
+              <ActionButton
                 type="button"
                 className="secondary"
                 disabled={page >= totalPages}
                 onClick={() => updateParams({ page: String(page + 1) })}
               >
                 Next
-              </button>
+              </ActionButton>
             </div>
           )}
         </div>

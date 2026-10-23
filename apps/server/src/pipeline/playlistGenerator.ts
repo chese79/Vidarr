@@ -98,7 +98,11 @@ async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'an
 
   if (filters.minPlayCount !== undefined) {
     const min = filters.minPlayCount;
-    checks.push((v) => (v.file?.playCount ?? Math.max(0, ...v.libraryVideos.map((item) => item.playCount ?? 0))) >= min);
+    checks.push((v) => {
+      const counts = v.libraryVideos.map(item => item.playCount).filter((count): count is number => count != null);
+      const count = (targetConnectorId ? null : v.file?.playCount) ?? (counts.length ? Math.max(...counts) : null);
+      return count != null && count >= min;
+    });
   }
 
   if (filters.artistIds?.length) {

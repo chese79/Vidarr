@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -59,9 +60,9 @@ function LibraryPicker({ connector, kind }: { connector: LibraryConnector; kind:
   if (!sections) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <button className="secondary" onClick={loadSections} disabled={loading} aria-label={pickerLabel}>
+        <ActionButton className="secondary" onClick={loadSections} disabled={loading} aria-label={pickerLabel}>
           {loading ? 'Loading…' : selectedId ? `Library #${selectedId}` : 'Choose…'}
-        </button>
+        </ActionButton>
         {error && (
           <span className="empty-state" style={{ padding: 0 }} title={error} role="status">
             Failed to load libraries
@@ -209,12 +210,12 @@ function ConnectorRow({
               onChange={(e) => setMusicPath(e.target.value)}
               style={{ minWidth: 220 }}
             />
-            <button onClick={() => update.mutate()} disabled={update.isPending}>
+            <ActionButton onClick={() => update.mutate()} disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" className="secondary" onClick={() => setEditing(false)}>
+            </ActionButton>
+            <ActionButton type="button" className="secondary" onClick={() => setEditing(false)}>
               Cancel
-            </button>
+            </ActionButton>
           </div>
           {update.isError && (
             <p className="empty-state" role="alert">
@@ -246,9 +247,9 @@ function ConnectorRow({
         </td>
         <td>
           {unmatchedVideos.length > 0 ? (
-            <button type="button" className="secondary" aria-expanded={expanded} onClick={onToggleExpand}>
+            <ActionButton type="button" className="secondary" aria-expanded={expanded} onClick={onToggleExpand}>
               {expanded ? 'Hide' : 'Show'} {unmatchedVideos.length} unmatched
-            </button>
+            </ActionButton>
           ) : (
             <span className="empty-state" style={{ padding: 0 }}>
               None
@@ -257,9 +258,9 @@ function ConnectorRow({
         </td>
         <td>
           {reviewVideos.length > 0 ? (
-            <button type="button" className="secondary" aria-expanded={reviewExpanded} onClick={onToggleReviewExpand}>
+            <ActionButton type="button" className="secondary" aria-expanded={reviewExpanded} onClick={onToggleReviewExpand}>
               {reviewExpanded ? 'Hide' : 'Show'} {reviewVideos.length} to review
-            </button>
+            </ActionButton>
           ) : (
             <span className="empty-state" style={{ padding: 0 }}>
               None
@@ -268,28 +269,28 @@ function ConnectorRow({
         </td>
         <td style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button className="secondary" aria-label={`Test ${connector.name}`} onClick={onTest}>
+            <ActionButton className="secondary" aria-label={`Test ${connector.name}`} onClick={onTest}>
               Test
-            </button>
-            <button className="secondary" aria-label={`Sync ${connector.name}`} onClick={onSync}>
+            </ActionButton>
+            <ActionButton className="secondary" aria-label={`Sync ${connector.name}`} onClick={onSync}>
               Sync
-            </button>
+            </ActionButton>
             {connector.type !== 'subsonic' && (
-              <button
+              <ActionButton
                 className="secondary"
                 aria-label={`Sync play counts for ${connector.name}`}
                 onClick={onSyncPlayCounts}
                 disabled={!connector.videoLibraryId}
               >
                 Sync Play Counts
-              </button>
+              </ActionButton>
             )}
-            <button className="secondary" aria-label={`Edit ${connector.name}`} onClick={startEditing}>
+            <ActionButton className="secondary" aria-label={`Edit ${connector.name}`} onClick={startEditing}>
               Edit
-            </button>
-            <button className="secondary" aria-label={`Remove ${connector.name}`} onClick={onRemove}>
+            </ActionButton>
+            <ActionButton className="secondary" aria-label={`Remove ${connector.name}`} onClick={onRemove}>
               Remove
-            </button>
+            </ActionButton>
           </div>
           {/* Visible text, not just a title tooltip on the disabled button above —
               a keyboard/screen-reader user can't hover a disabled control to read
@@ -299,12 +300,6 @@ function ConnectorRow({
               Pick a music video library first to sync play counts.
             </span>
           )}
-          {connector.type === 'jellyfin' && connector.videoLibraryId && <details>
-            <summary>Qualified-play notifications</summary>
-            <p>Tracking works automatically by polling every 15 seconds. For faster checks, add a Generic destination in Jellyfin’s Webhook plugin and enable PlaybackStart, PlaybackProgress and PlaybackStop for music videos.</p>
-            <p>POST JSON to <code>{typeof window === 'undefined' ? 'http://your-vidarr:3434' : window.location.origin}/api/v1/libraryconnector/{connector.id}/playback-webhook</code> with the header <code>X-Api-Key</code> set to your Vidarr API key. Use a Vidarr address reachable from Jellyfin.</p>
-            <p>Template: <code>{'{"NotificationType":"{{NotificationType}}"}'}</code>. Notifications prompt a verified server read; they never increment counts directly.</p>
-          </details>}
         </td>
       </tr>
       {expanded && unmatchedVideos.length > 0 && (
@@ -361,22 +356,22 @@ function ConnectorRow({
                       </span>
                     </span>
                   )}
-                  <button
+                  <ActionButton
                     type="button"
                     className="secondary"
                     aria-label={`Confirm match for ${v.title}`}
                     onClick={() => confirmMatch.mutate(v.id)}
                   >
                     Confirm
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
                     type="button"
                     className="secondary"
                     aria-label={`Reject match for ${v.title}`}
                     onClick={() => rejectMatch.mutate(v.id)}
                   >
                     Reject
-                  </button>
+                  </ActionButton>
                 </div>
               ))}
             </div>
@@ -522,7 +517,7 @@ export default function LibraryConnectorsPage() {
       </div>
       <p className="empty-state">Test connection → select music/video libraries → map a root folder → Sync and review uncertain inventory. A successful connection test does not load the library.</p>
 
-      <form className="card" onSubmit={handleSubmit}>
+      <ActionForm className="card" onSubmit={handleSubmit}>
         <div className="form-row">
           <input
             placeholder="Name"
@@ -552,9 +547,9 @@ export default function LibraryConnectorsPage() {
             required
           />
           {type !== 'subsonic' && (
-            <button type="button" className="secondary" onClick={handleDiscover} disabled={discovering}>
+            <ActionButton type="button" className="secondary" onClick={handleDiscover} disabled={discovering}>
               {discovering ? 'Searching…' : 'Auto-detect'}
-            </button>
+            </ActionButton>
           )}
         </div>
         {discovered && (
@@ -618,9 +613,9 @@ export default function LibraryConnectorsPage() {
             onChange={(e) => setMusicPath(e.target.value)}
             style={{ minWidth: 260 }}
           />
-          <button type="submit">Add</button>
+          <ActionButton type="submit">Add</ActionButton>
         </div>
-      </form>
+      </ActionForm>
 
       {connectors.data?.length ? (
         <table>

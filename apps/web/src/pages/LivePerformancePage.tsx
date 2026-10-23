@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import LivePerformanceTools from '../components/LivePerformanceTools';
 import LiveViewingPanel from '../components/LiveViewingPanel';
 import { LiveDiscoveryControls } from '../components/LiveControls';
@@ -25,7 +26,7 @@ export default function LivePerformancePage() {
   if (!performance.data) return null;
   const row = performance.data;
   return <>
-    <p><Link to={`/artist/${row.artistId}/live`}>{row.artist.name} / Live</Link></p>
+    <p><Link to={`/artist/${row.artistId}/live`}>{row.artist.name} / Live &amp; Concerts</Link></p>
     <h2>{row.title}</h2>
     {row.removedAt && <p role="status">Removed from the visible catalog. Retained history remains available; restore it under Setlist, credits and occasion.</p>}
     <p>{row.performanceDate ?? 'Date unknown'} · {[row.venue, row.city].filter(Boolean).join(', ') || 'Place unknown'}</p>
@@ -46,14 +47,14 @@ export default function LivePerformancePage() {
     <h3>Recording candidates ({row._count.recordings})</h3>
     {row._count.recordings > 25 && <p>Showing the latest 25. <Link to="/live?view=recordings">Browse recordings</Link>.</p>}
     {row.recordings.map(link => <RecordingRow key={link.recording.id} recording={link.recording} />)}
-    <form className="card" onSubmit={event => { event.preventDefault(); create.mutate({ title, performanceIds: [id], evidenceUrl: url.trim() || null, claimedCoverage: coverage }); }}>
+    <ActionForm className="card" onSubmit={event => { event.preventDefault(); create.mutate({ title, performanceIds: [id], evidenceUrl: url.trim() || null, claimedCoverage: coverage }); }}>
       <h3>Add recording evidence</h3>
       <p>Retains a candidate for later identity/content review. This does not download, validate or register ownership.</p>
       <label>Recording title <input required maxLength={300} value={title} onChange={e => setTitle(e.target.value)} /></label>
       <label>Evidence URL <input type="url" value={url} onChange={e => setUrl(e.target.value)} /></label>
       <label>Claimed coverage <select value={coverage} onChange={e => setCoverage(e.target.value as typeof coverage)}>{RecordingCoverage.options.map(value => <option key={value} value={value}>{liveLabels[value]}</option>)}</select></label>
       {create.isError && <p role="alert">{create.error.message}</p>}
-      <button disabled={create.isPending}>{create.isPending ? 'Saving…' : 'Save candidate'}</button>
-    </form>
+      <ActionButton disabled={create.isPending}>{create.isPending ? 'Saving…' : 'Save candidate'}</ActionButton>
+    </ActionForm>
   </>;
 }

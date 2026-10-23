@@ -7,7 +7,6 @@ import { startScheduler } from './scheduler/index.js';
 import { prisma } from './db/client.js';
 import { resumeDownloadQueue } from './pipeline/grab.js';
 import { recoverInterruptedVideoDeletions } from './pipeline/deleteVideo.js';
-import { resetQualifiedPlaybackContinuity } from './pipeline/qualifiedPlayback.js';
 
 const app = await buildApp();
 
@@ -22,7 +21,6 @@ await resumeDownloadQueue();
 await recoverInterruptedVideoDeletions();
 await recoverRecordingDeletions();
 await prisma.livePlaybackObservation.updateMany({ data: { playing: false } });
-await resetQualifiedPlaybackContinuity();
 
 const port = Number(process.env.PORT ?? 3434);
 app.listen({ port, host: '0.0.0.0' }).catch((err) => {

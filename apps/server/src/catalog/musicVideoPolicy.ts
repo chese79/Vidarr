@@ -35,5 +35,3 @@ export function preferredDirectSource<T extends { id: number; authority: string;
   return sources.filter(source => /^https?:\/\//i.test(source.url))
     .sort((a, b) => (AUTHORITY_RANK[a.authority] ?? 4) - (AUTHORITY_RANK[b.authority] ?? 4) || a.id - b.id)[0];
 }
-
-export const musicVideoQualifiedPlayThreshold = (durationSeconds: number): number => Math.min(durationSeconds / 2, 240);

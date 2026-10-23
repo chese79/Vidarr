@@ -1,3 +1,4 @@
+import { ActionButton } from './ButtonFeedback';
 import { useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -32,8 +33,8 @@ export function YoutubeCookiesSection() {
       <label htmlFor="youtube-cookie-file">{status.data?.configured ? 'Replace cookie file' : 'Upload cookie file'}</label>
       <input id="youtube-cookie-file" ref={input} type="file" accept=".txt" disabled={busy || status.isLoading || status.isError}
         onChange={event => { const file = event.target.files?.[0]; if (file) { remove.reset(); save.mutate(file); } }} />
-      <button type="button" className="secondary" disabled={!status.data?.configured || busy}
-        onClick={() => remove.mutate()}>Remove cookies</button>
+      <ActionButton type="button" className="secondary" disabled={!status.data?.configured || busy}
+        onClick={() => remove.mutate()}>Remove cookies</ActionButton>
     </div>
     {save.isPending && <p role="status">Saving cookies…</p>}
     {(status.error || save.error || remove.error) && <p role="alert">{(status.error || save.error || remove.error)?.message}</p>}

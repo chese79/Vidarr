@@ -125,7 +125,6 @@ export const ArtistSummarySchema = z.object({
   // Distinct from 0 — an artist with videos but no known play-count data
   // anywhere is `null`, not "played zero times".
   aggregatePlayCount: z.number().int().nullable(),
-  qualifiedPlayCount: z.number().int().nonnegative().optional(),
 });
 export type ArtistSummary = z.infer<typeof ArtistSummarySchema>;
 
@@ -176,8 +175,6 @@ export const BulkMonitorArtistsResultSchema = z.object({
 export type BulkMonitorArtistsResult = z.infer<typeof BulkMonitorArtistsResultSchema>;
 
 export const MusicVideoSchema = z.object({
-  qualifiedPlayCount: z.number().int().nonnegative().optional(),
-  lastQualifiedPlayAt: z.string().datetime().nullable().optional(),
   isLiveConcert: z.boolean().optional(),
   deletionState: z.string().nullable().optional(),
   deletionError: z.string().nullable().optional(),
@@ -807,6 +804,7 @@ export const PlaylistItemSchema = z.object({
   fullRecordingFallback: z.boolean().optional(),
   sortOrder: z.number().int(),
   musicVideo: z.object({
+    catalogKind: z.string().optional(),
     title: z.string(),
     thumbnailUrl: z.string().nullable(),
     hasFile: z.boolean(),

@@ -59,6 +59,21 @@ describe('artist routes', () => {
   let rootFolderId: number;
   let qualityProfileId: number;
 
+  it('previews all eligible searches and requires explicit IDs for manual execution', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const video = await createMusicVideo(artist.id);
+    await createMusicVideo(artist.id, { title: 'Owned', hasFile: true });
+    const preview = await app.inject({ url: '/api/v1/artist/search-all-missing/preview', headers: authHeaders() });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toEqual({ searches: 1, videoIds: [video.id] });
+    expect(await prisma.downloadQueueItem.count()).toBe(0);
+    const missingApproval = await app.inject({ method: 'POST', url: '/api/v1/artist/search-all-missing/confirmed', headers: authHeaders(), payload: {} });
+    expect(missingApproval.statusCode).toBe(400);
+    const emptyApproval = await app.inject({ method: 'POST', url: '/api/v1/artist/search-all-missing/confirmed', headers: authHeaders(), payload: { videoIds: [] } });
+    expect(emptyApproval.statusCode).toBe(200);
+    expect(emptyApproval.json()).toEqual({ grabbed: 0, skipped: 0 });
+  });
+
   it('hides only artists with zero available, known and unmatched videos before paging and letter counts', async () => {
     const empty = await createArtist(rootFolderId, qualityProfileId, { name: 'Empty', sortName: 'Empty' });
     const known = await createArtist(rootFolderId, qualityProfileId, { name: 'Known', sortName: 'Known' });

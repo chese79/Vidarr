@@ -1,3 +1,4 @@
+import { ActionButton } from '../components/ButtonFeedback';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -32,9 +33,9 @@ export default function SystemTasksPage() {
 
       <div className="card">
         <div className="form-row" style={{ alignItems: 'center', marginBottom: 0 }}>
-          <button className="secondary" onClick={() => backfill.mutate()} disabled={backfill.isPending}>
+          <ActionButton className="secondary" onClick={() => backfill.mutate()} disabled={backfill.isPending}>
             {backfill.isPending ? 'Running…' : 'Regenerate library metadata files'}
-          </button>
+          </ActionButton>
           <span className="empty-state" style={{ padding: 0 }} aria-live="polite">
             {backfill.isError
               ? `Failed: ${(backfill.error as Error).message}`
@@ -79,13 +80,13 @@ export default function SystemTasksPage() {
                   )}
                 </td>
                 <td>
-                  <button
+                  <ActionButton
                     className="secondary"
                     aria-label={`Run ${t.name} now`}
                     onClick={() => runTask.mutate(t.name)}
                   >
                     Run Now
-                  </button>
+                  </ActionButton>
                 </td>
               </tr>
             ))}

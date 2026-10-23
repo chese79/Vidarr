@@ -45,6 +45,16 @@ describe('generatePlaylistFromFilters', () => {
     expect((await prisma.playlistItem.findFirst({ where: { playlistId: result.playlistId } }))?.musicVideoId).toBe(video.id);
   });
 
+  it('does not treat an unknown server count as zero for minimum-play filtering', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId);
+    const connector = await createLibraryConnector();
+    const video = await createMusicVideo(artist.id, { title: 'Unknown plays' });
+    await createLibraryVideo(connector.id, { musicVideoId: video.id, playCount: null });
+    expect((await generatePlaylistFromFilters('Unknown', { minPlayCount: 0 }, 'all')).matchedCount).toBe(0);
+    await prisma.libraryVideo.updateMany({ where: { musicVideoId: video.id }, data: { playCount: 0 } });
+    expect((await generatePlaylistFromFilters('Known zero', { minPlayCount: 0 }, 'all')).matchedCount).toBe(1);
+  });
+
   it('scopes a bound playlist to confirmed videos in its selected playback connector', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId);
     const target = await createLibraryConnector({ name: 'Target' });

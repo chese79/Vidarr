@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from './ButtonFeedback';
 import { useState } from 'react';
 import { api } from '../api/client';
 
@@ -21,15 +22,15 @@ export default function PasswordResetForm({ initialUsername, onComplete, onCance
     <div className="card" style={{ width: '100%', maxWidth: 460 }}>
       <h2 style={{ marginTop: 0 }}>Reset owner password</h2>
       <p>Use this installation’s integration API key to prove you own Vidarr, then choose your owner username and new password. Your library, integrations and API key are preserved.</p>
-      <form onSubmit={reset}><fieldset disabled={busy} style={{ border: 0, padding: 0 }}>
+      <ActionForm onSubmit={reset}><fieldset disabled={busy} style={{ border: 0, padding: 0 }}>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label htmlFor="reset-recovery-key">Recovery API key</label><input id="reset-recovery-key" type="password" autoComplete="off" required value={key} onChange={e => setKey(e.target.value)} />
           <label htmlFor="reset-username">Owner username</label><input id="reset-username" autoComplete="username" required value={username} onChange={e => setUsername(e.target.value)} />
           <label htmlFor="reset-password">New password (min. 8 characters)</label><input id="reset-password" type="password" autoComplete="new-password" minLength={8} required value={password} onChange={e => setPassword(e.target.value)} />
           <label htmlFor="reset-password-confirm">Confirm new password</label><input id="reset-password-confirm" type="password" autoComplete="new-password" minLength={8} required value={confirmation} onChange={e => setConfirmation(e.target.value)} />
-          <button type="submit">{busy ? 'Resetting password…' : 'Reset password'}</button>
+          <ActionButton type="submit">{busy ? 'Resetting password…' : 'Reset password'}</ActionButton>
         </div>
-      </fieldset></form>
+      </fieldset></ActionForm>
       {error && <p role="alert">{error}</p>}
       <details style={{ marginTop: 16 }}><summary>I don’t have my API key</summary>
         <p>If another browser is signed in, find the key under Settings → General → Integration API key. You can also use configured Google sign-in and change your password under Owner account.</p>

@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -55,25 +56,25 @@ export default function MatchReviewPage() {
         <div className="artist-row-header">
           <div className="artist-image" aria-hidden="true">{artist.name.slice(0, 1).toUpperCase()}</div>
           <div className="artist-row-main"><span className="artist-name">{artist.name}</span><span className="artist-meta">{artist.musicbrainzMatchStatus} · {artist.suggestedMatchCount} suggested matches</span></div>
-          <div className="artist-row-actions"><button className="secondary" aria-expanded={expanded === artist.id} onClick={() => setExpanded(expanded === artist.id ? null : artist.id)}>{expanded === artist.id ? 'Hide matches' : 'Review matches'}</button></div>
+          <div className="artist-row-actions"><ActionButton className="secondary" aria-expanded={expanded === artist.id} onClick={() => setExpanded(expanded === artist.id ? null : artist.id)}>{expanded === artist.id ? 'Hide matches' : 'Review matches'}</ActionButton></div>
         </div>
         {expanded === artist.id && <div className="artist-accordion" role="region" aria-label={`MusicBrainz matches for ${artist.name}`}>
-          <form className="review-detail-row" onSubmit={(event) => { event.preventDefault(); discover.mutate(artist.id); }}>
+          <ActionForm className="review-detail-row" onSubmit={(event) => { event.preventDefault(); discover.mutate(artist.id); }}>
             <input aria-label={`MusicBrainz search name for ${artist.name}`} placeholder="Search name (e.g. Amy Winehouse)" value={searchTerms[artist.id] ?? artist.name} onChange={(event) => setSearchTerms({ ...searchTerms, [artist.id]: event.target.value })} />
-            <button className="secondary" type="submit" disabled={discover.isPending}>Find MusicBrainz matches</button>
-          </form>
+            <ActionButton className="secondary" type="submit" disabled={discover.isPending}>Find MusicBrainz matches</ActionButton>
+          </ActionForm>
           {artist.musicbrainzCandidates.length === 0 && <span className="artist-meta">No suggested matches yet.</span>}
           {artist.musicbrainzCandidates.map((candidate) => <div className="review-detail-row" key={candidate.id}>
             <strong>{candidate.name}</strong><span className="artist-meta">{candidate.disambiguation || 'No disambiguation'} · {Math.round(candidate.score * 100)}%</span>
-            <button onClick={() => confirm.mutate({ id: artist.id, mbid: candidate.musicbrainzArtistId })} disabled={confirm.isPending}>Confirm artist</button>
+            <ActionButton onClick={() => confirm.mutate({ id: artist.id, mbid: candidate.musicbrainzArtistId })} disabled={confirm.isPending}>Confirm artist</ActionButton>
           </div>)}
         </div>}
       </div>)}
     </div>
     {review.isSuccess && review.data.total > PAGE_SIZE && <div className="review-pagination">
-      <button className="secondary" disabled={page === 0} onClick={() => { setPage(page - 1); setExpanded(null); }}>Previous</button>
+      <ActionButton className="secondary" disabled={page === 0} onClick={() => { setPage(page - 1); setExpanded(null); }}>Previous</ActionButton>
       <span className="artist-meta">Page {page + 1} of {Math.ceil(review.data.total / PAGE_SIZE)}</span>
-      <button className="secondary" disabled={(page + 1) * PAGE_SIZE >= review.data.total} onClick={() => { setPage(page + 1); setExpanded(null); }}>Next</button>
+      <ActionButton className="secondary" disabled={(page + 1) * PAGE_SIZE >= review.data.total} onClick={() => { setPage(page + 1); setExpanded(null); }}>Next</ActionButton>
     </div>}
   </div>;
 }

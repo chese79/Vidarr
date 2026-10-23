@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -29,9 +30,9 @@ function CategoriesCell({ indexer }: { indexer: Indexer }) {
         aria-label={`Categories for ${indexer.name}`}
         style={{ width: 90 }}
       />
-      <button className="secondary" onClick={() => update.mutate()}>
+      <ActionButton className="secondary" onClick={() => update.mutate()}>
         Save
-      </button>
+      </ActionButton>
     </div>
   );
 }
@@ -95,12 +96,12 @@ function IndexerRow({ indexer, status, onTest, onRemove }: {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
-            <button onClick={() => update.mutate()} disabled={update.isPending}>
+            <ActionButton onClick={() => update.mutate()} disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" className="secondary" onClick={() => setEditing(false)}>
+            </ActionButton>
+            <ActionButton type="button" className="secondary" onClick={() => setEditing(false)}>
               Cancel
-            </button>
+            </ActionButton>
           </div>
           {update.isError && (
             <p className="empty-state" role="alert">
@@ -121,15 +122,15 @@ function IndexerRow({ indexer, status, onTest, onRemove }: {
       </td>
       <td role="status">{status ?? '—'}</td>
       <td style={{ display: 'flex', gap: 6 }}>
-        <button className="secondary" aria-label={`Test ${indexer.name}`} onClick={onTest}>
+        <ActionButton className="secondary" aria-label={`Test ${indexer.name}`} onClick={onTest}>
           Test
-        </button>
-        <button className="secondary" aria-label={`Edit ${indexer.name}`} onClick={startEditing}>
+        </ActionButton>
+        <ActionButton className="secondary" aria-label={`Edit ${indexer.name}`} onClick={startEditing}>
           Edit
-        </button>
-        <button className="secondary" aria-label={`Remove ${indexer.name}`} onClick={onRemove}>
+        </ActionButton>
+        <ActionButton className="secondary" aria-label={`Remove ${indexer.name}`} onClick={onRemove}>
           Remove
-        </button>
+        </ActionButton>
       </td>
     </tr>
   );
@@ -181,7 +182,7 @@ export default function IndexersPage() {
         music videos differently.
       </p>
 
-      <form
+      <ActionForm
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
@@ -235,9 +236,9 @@ export default function IndexersPage() {
             onChange={(e) => setCategories(e.target.value)}
             style={{ width: 90 }}
           />
-          <button type="submit">Add</button>
+          <ActionButton type="submit">Add</ActionButton>
         </div>
-      </form>
+      </ActionForm>
 
       {indexers.data?.length ? (
         <table>

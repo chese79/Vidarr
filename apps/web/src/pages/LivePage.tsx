@@ -1,4 +1,6 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { LiveDiscoveryControls } from '../components/LiveControls';
+import { CatalogLink } from '../components/CatalogMode';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,7 +35,7 @@ function AddPerformance({ artistId, onSaved }: { artistId?: number; onSaved: (id
   const [songs, setSongs] = useState('');
   const artists = useQuery({ queryKey: ['live-artists', search, artistId], queryFn: () => api.live.artists(search, artistId) });
   const create = useMutation({ mutationFn: api.live.createPerformance, onSuccess: result => onSaved(result.id) });
-  return <form className="card" onSubmit={event => {
+  return <ActionForm className="card" onSubmit={event => {
     event.preventDefault();
     create.mutate({ artistId: Number(selectedArtist), title, performanceDate: date.trim() || null,
       venue: venue.trim() || null, city: city.trim() || null, setting, style,
@@ -55,15 +57,22 @@ function AddPerformance({ artistId, onSaved }: { artistId?: number; onSaved: (id
     <label>Known songs in performance order, one per line <textarea rows={6} value={songs} onChange={e => setSongs(e.target.value)} /></label>
     <p>Repeated songs remain separate occurrences. This list does not prove recording coverage or setlist completeness.</p>
     {create.isError && <p role="alert">{create.error.message}</p>}
-    <button disabled={create.isPending || !selectedArtist || artists.isLoading}>{create.isPending ? 'Saving…' : 'Save performance'}</button>
-  </form>;
+    <ActionButton disabled={create.isPending || !selectedArtist || artists.isLoading}>{create.isPending ? 'Saving…' : 'Save performance'}</ActionButton>
+  </ActionForm>;
 }
 
-export default function LivePage() {
+export default function LivePage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const { id } = useParams();
   const artistId = id ? Number(id) : undefined;
-  const [params, setParams] = useSearchParams();
+  const [allParams, setAllParams] = useSearchParams();
+  const params = embedded ? new URLSearchParams([...allParams].filter(([key]) => key.startsWith('live.')).map(([key, value]) => [key.slice(5), value])) : allParams;
+  function setParams(next: URLSearchParams) {
+    if (!embedded) { setAllParams(next); return; }
+    const merged = new URLSearchParams([...allParams].filter(([key]) => !key.startsWith('live.')));
+    next.forEach((value, key) => merged.set(`live.${key}`, value));
+    setAllParams(merged);
+  }
   const recordings = params.get('view') === 'recordings';
   const offset = Math.max(0, Number(params.get('offset')) || 0);
   const [adding, setAdding] = useState(false);
@@ -77,15 +86,15 @@ export default function LivePage() {
   const error = recordings ? candidates.error : performances.error;
   function change(key: string, value: string) { const next = new URLSearchParams(params); if (value) next.set(key, value); else next.delete(key); next.delete('offset'); setParams(next); }
   return <>
-    <h2>Live</h2><Link to="/live/settings">Live settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link>{artistId && <LiveDiscoveryControls artistId={artistId} />}
-    {artistId && <nav aria-label="Artist catalog"><Link to={`/artist/${artistId}`}>Music Videos</Link> · <strong>Live</strong></nav>}
-    <nav aria-label="Live views"><button aria-pressed={!recordings} onClick={() => change('view', '')}>Performances</button> <button aria-pressed={recordings} onClick={() => change('view', 'recordings')}>Recordings</button></nav>
+    <h2>Live &amp; Concerts</h2><Link to="/live/settings">Live &amp; Concerts settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link>{artistId && <LiveDiscoveryControls artistId={artistId} />}
+    {artistId && <nav aria-label="Artist catalog"><CatalogLink catalog="musicVideos" to={`/artist/${artistId}`}>Music Videos</CatalogLink> · <strong>Live &amp; Concerts</strong></nav>}
+    <nav aria-label="Live views"><ActionButton aria-pressed={!recordings} onClick={() => change('view', '')}>Performances</ActionButton> <ActionButton aria-pressed={recordings} onClick={() => change('view', 'recordings')}>Recordings</ActionButton></nav>
     <p>Browse performances and recording versions. Identity review, verified coverage, acquisition and playback readiness remain distinct.</p>
     <div className="toolbar">
       <label>Search <input value={params.get('search') ?? ''} onChange={e => change('search', e.target.value)} /></label>
       <label>Setting <select value={params.get('setting') ?? ''} onChange={e => change('setting', e.target.value)}><option value="">All settings</option>{LiveSetting.options.map(value => <option key={value} value={value}>{liveLabels[value]}</option>)}</select></label>
       <label>Style <select value={params.get('style') ?? ''} onChange={e => change('style', e.target.value)}><option value="">All styles</option>{LiveStyle.options.map(value => <option key={value} value={value}>{liveLabels[value]}</option>)}</select></label>
-      <button onClick={() => setAdding(value => !value)}>{adding ? 'Close form' : 'Add performance'}</button>
+      <ActionButton onClick={() => setAdding(value => !value)}>{adding ? 'Close form' : 'Add performance'}</ActionButton>
     </div>
     {adding && <AddPerformance key={artistId ?? 'all'} artistId={artistId} onSaved={savedId => { setAdding(false); client.invalidateQueries({ queryKey: ['live-performances'] }); navigate(`/live/performance/${savedId}`); }} />}
     {error && <p role="alert">{error.message}</p>}
@@ -98,6 +107,6 @@ export default function LivePage() {
       <p>{performance._count.songs} song occurrences · {performance._count.recordings} recording versions</p>
     </article>)}
     {recordings && candidates.data?.items.map(recording => <RecordingRow key={recording.id} recording={recording} />)}
-    {page && <div><button disabled={!offset} onClick={() => { const next = new URLSearchParams(params); next.set('offset', String(Math.max(0, offset - 25))); setParams(next); }}>Previous</button> <button disabled={offset + 25 >= page.total} onClick={() => { const next = new URLSearchParams(params); next.set('offset', String(offset + 25)); setParams(next); }}>Next</button></div>}
+    {page && <div><ActionButton disabled={!offset} onClick={() => { const next = new URLSearchParams(params); next.set('offset', String(Math.max(0, offset - 25))); setParams(next); }}>Previous</ActionButton> <ActionButton disabled={offset + 25 >= page.total} onClick={() => { const next = new URLSearchParams(params); next.set('offset', String(offset + 25)); setParams(next); }}>Next</ActionButton></div>}
   </>;
 }

@@ -19,7 +19,7 @@ import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
 import { computeVideoStatus, effectivePlayCount } from '../pipeline/videoStatus.js';
 import { matchLibraryVideo, type CanonicalVideo } from '../pipeline/reconciliation.js';
-import { autoSearchAndGrab, runBacklogSearch } from '../pipeline/autoSearch.js';
+import { autoSearchAndGrab, previewBacklogSearch, runBacklogSearch } from '../pipeline/autoSearch.js';
 import { confirmArtistIdentity, discoverArtistIdentityCandidates } from '../pipeline/artistIdentity.js';
 import { collectArtistVideoInventory } from '../pipeline/artistVideoInventory.js';
 import { lookupMusicBrainzArtist, searchMusicBrainzArtists } from '../providers/metadata/musicbrainz.js';
@@ -80,7 +80,6 @@ interface ArtistSummaryRow {
   supplementaryVideoCount: number;
   inventoryVideoCount: number;
   aggregatePlayCount: number | null;
-  qualifiedPlayCount: number;
   letter: string;
 }
 
@@ -410,7 +409,6 @@ export async function artistRoutes(app: FastifyInstance) {
       filtered AS (
         SELECT
           a."id" AS "id",
-          (SELECT COALESCE(SUM(qp."qualifiedPlayCount"), 0) FROM "MusicVideo" qp WHERE qp."artistId" = a."id") AS "qualifiedPlayCount",
           a."addedAt" AS "addedAt",
           a."videoInventoryStatus" AS "videoInventoryStatus",
           a."videoInventoryError" AS "videoInventoryError",
@@ -512,7 +510,6 @@ export async function artistRoutes(app: FastifyInstance) {
       supplementaryVideoCount: Number(row.supplementaryVideoCount),
       inventoryVideoCount: Number(row.inventoryVideoCount),
       aggregatePlayCount: row.aggregatePlayCount == null ? null : Number(row.aggregatePlayCount),
-      qualifiedPlayCount: Number(row.qualifiedPlayCount),
     }));
     const availableLetters = letterRows.map((r) => r.letter).sort();
 
@@ -643,7 +640,12 @@ export async function artistRoutes(app: FastifyInstance) {
     return { grabbed, skipped };
   });
 
+  app.get('/api/v1/artist/search-all-missing/preview', async () => previewBacklogSearch());
   app.post('/api/v1/artist/search-all-missing', async () => runBacklogSearch());
+  app.post('/api/v1/artist/search-all-missing/confirmed', async (req) => {
+    const { videoIds } = z.object({ videoIds: z.array(z.number().int().positive()).max(100000) }).strict().parse(req.body);
+    return runBacklogSearch(videoIds);
+  });
 
   // Lightweight payload for the Library-page accordion. Keep artwork,
   // acquisition-source history, and unmatched inventory on the full detail
@@ -666,7 +668,6 @@ export async function artistRoutes(app: FastifyInstance) {
             monitored: true,
             ignored: true,
             hasFile: true,
-            qualifiedPlayCount: true,
             awaitingServerScanAt: true,
             file: { select: { playCount: true } },
             libraryVideos: {
@@ -772,7 +773,6 @@ export async function artistRoutes(app: FastifyInstance) {
         }),
       })),
       summary: {
-        qualifiedPlayCount: artist.musicVideos.reduce((sum, video) => sum + video.qualifiedPlayCount, 0),
         known: artist.musicVideos.length,
         available: artist.musicVideos.filter((mv) => mv.hasFile || mv.libraryVideos.some((lv) => lv.available && lv.matchConfidence == null)).length,
         missing: artist.musicVideos.filter((mv) => !mv.hasFile && !mv.libraryVideos.some((lv) => lv.available && lv.matchConfidence == null)).length,

@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -122,37 +123,37 @@ export default function DiscoverPage() {
   }
 
   return <div>
-    <div className="page-header"><h2>Discover</h2><div className="form-row" style={{ marginBottom: 0 }}><button onClick={refresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh Recommendations'}</button><button className="add-new-artist" onClick={() => update('addNew', value('addNew') ? '' : '1')}>Add New Artist</button></div></div>
-    {value('addNew') && <form className="card" aria-label="Add New Artist" onSubmit={(e) => { e.preventDefault(); void validateAndAdd(); }}>
-      <div className="form-row"><input aria-label="New artist name" placeholder="Artist name" maxLength={120} required value={value('newArtistName')} onChange={(e) => { update('newArtistName', e.target.value); setValidation(null); }} /><button disabled={!canAdd || validating || createNew.isPending}>{validating ? 'Checking sources…' : 'Validate & Add'}</button></div>
+    <div className="page-header"><h2>Discover</h2><div className="form-row" style={{ marginBottom: 0 }}><ActionButton onClick={refresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh Recommendations'}</ActionButton><ActionButton className="add-new-artist" onClick={() => update('addNew', value('addNew') ? '' : '1')}>Add New Artist</ActionButton></div></div>
+    {value('addNew') && <ActionForm className="card" aria-label="Add New Artist" onSubmit={(e) => { e.preventDefault(); void validateAndAdd(); }}>
+      <div className="form-row"><input aria-label="New artist name" placeholder="Artist name" maxLength={120} required value={value('newArtistName')} onChange={(e) => { update('newArtistName', e.target.value); setValidation(null); }} /><ActionButton disabled={!canAdd || validating || createNew.isPending}>{validating ? 'Checking sources…' : 'Validate & Add'}</ActionButton></div>
       <p>Validates the artist against MusicBrainz and collects its video sources. Artists remain unmonitored until you select wanted videos.</p>
       {validation && !validation.validated && validation.name === value('newArtistName').trim() && <div role="alert"><p>MusicBrainz did not uniquely validate “{validation.name}”. {validation.warnings.join(' ')}</p></div>}
       {createNew.isError && <p role="alert">{(createNew.error as Error).message}</p>}
-    </form>}
+    </ActionForm>}
     <section className="card" aria-label="Find an artist to review">
       <div className="form-row">
         <label>Existing artists <select aria-label="Existing artists" value={value('libraryArtist')} onChange={(e) => update('libraryArtist', e.target.value)}><option value="">Choose an artist</option>{artists.data?.map((artist) => <option key={artist.id} value={artist.id}>{artist.name}</option>)}</select></label>
-        <button disabled={!value('libraryArtist')} onClick={() => review(Number(value('libraryArtist')), true)}>Review Artist</button>
+        <ActionButton disabled={!value('libraryArtist')} onClick={() => review(Number(value('libraryArtist')), true)}>Review Artist</ActionButton>
       </div>
       {artists.data?.some((artist) => artist.id === Number(value('libraryArtist'))) && <ConfirmGenreDownloadAll key={value('libraryArtist')} artistId={Number(value('libraryArtist'))} />}
-      <form className="form-row" onSubmit={(e) => { e.preventDefault(); update('mbQuery', value('artistSearch').trim()); }}>
+      <ActionForm className="form-row" onSubmit={(e) => { e.preventDefault(); update('mbQuery', value('artistSearch').trim()); }}>
         <input aria-label="Search MusicBrainz artists" placeholder="Artist name" maxLength={120} value={value('artistSearch')} onChange={(e) => update('artistSearch', e.target.value)} />
-        <button disabled={!value('artistSearch').trim() || lookup.isFetching}>Search MusicBrainz</button>
-      </form>
+        <ActionButton disabled={!value('artistSearch').trim() || lookup.isFetching}>Search MusicBrainz</ActionButton>
+      </ActionForm>
       {lookup.isFetching && <p role="status">Searching MusicBrainz…</p>}
       {lookup.isError && <p role="alert">{(lookup.error as Error).message}</p>}
       {addReview.isError && <p role="alert">{(addReview.error as Error).message}</p>}
       {lookup.isSuccess && !lookup.data.length && <p>No artists found.</p>}
       {lookup.data?.map((artist) => <div className="form-row" key={artist.id}>
         <span>{artist.name} · {[artist.type, artist.country, artist.disambiguation].filter(Boolean).join(' · ')}</span>
-        <button disabled={!canAdd || addReview.isPending} onClick={() => addReview.mutate(artist.id)}>Add to Library &amp; Review</button>
+        <ActionButton disabled={!canAdd || addReview.isPending} onClick={() => addReview.mutate(artist.id)}>Add to Library &amp; Review</ActionButton>
       </div>)}
     </section>
     {message && <p className="empty-state" role="status">{message}</p>}
     {(rootFolders.isError || qualityProfiles.isError) && <p className="empty-state" role="alert">Could not load root folders or quality profiles. Check your connection and reload.</p>}
     {rootFolders.isSuccess && qualityProfiles.isSuccess && !canAdd && <p className="empty-state">Add a root folder and a quality profile before you can add recommended artists.</p>}
     {recommendations.isPending ? <p className="empty-state" role="status">Loading recommendations…</p> : recommendations.isError ? <p className="empty-state" role="alert">Could not load recommendations. Check your connection and reload.</p> : <div className="library-layout">
-    {all.length > 0 && <nav className="letter-rail" aria-label="Filter recommendations by letter">{LETTERS.map((item) => <button key={item} type="button" disabled={!availableLetters.has(item)} className={letter === item ? 'active' : ''} onClick={() => update('letter', letter === item ? '' : item)}>{item}</button>)}</nav>}
+    {all.length > 0 && <nav className="letter-rail" aria-label="Filter recommendations by letter">{LETTERS.map((item) => <ActionButton key={item} type="button" disabled={!availableLetters.has(item)} className={letter === item ? 'active' : ''} onClick={() => update('letter', letter === item ? '' : item)}>{item}</ActionButton>)}</nav>}
     <div className="library-main">
     <div className="library-filter-bar">
       <input aria-label="Search recommended artists" placeholder="Search artists" value={search} onChange={(e) => update('search', e.target.value)} />
@@ -161,12 +162,12 @@ export default function DiscoverPage() {
       <select aria-label="Filter recommendation source" value={source} onChange={(e) => update('source', e.target.value)}><option value="">All sources</option>{Object.entries(SOURCE_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
       <input type="number" min="0" step="0.1" aria-label="Minimum recommendation score" placeholder="Min score" value={minScore || ''} onChange={(e) => update('minScore', e.target.value)} />
       <input type="number" min="0" aria-label="Minimum artist play count" placeholder="Min plays" value={minPlayCount || ''} onChange={(e) => update('minPlayCount', e.target.value)} />
-      {filtersActive && <button className="secondary" onClick={() => setParams({})}>Clear all</button>}
+      {filtersActive && <ActionButton className="secondary" onClick={() => setParams({})}>Clear all</ActionButton>}
     </div>
     <p>{visible.length} of {all.length} recommendations</p>
-    {selected.size > 0 && <div className="bulk-action-bar"><strong>{selected.size} selected</strong><button disabled={!canAdd} onClick={() => bulk('add')}>Add selected</button><button className="secondary" onClick={() => bulk('dismiss')}>Dismiss selected</button></div>}
+    {selected.size > 0 && <div className="bulk-action-bar"><strong>{selected.size} selected</strong><ActionButton disabled={!canAdd} onClick={() => bulk('add')}>Add selected</ActionButton><ActionButton className="secondary" onClick={() => bulk('dismiss')}>Dismiss selected</ActionButton></div>}
     {visible.length ? <table><thead><tr><th><input type="checkbox" aria-label="Select visible recommendations" checked={visible.every((item) => selected.has(item.id))} onChange={(e) => setSelected(e.target.checked ? new Set(visible.map((item) => item.id)) : new Set())} /></th><th>Artist</th><th>Score</th><th>Genre</th><th>Why</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>
-      {visible.map((item) => <tr key={item.id}><td><input type="checkbox" aria-label={`Select ${item.artistName}`} checked={selected.has(item.id)} onChange={() => setSelected((current) => { const next = new Set(current); next.has(item.id) ? next.delete(item.id) : next.add(item.id); return next; })} /></td><td>{item.artistName} · {item.mbid ? 'MB matched' : 'needs match'}</td><td>{item.aggregateScore.toFixed(2)}</td><td>{item.genre ?? 'Unknown'}</td><td>{[...new Set(item.sourceHits.map((hit) => SOURCE_LABEL[hit.source] ?? hit.source))].join(', ')}</td><td style={{ display: 'flex', gap: 6 }}><button disabled={!canAdd} onClick={() => add.mutate(item.id)}>Add to Library</button><button className="secondary" onClick={() => dismiss.mutate(item.id)}>Dismiss</button></td></tr>)}
+      {visible.map((item) => <tr key={item.id}><td><input type="checkbox" aria-label={`Select ${item.artistName}`} checked={selected.has(item.id)} onChange={() => setSelected((current) => { const next = new Set(current); next.has(item.id) ? next.delete(item.id) : next.add(item.id); return next; })} /></td><td>{item.artistName} · {item.mbid ? 'MB matched' : 'needs match'}</td><td>{item.aggregateScore.toFixed(2)}</td><td>{item.genre ?? 'Unknown'}</td><td>{[...new Set(item.sourceHits.map((hit) => SOURCE_LABEL[hit.source] ?? hit.source))].join(', ')}</td><td style={{ display: 'flex', gap: 6 }}><ActionButton disabled={!canAdd} onClick={() => add.mutate(item.id)}>Add to Library</ActionButton><ActionButton className="secondary" onClick={() => dismiss.mutate(item.id)}>Dismiss</ActionButton></td></tr>)}
     </tbody></table> : <p className="empty-state">No recommendations match these filters. Sync a connector or refresh recommendation providers.</p>}
     </div></div>}
   </div>;

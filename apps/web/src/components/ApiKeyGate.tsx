@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from './ButtonFeedback';
 import { useEffect, useState } from 'react';
 import { api, clearStoredApiKey, getStoredApiKey, setStoredApiKey } from '../api/client';
 import PasswordResetForm from './PasswordResetForm';
@@ -186,7 +187,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
         <div className="card" style={{ width: '100%', maxWidth: 420 }}>
           <h2 style={{ marginTop: 0 }}>Vidarr is unavailable</h2>
           <p className="empty-state">{error}</p>
-          <button type="button" onClick={() => window.location.reload()}>Retry</button>
+          <ActionButton type="button" onClick={() => window.location.reload()}>Retry</ActionButton>
         </div>
       </div>
     );
@@ -219,7 +220,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
               : 'Enter your owner username and password.'}
         </p>
 
-        <form onSubmit={handleSubmit}>
+        <ActionForm onSubmit={handleSubmit}>
           <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
             {isApiKeyMigration ? (
               <>
@@ -272,9 +273,9 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
                 )}
               </>
             )}
-            <button type="submit">{isSetup ? 'Create owner account' : 'Sign in'}</button>
+            <ActionButton type="submit">{isSetup ? 'Create owner account' : 'Sign in'}</ActionButton>
           </div>
-        </form>
+        </ActionForm>
 
         {localLoginConfigured && <p><a href="#reset-password" onClick={e => { e.preventDefault(); setNotice(''); setError(null); setPassword(''); setRecovering(true); }}>Forgot password?</a></p>}
         {notice && <p role="status">{notice}</p>}
@@ -289,7 +290,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
             <p className="empty-state" style={{ padding: '12px 0 4px', textAlign: 'center' }}>
               or
             </p>
-            <button
+            <ActionButton
               type="button"
               className="secondary"
               style={{ width: '100%' }}
@@ -298,7 +299,7 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
               }}
             >
               Sign in with Google
-            </button>
+            </ActionButton>
           </>
         )}
       </div>

@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, setStoredApiKey } from '../api/client';
@@ -32,12 +33,12 @@ function SecuritySection({ apiKey }: { apiKey: string | null }) {
           aria-label="Integration API key"
           style={{ minWidth: 320 }}
         />
-        <button type="button" className="secondary" onClick={() => setRevealed((v) => !v)}>
+        <ActionButton type="button" className="secondary" onClick={() => setRevealed((v) => !v)}>
           {revealed ? 'Hide' : 'Show'}
-        </button>
-        <button type="button" className="secondary" onClick={() => regenerate.mutate()}>
+        </ActionButton>
+        <ActionButton type="button" className="secondary" onClick={() => regenerate.mutate()}>
           {regenerate.isPending ? 'Regenerating…' : 'Regenerate'}
-        </button>
+        </ActionButton>
       </div>
       {regenerate.isSuccess && (
         <p className="empty-state" role="status" style={{ padding: '6px 0 0' }}>
@@ -118,9 +119,9 @@ function GoogleSignOnSection({
           onChange={(e) => setAllowedEmail(e.target.value)}
         />
       </div>
-      <button type="button" onClick={() => save.mutate()}>
+      <ActionButton type="button" onClick={() => save.mutate()}>
         {save.isPending ? 'Saving…' : 'Save'}
-      </button>
+      </ActionButton>
       {save.isSuccess && (
         <p className="empty-state" role="status" style={{ padding: '6px 0 0' }}>
           Saved.
@@ -178,7 +179,7 @@ function LocalLoginSection({ adminUsername }: { adminUsername: string | null }) 
           </>
         )}
       </p>
-      <form onSubmit={handleSubmit}>
+      <ActionForm onSubmit={handleSubmit}>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label htmlFor="admin-username">Username</label>
           <input id="admin-username" value={username} onChange={(e) => setUsername(e.target.value)} required />
@@ -208,9 +209,9 @@ function LocalLoginSection({ adminUsername }: { adminUsername: string | null }) 
             required
           />
         </div>
-        <button type="submit" disabled={save.isPending}>
+        <ActionButton type="submit" disabled={save.isPending}>
           {save.isPending ? 'Saving…' : adminUsername ? 'Update login' : 'Set up login'}
-        </button>
+        </ActionButton>
         {formError && (
           <p className="empty-state" role="alert">
             {formError}
@@ -221,7 +222,7 @@ function LocalLoginSection({ adminUsername }: { adminUsername: string | null }) 
             Saved.
           </p>
         )}
-      </form>
+      </ActionForm>
     </div>
   );
 }
@@ -306,13 +307,13 @@ export function ProviderRow({ config }: { config: RecommendationProviderConfig }
           No credentials required
         </span>
       )}
-      <button
+      <ActionButton
         type="button"
         aria-label={`Save ${PROVIDER_LABEL[config.provider] ?? config.provider} settings`}
         onClick={() => update.mutate()}
       >
         Save
-      </button>
+      </ActionButton>
       {update.isSuccess && (
         <span className="empty-state" role="status" style={{ padding: 0 }}>
           Saved.
@@ -377,7 +378,7 @@ export default function SettingsPage() {
         <h2>Settings</h2>
       </div>
 
-      <form
+      <ActionForm
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
@@ -438,8 +439,8 @@ export default function SettingsPage() {
             value={maxConcurrentDownloads} onChange={e => setMaxConcurrentDownloads(Number(e.target.value))} />
           <span className="empty-state" style={{ padding: '4px 0 0' }}>Default: 3. Additional videos wait in the queue.</span>
         </div>
-        <h3>Qualified plays</h3>
-        <p>Qualified plays are tracked independently of Last.fm: half the video or four minutes of observed watching, whichever comes first. Pauses, buffering, seeks and unobserved gaps earn no time. Counts begin with this release; existing server play counts remain separate. Connector settings explain optional Jellyfin playback notifications.</p>
+        <h3>Play counts</h3>
+        <p>Play counts come only from Jellyfin or Plex. Unavailable server counts remain unknown. Vidarr does not calculate its own plays; Last.fm reporting and viewing resume are independent.</p>
         <h3>Video deletion</h3>
         <div className="form-row">
           <label><input type="checkbox" checked={warnBeforeDelete} onChange={e => setWarnBeforeDelete(e.target.checked)} />Warn before delete</label>
@@ -448,7 +449,7 @@ export default function SettingsPage() {
         <p>Delete permanently removes the local video bundle, confirmed matched Jellyfin/Plex copies and the Vidarr entry. Active or waiting downloads must first be removed from Queue.</p>
         <p>Deletion starts after five minutes. Playing or paused server sessions defer removal. Failures retry 40 minutes later; the entry and next attempt stay visible until deletion finishes, including across restarts.</p>
         <p>Exclusion is off by default. When enabled, deletion fingerprints suppress future IMVDb, YouTube and local-file rediscovery. Turning it off permits rediscovery; it does not restore deleted files. Existing catalog entries are not removed by changing this option.</p>
-        <button type="submit">Save</button>
+        <ActionButton type="submit">Save</ActionButton>
         {update.isSuccess && (
           <p className="empty-state" role="status">
             Saved.
@@ -459,7 +460,7 @@ export default function SettingsPage() {
             Failed to save: {(update.error as Error).message}
           </p>
         )}
-      </form>
+      </ActionForm>
 
       <YoutubeCookiesSection />
       <SecuritySection apiKey={settings.data?.apiKey ?? null} />

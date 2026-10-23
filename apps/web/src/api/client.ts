@@ -1,4 +1,5 @@
 import type { LiveRecordingDetail, LiveConfigurationView } from '@vidarr/shared-types';
+import { trackButtonRequest } from '../buttonFeedback';
 import type { UpdateLivePerformance, CreateLivePerformance, CreateRecordingCandidate, LiveArtist, LivePerformanceSummary, LivePerformanceDetail, LivePage, RecordingCandidate } from '@vidarr/shared-types';
 import type {
   ValidationSettings,
@@ -116,7 +117,11 @@ export function clearStoredApiKey(): void {
   localStorage.removeItem(API_KEY_STORAGE_KEY);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return trackButtonRequest(requestData<T>(path, init));
+}
+
+async function requestData<T>(path: string, init?: RequestInit): Promise<T> {
   // Only declare a JSON content-type when there's actually a body — Fastify's
   // default JSON parser rejects Content-Type: application/json paired with an
   // empty body (FST_ERR_CTP_EMPTY_JSON_BODY), which every bodyless POST here
@@ -141,7 +146,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function requestBlob(path: string): Promise<Blob> {
+function requestBlob(path: string): Promise<Blob> {
+  return trackButtonRequest(requestBlobData(path));
+}
+
+async function requestBlobData(path: string): Promise<Blob> {
   const headers: Record<string, string> = {};
   const apiKey = getStoredApiKey();
   if (apiKey) headers['X-Api-Key'] = apiKey;
@@ -205,7 +214,7 @@ export const api = {
               id: number; provider: string; url: string; authority: string; confidence: string; accepted: boolean;
             }>;
           })[];
-          summary: { known: number; available: number; missing: number; monitored: number; aggregatePlayCount: number | null; qualifiedPlayCount: number };
+          summary: { known: number; available: number; missing: number; monitored: number; aggregatePlayCount: number | null };
           unmatchedInventory: Array<{
             id: number; title: string; releaseYear: number | null; durationSeconds: number | null;
             matchConfidence: string | null; musicVideoId: number | null;
@@ -216,7 +225,6 @@ export const api = {
     videos: (id: number) => request<Array<{
       id: number; title: string; releaseYear: number | null; director: string | null;
       durationSeconds: number | null; monitored: boolean; ignored: boolean; hasFile: boolean;
-      qualifiedPlayCount: number;
         effectivePlayCount: number | null;
       libraryVideos: Array<{ available: boolean; matchConfidence: string | null; playCount: number | null }>;
       status: VideoStatus;
@@ -289,7 +297,8 @@ export const api = {
     bulkSearchMissing: (ids: number[]) => request<BulkSearchResult>('/artist/bulk-search-missing', {
       method: 'POST', body: JSON.stringify({ ids }),
     }),
-    searchAllMissing: () => request<BulkSearchResult>('/artist/search-all-missing', { method: 'POST' }),
+    previewSearchAllMissing: () => request<{ videoIds: number[]; searches: number }>('/artist/search-all-missing/preview'),
+    searchAllMissing: (videoIds: number[]) => request<BulkSearchResult>('/artist/search-all-missing/confirmed', { method: 'POST', body: JSON.stringify({ videoIds }) }),
     // Not routed through request() — this needs the X-Api-Key header attached
     // as a fetch header (an <img src> can't do that), same reasoning as
     // libraryVideos.thumbnail below.

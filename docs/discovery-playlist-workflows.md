@@ -84,6 +84,19 @@ also returns without discarding the original Discover context.
 
 ## Playlists
 
+Generate playlist and Push to the selected media server sit together at the top, before the
+filter editor. Hiding filters leaves these actions available. Push is disabled until a saved
+playlist and usable server exist. A selector chooses an existing playlist; successful generation
+selects its new playlist after refetch, without automatically publishing it. Review and explicit
+Push remain separate stages. Bound playlists use their saved destination. Push reports unmatched
+server items and failures without claiming complete publication. Live & Concerts can push static
+playlists; automatic music-video rule generation remains specific to music videos.
+
+The default name is Awesome playlist #1. Check existing names case-insensitively, incrementing
+until an unused number is found. Automatic generation rechecks the list immediately before
+creation; an edited custom name is preserved. Generation keeps explicit identity, availability,
+filter and playback-library checks. Renaming never replaces an existing playlist.
+
 The primary creator starts at 20 videos and Shuffle. The count sits next to the name, with **Only
 add unwatched videos** nearby. Select a playback library and use **Use as default playback library**
 to persist it for future creation. With no usable saved default, the first enabled Plex/Jellyfin

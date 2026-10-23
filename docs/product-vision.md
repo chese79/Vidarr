@@ -6,6 +6,16 @@ Vidarr is a self-hosted music-video catalog, acquisition, library-management, an
 Plex and Jellyfin are not merely export targets: their libraries are primary inputs to Vidarr's
 catalog and the playback destinations for the finished collection.
 
+## Planned build editions
+
+Long term, Vidarr will offer multiple editions, initially Slim and Full. Slim retains full
+functionality except video validation type 1 (video-file/stream checks) and type 2 (motion
+checks), with no FFmpeg dependency. Full includes everything with the existing configurable
+validation policies. These are installation presets over shared application code, with optional
+components and their dependencies selectable during installation. Component packaging is future
+direction only, not an implemented build option. See the
+[edition requirements and dependency questions](requests/2026-10-18-build-editions.md).
+
 Concerts and live performances follow the [approved design](requests/2026-10-17-concerts-and-live-performances.md)
 and [unified implementation](live-implementation.md). Music videos and Live share artists, recording
 facts, acquisition, inspection, import, queue, connectors and playlist publication, with separate
@@ -17,14 +27,7 @@ and local deployment status are recorded in the implementation document.
 
 ## Canonical catalog
 
-Vidarr qualified plays are distinct from Jellyfin/Plex's native play counters. One viewing
-qualifies after half the video's duration or four minutes of observed watching, whichever is
-first. Starts alone, pauses, buffering, seeks and unobserved gaps do not earn watched time.
-Track all exposed server sessions only for confirmed available catalog matches in selected
-video libraries; Last.fm linking is independent. Counters begin with this capability and do
-not reinterpret earlier server history. Show both qualified and reported server counts honestly;
-existing minimum-play and Unwatched rules retain their server-history semantics. See
-[qualified playback](qualified-playback.md) for observation, webhook setup and recovery details.
+Play counts come exclusively from Jellyfin/Plex inventory and native count synchronization. Unknown counts remain unknown; Vidarr does not infer plays from starts, watched time or completion. Minimum-play and Unwatched rules require known server counts. Live viewing/resume progress and optional Last.fm scrobbling remain independent and never create a catalog play count. Historical qualified-counter storage is retained only for backup/rollback compatibility and is neither exposed nor used. See [server play counts](qualified-playback.md).
 
 Artist detail groups genres in a disclosure closed by default. Its Videos heading includes a
 case-insensitive title filter; bulk selection follows the visible results. Queue and History
@@ -293,6 +296,13 @@ the database; each yt-dlp process uses a private temporary copy to avoid concurr
 New requests use the latest saved session; active requests finish with their existing copy.
 
 ## Media-library delivery
+
+The optional [native MTV overlay](mtv-overlay.md) has separate Jellyfin Roku and web client source
+components, replacing the abandoned, undeployed pre-rendered-copy approach. It draws imported
+metadata over the original music video during the first/last six seconds without extra files or
+transcoding. Each component has its own client setting and installation/build path; rebuilding
+Vidarr alone does not install either overlay. Device/server deployment is a separate verification
+stage, and the standard Roku store app is not modified by a server plug-in.
 
 Completed downloads default to Move into an artist/video folder within the configured root with predictable names,
 metadata sidecars, artwork and supplied subtitles. Existing configured Copy/Hardlink preferences

@@ -1,5 +1,78 @@
 # Process flows and consistency review
 
+## Button engagement and request feedback
+
+Activate an enabled button → immediately acknowledge the click → run existing validation and
+confirmation → show pending feedback while its associated handler, request or mutation is running
+→ restore the current action label when it settles. A rejected action briefly shows Failed;
+existing page errors remain available and the action can be retried. Cancelled confirmation or
+failed native form validation receives click acknowledgement without claiming work is pending.
+Only the pending control is blocked against repeated activation. Queue and task status remain
+the authority for background completion; response receipt does not establish validation, import,
+delivery or publication success. See [shared button feedback](button-feedback.md).
+
+## Native MTV overlay direction (2026-10-19)
+
+Choose a supported playback client/build → install and enable its optional overlay → play the
+existing music-video item → draw the lower-left information block using playback position and
+imported metadata → hide outside the first/last six seconds and clear on item change/stop.
+The user explicitly replaced pre-rendered copies with this native workflow. No derivative
+rendering, separate library, derivative delivery or playlist substitution is needed. Original
+acquisition, validation, import and exact original-file server confirmation remain required.
+The undeployed pre-render implementation was removed. Roku and web are separate optional client
+source components: verify the pinned source checksums → install the component → build the client
+→ install/deploy that client → enable its playback setting → verify actual server/device playback.
+An installer/build success alone does not confirm device playback. Failed compatibility checks
+leave source unchanged; removal restores saved originals after checking for intervening edits.
+Unknown duration permits intro display only. See [native implementation](mtv-overlay.md).
+
+## Planned Slim and Full editions (not implemented)
+
+The [build-edition requirement](requests/2026-10-18-build-editions.md) explicitly authorizes a
+future Slim flow omitting video-file/stream and motion validation (types 1 and 2), with no
+FFmpeg dependency. All other functionality and required identity, metadata eligibility, review,
+ownership, import, exact delivery confirmation and playlist publication outcomes remain.
+Unavailable checks must not be labeled passed; unresolved visual eligibility stays reviewable.
+Full retains the existing configurable checks. The flows below describe current behavior;
+this documentation request changes no runtime behavior or deployed build.
+
+## Global catalog browsing filter
+
+Choose Music Videos, Live & Concerts or Both in the global navigation bar → retain the choice
+in browser storage across pages and reloads → display the selected catalog(s). Both shows
+independent labeled sections and keeps Live search/pagination in `live.*` URL parameters so
+music-video filters do not change Live results. Live & Concerts uses an inverted light palette;
+images are not inverted. Hide Artists w/o Videos remains the existing music-video artist rule
+and sits at the right of the Library navigation bar. Shared identities and settings remain common.
+
+Queue, completed/failure queue pages and History deliberately ignore this selection. Their filter
+buttons are all deselected and disabled, with an All categories explanation. Visiting them never
+overwrites the remembered choice. Returning to catalog browsing restores its selected state.
+
+Playlist browsing filters both cards and visible entries while retaining complete saved membership.
+Hidden members are stated explicitly; Push and playlist-wide actions use the full saved playlist.
+Reordering is disabled until all members are visible. Music-video rule generation is hidden in
+Live & Concerts; reviewed live versions are added through their existing recording actions.
+Review/import/calendar routes show the selected catalog workflow; live work begins by selecting
+the exact event/recording. This selection starts no provider search, acquisition, import or deletion
+and preserves all identity, content, review, validation and server-confirmation stages.
+
+## Confirm library-wide searches
+
+Library → Search all eligible → read-only eligibility preview → confirmation showing the number
+of video searches, library-wide scope and automatic acquisition consequences → search only the
+approved IDs that remain eligible → report grabbed/skipped results. Cancel, preview failure and
+zero eligible searches submit no search request. The count is video search attempts, not provider
+HTTP requests: each attempt may query multiple providers. Current Library filters do not narrow
+this action. Identity, source review, validation and delivery checks remain required. Scheduled
+backlog searches retain their existing automatic behavior.
+
+API clients first GET `/api/v1/artist/search-all-missing/preview` for `searches` and `videoIds`,
+then POST `/api/v1/artist/search-all-missing/confirmed` with the approved `videoIds` array. The server
+rechecks eligibility and intersects the approved set, so later additions cannot expand the run.
+The confirmed POST requires explicit IDs. The existing `/search-all-missing` POST remains
+available for backward compatibility with automation clients; Library uses the confirmed endpoint.
+
 ## Live catalog implementation
 
 The [concerts and live performances design](requests/2026-10-17-concerts-and-live-performances.md)
@@ -33,27 +106,9 @@ Each batch retains the mapped playback-library and exact delivered-path checks. 
 SQLite's parameter limit for queries containing negation filters. Playlist generation still
 reports a failed refresh and uses the last synced inventory; review and Push remain required.
 
-## Qualified playback (2026-10-16)
+## Server play counts only (2026-10-18)
 
-Enable a tested Jellyfin/Plex connector and select its video library → synchronize and confirm
-the catalog match → observe live sessions every 15 seconds → accumulate continuous watched
-seconds → atomically mark the viewing qualified and increment the video counter once at
-`min(duration / 2, 240 seconds)` → refresh artist/Library qualified totals. Duplicate events,
-pauses, buffering, seeks and gaps over 45 seconds earn no time. A start is only a baseline;
-already-watched positions never backfill time. The counter is separate from native server
-history and from optional Last.fm submission.
-
-Optional Jellyfin Webhook plugin → authenticated PlaybackStart/Progress/Stop POST → coalesced
-fresh server-session read → the same observation/qualification checks. Payload counts and
-positions cannot qualify a video. Polling provides the complete flow when the plugin is absent.
-No Jellyfin installation/restart is required by Vidarr deployment.
-
-Persist current observation and qualified status together with each earned counter update.
-On a failed server read, preserve viewing identity but break continuity; a later read cannot
-credit the missed time or repeat a qualification. Unconfigured sources close active observations;
-completed diagnostic rows expire after 30 days while counters remain. Catalog deletion cascades
-its observation records. Existing server count synchronization, playlist rules and Last.fm
-qualification/delivery continue independently. See [setup and limits](qualified-playback.md).
+Connect a selected Jellyfin/Plex video library → synchronize confirmed inventory/native play counts → show known server counts or unknown. Vidarr does not calculate or increment music-video, performance or song plays. Qualification polling and thresholds are retired; the old protected playback webhook returns HTTP 410. Remove obsolete notification destinations from Jellyfin. Resume observations retain viewing progress indefinitely but create no play count. Last.fm submission remains independently authorized and uses its own eligibility rules. Historical counter fields/rows remain inactive for rollback; APIs omit them. No media or database history is removed.
 
 ## Artist video actions and deletion (2026-10-16)
 

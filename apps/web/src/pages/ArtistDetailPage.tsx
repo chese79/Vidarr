@@ -1,7 +1,9 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { CatalogLink } from '../components/CatalogMode';
 import VideoThumb from '../components/VideoThumb';
 import GenreEditor from '../components/GenreEditor';
 import { NewArtistBadge, sourceCheckLabel } from '../components/ArtistProgress';
@@ -111,9 +113,9 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
     <div className="card">
       <div className="page-header" style={{ marginBottom: 8 }}>
         <h3 style={{ margin: 0 }}>Search results — {video.title}</h3>
-        <button className="secondary" onClick={onClose}>
+        <ActionButton className="secondary" onClick={onClose}>
           Close
-        </button>
+        </ActionButton>
       </div>
 
       {!downloadClients.data?.length && (
@@ -150,12 +152,12 @@ function ReleaseSearchPanel({ video, onClose }: { video: MusicVideo; onClose: ()
                 <td>{r.sizeBytes ? `${(r.sizeBytes / 1_000_000_000).toFixed(2)} GB` : '—'}</td>
                 <td>{r.seeders ?? '—'}</td>
                 <td>
-                  <button
+                  <ActionButton
                     disabled={!downloadClients.data?.length || grabbing === r.downloadUrl}
                     onClick={() => handleGrab(r)}
                   >
                     {grabbing === r.downloadUrl ? 'Grabbing…' : 'Grab'}
-                  </button>
+                  </ActionButton>
                 </td>
               </tr>
             ))}
@@ -214,7 +216,7 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>YouTube Sources</h3>
-      <form
+      <ActionForm
         className="form-row"
         onSubmit={(e) => {
           e.preventDefault();
@@ -234,8 +236,8 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
           style={{ minWidth: 320 }}
           required
         />
-        <button type="submit">Add</button>
-      </form>
+        <ActionButton type="submit">Add</ActionButton>
+      </ActionForm>
 
       {sources.data?.length ? (
         <table>
@@ -256,12 +258,12 @@ function YoutubeSourcesSection({ artistId }: { artistId: number }) {
                 <td>{s.url}</td>
                 <td role="status">{status[s.id] ?? (s.lastPolledAt ? 'Synced' : 'Never synced')}</td>
                 <td style={{ display: 'flex', gap: 6 }}>
-                  <button className="secondary" onClick={() => handleSync(s.id)}>
+                  <ActionButton className="secondary" onClick={() => handleSync(s.id)}>
                     Sync
-                  </button>
-                  <button className="secondary" onClick={() => removeSource.mutate(s.id)}>
+                  </ActionButton>
+                  <ActionButton className="secondary" onClick={() => removeSource.mutate(s.id)}>
                     Remove
-                  </button>
+                  </ActionButton>
                 </td>
               </tr>
             ))}
@@ -535,17 +537,17 @@ export default function ArtistDetailPage() {
 
   return (
     <div>
-      {returnTo && <button className="secondary" onClick={() => returnToDiscover()}>Back to Discover</button>}
+      {returnTo && <ActionButton className="secondary" onClick={() => returnToDiscover()}>Back to Discover</ActionButton>}
       <div className="page-header">
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <ArtistHeaderImage artistId={artistId} name={artist.data.name} />
           <div>
             <h2>{artist.data.name} <NewArtistBadge addedAt={artist.data.addedAt} /></h2>
-            <nav aria-label="Artist catalog"><strong>Music Videos</strong> · <Link to={`/artist/${artistId}/live`}>Live</Link></nav>
+            <nav aria-label="Artist catalog"><strong>Music Videos</strong> · <CatalogLink catalog="live" to={`/artist/${artistId}/live`}>Live &amp; Concerts</CatalogLink></nav>
             <div className="artist-meta">
               {artist.data.musicbrainzArtistId ? `MusicBrainz: ${artist.data.musicbrainzArtistId}` : `MusicBrainz: ${artist.data.musicbrainzMatchStatus}`} ·{' '}
               {artist.data.imvdbArtistId ? `IMVDb: ${artist.data.imvdbArtistId}` : 'No IMVDb match'} ·{' '}
-              {artist.data.summary.qualifiedPlayCount ?? 0} qualified plays · {artist.data.summary.aggregatePlayCount ?? 'unknown'} server plays · {artist.data.summary.available} available / {artist.data.summary.known} known ·{' '}
+              {artist.data.summary.aggregatePlayCount != null ? `${artist.data.summary.aggregatePlayCount} server plays` : 'server plays unknown'} · {artist.data.summary.available} available / {artist.data.summary.known} known ·{' '}
               {artist.data.summary.missing} missing · {artist.data.summary.monitored} monitored
             </div>
           </div>
@@ -559,23 +561,23 @@ export default function ArtistDetailPage() {
             />
             Monitored
           </label>
-          <button onClick={() => setShowAdd((v) => !v)}>Add Video</button>
+          <ActionButton onClick={() => setShowAdd((v) => !v)}>Add Video</ActionButton>
         </div>
       </div>
 
       <div className="form-row" style={{ alignItems: 'center' }}>
-        <button className="secondary" onClick={() => refreshMetadata.mutate()} disabled={refreshMetadata.isPending}>Refresh IMVDb</button>
-        <button className="secondary" onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>Reconcile inventory</button>
-        <button className="secondary" onClick={() => monitorVideos.mutate('all')}>Monitor all</button>
-        <button className="secondary" onClick={() => monitorVideos.mutate('none')}>Unmonitor all</button>
-        <button className="secondary" onClick={() => monitorVideos.mutate('missing')}>Monitor missing</button>
-        <button onClick={() => searchMissing.mutate()} disabled={searchMissing.isPending || !artist.data.monitored}>Search missing monitored</button>
+        <ActionButton className="secondary" onClick={() => refreshMetadata.mutate()} disabled={refreshMetadata.isPending}>Refresh IMVDb</ActionButton>
+        <ActionButton className="secondary" onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>Reconcile inventory</ActionButton>
+        <ActionButton className="secondary" onClick={() => monitorVideos.mutate('all')}>Monitor all</ActionButton>
+        <ActionButton className="secondary" onClick={() => monitorVideos.mutate('none')}>Unmonitor all</ActionButton>
+        <ActionButton className="secondary" onClick={() => monitorVideos.mutate('missing')}>Monitor missing</ActionButton>
+        <ActionButton onClick={() => searchMissing.mutate()} disabled={searchMissing.isPending || !artist.data.monitored}>Search missing monitored</ActionButton>
       </div>
       {artistActionMessage && <p role="status" className="empty-state">{artistActionMessage}</p>}
 
       {artist.data.musicbrainzMatchStatus === 'confirmed' && <details className="artist-source-details">
         <summary>Video sources · {videoInventory.data ? `${videoInventory.data.official} official · ${videoInventory.data.approvedOther} approved · ${videoInventory.data.pendingYoutube + videoInventory.data.pendingLocal} to review` : 'loading'}</summary>
-        <div className="artist-source-content"><div className="form-row"><button className="secondary" onClick={() => collectVideoInventory.mutate()} disabled={collectVideoInventory.isPending}>{collectVideoInventory.isPending ? 'Collecting…' : 'Refresh all sources'}</button></div>
+        <div className="artist-source-content"><div className="form-row"><ActionButton className="secondary" onClick={() => collectVideoInventory.mutate()} disabled={collectVideoInventory.isPending}>{collectVideoInventory.isPending ? 'Collecting…' : 'Refresh all sources'}</ActionButton></div>
         {videoInventory.isPending && <p>Loading source record…</p>}
         {videoInventory.isError && <p role="alert">Could not load the source record.</p>}
         {videoInventory.data && <>
@@ -588,8 +590,8 @@ export default function ArtistDetailPage() {
       </details>}
 
       {!artist.data.musicbrainzArtistId && <section className="card">
-        <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr collects its video catalog.</p></div><button className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</button></div>
-        {musicbrainzCandidates.data?.map((candidate) => <div key={candidate.id} className="form-row" style={{ alignItems: 'center' }}><strong>{candidate.name}</strong><span>{candidate.artistType ?? 'Unknown type'} · {candidate.country ?? 'Unknown country'}{candidate.disambiguation ? ` · ${candidate.disambiguation}` : ''} · {Math.round(candidate.score * 100)}%{recordingEvidenceLabel(candidate.evidence) ? ` · ${recordingEvidenceLabel(candidate.evidence)}` : ''}</span><button onClick={() => confirmMusicbrainz.mutate(candidate.musicbrainzArtistId)} disabled={confirmMusicbrainz.isPending}>Confirm</button></div>)}
+        <div className="page-header"><div><h3>Match artist identity</h3><p className="empty-state">Confirm the MusicBrainz artist before Vidarr collects its video catalog.</p></div><ActionButton className="secondary" onClick={() => discoverMusicbrainz.mutate()} disabled={discoverMusicbrainz.isPending}>{discoverMusicbrainz.isPending ? 'Searching…' : 'Find MusicBrainz matches'}</ActionButton></div>
+        {musicbrainzCandidates.data?.map((candidate) => <div key={candidate.id} className="form-row" style={{ alignItems: 'center' }}><strong>{candidate.name}</strong><span>{candidate.artistType ?? 'Unknown type'} · {candidate.country ?? 'Unknown country'}{candidate.disambiguation ? ` · ${candidate.disambiguation}` : ''} · {Math.round(candidate.score * 100)}%{recordingEvidenceLabel(candidate.evidence) ? ` · ${recordingEvidenceLabel(candidate.evidence)}` : ''}</span><ActionButton onClick={() => confirmMusicbrainz.mutate(candidate.musicbrainzArtistId)} disabled={confirmMusicbrainz.isPending}>Confirm</ActionButton></div>)}
       </section>}
 
       {monitorMessage && (
@@ -608,7 +610,7 @@ export default function ArtistDetailPage() {
       {settings.isError && <p role="alert">Could not load deletion preferences. Reload the page to enable Delete.</p>}
 
       {showAdd && (
-        <form className="card" onSubmit={handleSubmit}>
+        <ActionForm className="card" onSubmit={handleSubmit}>
           <div className="form-row">
             <input
               placeholder="Video title"
@@ -627,22 +629,22 @@ export default function ArtistDetailPage() {
               value={videoGenre}
               onChange={(e) => setVideoGenre(e.target.value)}
             />
-            <button type="submit">Save</button>
+            <ActionButton type="submit">Save</ActionButton>
           </div>
-        </form>
+        </ActionForm>
       )}
 
       {wantedVideos.length > 0 && (
         <div className="form-row" style={{ alignItems: 'center' }}>
-          <button className="secondary" onClick={toggleSelectAll}>
+          <ActionButton className="secondary" onClick={toggleSelectAll}>
             {allSelected ? 'Deselect All' : 'Select All'}
-          </button>
-          <button disabled={!selected.size || bulkSearching || bulkDownloading} onClick={handleBulkSearch}>
+          </ActionButton>
+          <ActionButton disabled={!selected.size || bulkSearching || bulkDownloading} onClick={handleBulkSearch}>
             {bulkSearching ? 'Searching…' : `Search Selected (${selected.size})`}
-          </button>
-          <button disabled={!downloadableIds.length || bulkSearching || bulkDownloading} onClick={handleBulkDownload}>
+          </ActionButton>
+          <ActionButton disabled={!downloadableIds.length || bulkSearching || bulkDownloading} onClick={handleBulkDownload}>
             {bulkDownloading ? 'Downloading…' : `Download Selected (${downloadableIds.length})`}
-          </button>
+          </ActionButton>
           {bulkMessage && (
             <span className="empty-state" role="status">
               {bulkMessage}
@@ -670,19 +672,19 @@ export default function ArtistDetailPage() {
                   <span className="empty-state" style={{ padding: 0 }}>
                     ({mv.releaseYear ?? 'year unknown'})
                   </span>
-                  {' '}<button type="button" className="secondary" disabled={flagLiveConcert.isPending || Boolean(mv.deletionState)}
+                  {' '}<ActionButton type="button" className="secondary video-inline-action" disabled={flagLiveConcert.isPending || Boolean(mv.deletionState)}
                     onClick={() => flagLiveConcert.mutate({ id: mv.id, isLiveConcert: !mv.isLiveConcert })}>
                     {mv.isLiveConcert ? 'Unflag Live/Concert' : 'Flag as Live/Concert'}
-                  </button>
-                  {' '}<button type="button" className="secondary" aria-label={`Delete ${mv.title}`}
+                  </ActionButton>
+                  {' '}<ActionButton type="button" className="secondary video-inline-action" aria-label={`Delete ${mv.title}`}
                     disabled={!settings.isSuccess || deleteVideo.isPending || mv.deletionState === 'running' || mv.deletionState === 'pending' || ['queued', 'downloading', 'importing', 'submissionUnknown'].includes(mv.status.acquisition ?? '')}
                     onClick={() => {
                       const warning = settings.data?.warnBeforeDelete ?? true;
                       if (warning && !window.confirm(`Delete ${currentArtist.name} — ${mv.title}?\n\nThis permanently removes the local file and its metadata, all confirmed matched Jellyfin/Plex copies, and the Vidarr entry. This cannot be undone.\n\n${settings.data?.excludeDeletedVideosFromScans ? 'Future scans will exclude this video.' : 'Future scans may add this video again.'}`)) return;
                       deleteVideo.mutate({ id: mv.id, title: mv.title, confirmed: warning });
-                    }}>{mv.deletionState === 'running' ? 'Deleting…' : mv.deletionState === 'pending' ? 'Pending deletion' : mv.deletionState === 'failed' ? 'Reschedule delete' : 'Delete'}</button>
+                    }}>{mv.deletionState === 'running' ? 'Deleting…' : mv.deletionState === 'pending' ? 'Pending deletion' : mv.deletionState === 'failed' ? 'Reschedule delete' : 'Delete'}</ActionButton>
                   {mv.isLiveConcert && <Link className="status-chip" to="/live/classification">Awaiting live classification</Link>}
-                  <span className="artist-meta"> {mv.qualifiedPlayCount ?? 0} qualified plays</span>
+                  {mv.effectivePlayCount != null && <span className="artist-meta"> {mv.effectivePlayCount} server plays</span>}
                   {mv.deletionError && <p role="alert">{mv.deletionError}</p>}
                   {mv.deletionNextAttemptAt && <p role="status">{mv.deletionState === 'failed' ? 'Deletion retry' : 'Deletion scheduled'}: {new Date(mv.deletionNextAttemptAt).toLocaleString()}</p>}
                   {['queued', 'downloading', 'importing', 'submissionUnknown'].includes(mv.status.acquisition ?? '') && <small> Remove or finish the download in Queue before deleting.</small>}
@@ -753,8 +755,8 @@ export default function ArtistDetailPage() {
                         {match.matchConfidence ? ` · ${match.matchConfidence} match` : ''}
                         {match.matchConfidence && (
                           <>
-                            <button className="secondary" onClick={() => confirmMatch.mutate(match.id)}>Confirm</button>
-                            <button className="secondary" onClick={() => rejectMatch.mutate(match.id)}>Reject</button>
+                            <ActionButton className="secondary" onClick={() => confirmMatch.mutate(match.id)}>Confirm</ActionButton>
+                            <ActionButton className="secondary" onClick={() => rejectMatch.mutate(match.id)}>Reject</ActionButton>
                           </>
                         )}
                       </span>
@@ -772,13 +774,13 @@ export default function ArtistDetailPage() {
                 {!mv.hasFile && (mv.status.acquisition == null || mv.status.acquisition === 'failed') && !mv.ignored && (
                   <>
                     {mv.youtubeVideoId && (
-                      <button className="secondary" onClick={() => handleGrab(mv.id)}>
+                      <ActionButton className="secondary" onClick={() => handleGrab(mv.id)}>
                         Grab
-                      </button>
+                      </ActionButton>
                     )}
-                    <button className="secondary" onClick={() => setSearchingVideo(mv)}>
+                    <ActionButton className="secondary" onClick={() => setSearchingVideo(mv)}>
                       Search
-                    </button>
+                    </ActionButton>
                   </>
                 )}
                 {!mv.hasFile && mv.ignored && (
@@ -805,8 +807,8 @@ export default function ArtistDetailPage() {
           {artist.data.unmatchedInventory.map((item) => (
             <div key={item.id} className="form-row">
               <span>{item.title} ({item.releaseYear ?? 'year unknown'}) · {item.connector.name}</span>
-              {item.matchConfidence && <button onClick={() => confirmMatch.mutate(item.id)}>Confirm proposed match</button>}
-              {item.musicVideoId && <button className="secondary" onClick={() => rejectMatch.mutate(item.id)}>Reject</button>}
+              {item.matchConfidence && <ActionButton onClick={() => confirmMatch.mutate(item.id)}>Confirm proposed match</ActionButton>}
+              {item.musicVideoId && <ActionButton className="secondary" onClick={() => rejectMatch.mutate(item.id)}>Reject</ActionButton>}
             </div>
           ))}
         </div>

@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from './ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ArtistGenreView, GenreSourceName } from '@vidarr/shared-types';
@@ -37,7 +38,7 @@ function GenreChip({ item, total, onRemove }: {
       <span className="genre-chip-name">{item.name}</span>
       <span className="genre-chip-meta">{formatGenreUsage(item.artistCount, item.percentOfArtists, total)}</span>
       <span className="genre-chip-meta">{item.sources.map((s) => SOURCE_LABEL[s]).join(' + ')}</span>
-      <button type="button" className="genre-chip-remove" aria-label={`Remove ${item.name}`} onClick={onRemove}>×</button>
+      <ActionButton type="button" className="genre-chip-remove" aria-label={`Remove ${item.name}`} onClick={onRemove}>×</ActionButton>
     </li>
   );
 }
@@ -112,16 +113,16 @@ export default function GenreEditor({ artistId }: { artistId: number }) {
           </p>
         </div>
         <div className="form-row" style={{ marginBottom: 0 }}>
-          <button type="button" className="secondary" onClick={() => refresh.mutate()} disabled={busy}>
+          <ActionButton type="button" className="secondary" onClick={() => refresh.mutate()} disabled={busy}>
             {refresh.isPending ? 'Refreshing…' : 'Refresh from sources'}
-          </button>
-          <button type="button" className="secondary" onClick={() => matchSpotify.mutate()} disabled={busy || matchSpotify.isPending}>
+          </ActionButton>
+          <ActionButton type="button" className="secondary" onClick={() => matchSpotify.mutate()} disabled={busy || matchSpotify.isPending}>
             {matchSpotify.isPending ? 'Matching…' : 'Match from Spotify'}
-          </button>
+          </ActionButton>
           {data.userOverride && (
-            <button type="button" className="secondary" onClick={() => { setMessage(null); save.mutate([]); }} disabled={busy}>
+            <ActionButton type="button" className="secondary" onClick={() => { setMessage(null); save.mutate([]); }} disabled={busy}>
               Reset to automatic
-            </button>
+            </ActionButton>
           )}
         </div>
       </div>
@@ -133,7 +134,7 @@ export default function GenreEditor({ artistId }: { artistId: number }) {
       {subgenres.length ? <ul className="genre-chips">{subgenres.map((g) => <GenreChip key={g.name} item={g} total={data.totalArtists} onRemove={() => remove(g.name)} />)}</ul>
         : <p className="empty-state" style={{ padding: 0 }}>No sub-genre set.</p>}
 
-      <form className="form-row" onSubmit={(e) => { e.preventDefault(); add(draft); }}>
+      <ActionForm className="form-row" onSubmit={(e) => { e.preventDefault(); add(draft); }}>
         <label htmlFor="genre-add" className="sr-only">Add a genre or sub-genre</label>
         <input
           id="genre-add"
@@ -144,8 +145,8 @@ export default function GenreEditor({ artistId }: { artistId: number }) {
           style={{ minWidth: 240 }}
         />
         <datalist id="genre-add-options">{data.alternatives.map((a) => <option key={a.name} value={a.name} />)}</datalist>
-        <button type="submit" disabled={busy || !draft.trim()}>Add</button>
-      </form>
+        <ActionButton type="submit" disabled={busy || !draft.trim()}>Add</ActionButton>
+      </ActionForm>
 
       {data.alternatives.length > 0 && (
         <>
@@ -153,7 +154,7 @@ export default function GenreEditor({ artistId }: { artistId: number }) {
           <ul className="genre-chips" aria-label="Alternative genres">
             {data.alternatives.map((a) => (
               <li key={a.name} className="genre-chip genre-chip-alt">
-                <button type="button" className="genre-chip-add" onClick={() => add(a.name)} disabled={busy} aria-label={`Add ${a.name}`}>+ {a.name}</button>
+                <ActionButton type="button" className="genre-chip-add" onClick={() => add(a.name)} disabled={busy} aria-label={`Add ${a.name}`}>+ {a.name}</ActionButton>
                 <span className="genre-chip-meta">{a.level === 'subgenre' ? 'sub-genre' : 'genre'} · {formatGenreUsage(a.artistCount, a.percentOfArtists, data.totalArtists)}</span>
                 <span className="genre-chip-meta">{a.reason}</span>
               </li>

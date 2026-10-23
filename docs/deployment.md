@@ -1,5 +1,67 @@
 # Deployment
 
+### Native MTV overlay direction
+
+The undeployed pre-render component and its migration were removed after the user selected a
+[native playback overlay](mtv-overlay.md). The local database was checked and has no overlay-job
+table; no live schema/data rollback is required. There is no overlay output mount or FFmpeg/font
+installation option to configure. Native Roku support needs a modified/updated Roku client;
+web support needs its own player integration. Both are supplied as separate source components in
+[`integrations/jellyfin-native`](../integrations/jellyfin-native/README.md), with pinned client
+revisions, compatibility checks, settings, tests and reversible source installation. Build and
+deploy each Jellyfin client separately; Vidarr's Docker image does not bundle them. The current
+web source base requires Node 24/npm 11 for its own build; Vidarr stays on Node 22. Roku sideloading
+requires developer mode and replaces the device's existing development channel. No live Jellyfin
+web assets or Roku channels have been changed by developing these components.
+
+Native component verification: 10 standalone tests pass without skipped installer checks; the
+pinned Roku development client compiles/packages under Node 22; the pinned web client passes its
+full TypeScript check and production minification under Node 24. `Dockerfile.web` separates type
+checking from bundling and limits bundler/minifier parallelism for the local 4 GB Docker VM.
+Installable development artifacts are retained under `integrations/jellyfin-native/build/` and
+are separate from the live Vidarr service. See the component README before replacing web assets
+or sideloading Roku; source/build success does not confirm playback on the actual device/server.
+
+### Local Full deployment — 2026-10-19
+
+Deployed the complete current application locally as `vidarr-full-20261019:release`, image ID
+`sha256:0617d81b8c62cd615c727e884985c6a9344043ec8e0b6a240418f24860260524`,
+from the working tree based on `8062e8c`. This includes server-native play counts, global catalog
+selection, playlist creation controls and confirmed library-wide searches. It is the existing
+full-featured runtime with FFmpeg/ffprobe and yt-dlp, not a new optional-component installer.
+Build-edition packaging remains planned and MTV overlay pre-rendering remains on hold.
+
+Verification under Node 22: 884 server tests (112 files), 58 web tests (17 files), and the production
+Docker build passed. Fixed the validation-page test's missing router context without changing
+runtime behavior. Post-cutover checks confirmed healthy service at `http://192.168.0.8:3434`, ten
+HTTP routes, built assets, protected API access, SQLite quick/foreign-key checks, unchanged
+authentication and configuration fingerprints, and working media tools as uid 1000.
+
+Only Vidarr was recreated. Existing configuration, media, D-drive and persistent staging mounts,
+port binding, environment and restart policy were retained; SABnzbd was left running. Verified
+offline backup `vidarr-backup-20261019-full` retains the SQLite database/recovery sidecars and
+configuration archive. Keep this volume private because configuration contains credentials.
+Preservation checks found all original 3,051 artists, 4,281 videos, 676 file records, 48,036 review
+candidates and 1,041 queue entries. Staging retained its existing mount and 58 files at cutover.
+No schema change was introduced by this release and no media was changed by deployment.
+
+The previous container is retained stopped as `vidarr-rollback-20261019-full` (image
+`vidarr:170bd6b`). To roll back, stop the current Vidarr, rename it to an unused failed-release
+name, rename that rollback container to `vidarr`, then start it with its existing mounts.
+The backup is retained for recovery; do not overwrite a live database or restore it blindly
+over work performed after cutover. No image/source publication was performed.
+
+### Planned editions: documentation only
+
+Future distribution will initially provide Slim (full functionality except video validation
+types 1 and 2, without FFmpeg) and Full (everything). No edition images, tags or installation
+commands exist as a result of this plan. Current deployment instructions remain unchanged.
+Slim and Full are planned installation presets with separately selectable feature components
+over shared application code. The current Full deployment uses the existing complete image;
+the component installer is not implemented by deploying it.
+See [build editions](requests/2026-10-18-build-editions.md) for compatibility requirements and
+the non-validation media-tool dependencies that must be resolved before implementation.
+
 ### Qualified-play revision
 
 Migration `20261017010000_qualified_play_counts` adds zero-initialized Vidarr counters and

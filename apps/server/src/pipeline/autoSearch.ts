@@ -215,7 +215,7 @@ export async function autoSearchAndGrab(
 // anywhere" actually apply (a manual bulk-search or a quality-upgrade
 // candidate legitimately has a file already, so those checks live only
 // here, not inside the shared grab function).
-export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: number }> {
+export async function previewBacklogSearch(): Promise<{ videoIds: number[]; searches: number }> {
   const wanted = await prisma.musicVideo.findMany({
     where: {
       monitored: true,
@@ -235,12 +235,20 @@ export async function runBacklogSearch(): Promise<{ grabbed: number; skipped: nu
     },
     select: { id: true },
   });
+  return { videoIds: wanted.map(video => video.id), searches: wanted.length };
+}
+
+export async function runBacklogSearch(approvedVideoIds?: number[]): Promise<{ grabbed: number; skipped: number }> {
+  // Recheck eligibility, but never expand a manually approved preview with new videos.
+  const preview = await previewBacklogSearch();
+  const approved = approvedVideoIds === undefined ? undefined : new Set(approvedVideoIds);
+  const wanted = preview.videoIds.filter(id => approved === undefined || approved.has(id));
 
   let grabbed = 0;
   let skipped = 0;
   for (const video of wanted) {
     try {
-      const outcome = await autoSearchAndGrab(video.id);
+      const outcome = await autoSearchAndGrab(video);
       if (outcome.grabbed) grabbed++;
       else skipped++;
     } catch (err) {

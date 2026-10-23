@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIVE_DOWNLOAD_STATUSES, deriveMediaLifecycle } from '../src/media/lifecycle.js';
 import { observedPlaybackSeconds } from '../src/media/playback.js';
-import { observedPlaybackSeconds as legacyObservation, qualifiedPlayThreshold } from '../src/pipeline/playbackObservation.js';
+import { observedPlaybackSeconds as legacyObservation } from '../src/pipeline/playbackObservation.js';
 import { assertVideoMedia, NotAVideoError } from '../src/media/inspection.js';
 import { assertIsRealMusicVideo, NotAVideoError as LegacyError } from '../src/pipeline/validateVideoFile.js';
 import { withValidationWorker } from '../src/media/validationWorker.js';
@@ -57,8 +57,6 @@ describe('shared media foundations', () => {
     const sources = [{ id: 1, authority: 'manual', url: 'https://manual' }, { id: 2, authority: 'authoritative', url: 'https://official' }];
     expect(preferredDirectSource(sources)?.id).toBe(2);
     expect(sources[0].id).toBe(1);
-    expect(qualifiedPlayThreshold(900)).toBe(240);
-    expect(qualifiedPlayThreshold(100)).toBe(50);
   });
 
   it.each([

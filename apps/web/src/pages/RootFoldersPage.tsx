@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -35,7 +36,7 @@ export default function RootFoldersPage() {
         <h2>Root Folders</h2>
       </div>
 
-      <form
+      <ActionForm
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
@@ -64,10 +65,10 @@ export default function RootFoldersPage() {
               <option key={connector.id} value={connector.id}>{connector.name}</option>
             ))}
           </select>
-          <button type="submit">Add</button>
+          <ActionButton type="submit">Add</ActionButton>
         </div>
         {createFolder.error ? <p className="error">{createFolder.error.message}</p> : null}
-      </form>
+      </ActionForm>
 
       {rootFolders.data?.length ? (
         <table>
@@ -97,13 +98,13 @@ export default function RootFoldersPage() {
                   </select>
                 </td>
                 <td>
-                  <button
+                  <ActionButton
                     className="secondary"
                     aria-label={`Remove ${rf.path}`}
                     onClick={() => removeFolder.mutate(rf.id)}
                   >
                     Remove
-                  </button>
+                  </ActionButton>
                 </td>
               </tr>
             ))}

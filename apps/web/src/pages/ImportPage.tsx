@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -132,7 +133,7 @@ export default function ImportPage() {
           found) and grouped below. Videos are included by default; check "Add to watch list" only
           for artists you want vidarr to actively monitor going forward.
         </p>
-        <form className="form-row" onSubmit={handlePreview}>
+        <ActionForm className="form-row" onSubmit={handlePreview}>
           <input
             placeholder="https://www.youtube.com/playlist?list=..."
             aria-label="YouTube playlist URL"
@@ -141,10 +142,10 @@ export default function ImportPage() {
             style={{ minWidth: 360 }}
             required
           />
-          <button type="submit" disabled={previewing}>
+          <ActionButton type="submit" disabled={previewing}>
             {previewing ? 'Loading…' : 'Preview'}
-          </button>
-        </form>
+          </ActionButton>
+        </ActionForm>
         {previewError && (
           <p className="empty-state" role="alert">
             {previewError}
@@ -181,9 +182,9 @@ export default function ImportPage() {
                 </option>
               ))}
             </select>
-            <button onClick={handleImport} disabled={!canImport || importing}>
+            <ActionButton onClick={handleImport} disabled={!canImport || importing}>
               {importing ? 'Importing…' : `Import Selected (${includedCount}/${totalVideos})`}
-            </button>
+            </ActionButton>
           </div>
 
           {groups.map((g) => (

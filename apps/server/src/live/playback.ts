@@ -32,21 +32,17 @@ export async function observeLivePlayback(serverKey: string, partId: number, ses
       const watchedSeconds = view.watchedSeconds + credit;
       const full = part.recording.uninterruptedVerified && part.recording.claimedCoverage === 'entirePerformance' && part.recording.identityVerified && part.recording.videoVerified;
       const duration = full && part.recording.performances.length === 1 ? await tx.recordingPart.aggregate({ where: { recordingId: part.recordingId, OR: [{ available: true }, { serverCopies: { some: { available: true } } }] }, _sum: { durationSeconds: true } }).then(value => value._sum.durationSeconds) : view.durationSeconds;
-      const qualified = duration != null && duration > 0 && watchedSeconds >= Math.min(duration / 2, 1800);
       const finalPart = full ? await tx.recordingPart.findFirst({ where: { recordingId: part.recordingId }, orderBy: { position: 'desc' } }) : null;
       const ended = full && finalPart?.id === partId && credit > 0 && part.durationSeconds != null && session.positionSeconds >= part.durationSeconds;
       await tx.liveViewing.update({ where: { id: view.id }, data: { ...(ended ? { completedAt: now, active: false } : {}), watchedSeconds, durationSeconds: duration, positionSeconds: session.positionSeconds, partId,
-        ...(credit > 0 ? { lastCreditAt: now } : {}), ...(qualified && !view.qualifiedAt ? { qualifiedAt: now } : {}) } });
-      if (qualified && !view.qualifiedAt) await tx.livePerformance.update({ where: { id: link.performanceId }, data: { qualifiedPlayCount: { increment: 1 } } });
+        ...(credit > 0 ? { lastCreditAt: now } : {}) } });
       for (const item of relevant.filter(item => songIds.has(item.songId) && item.fullSong)) {
         const start = item.startSeconds!, end = item.endSeconds!;
         const overlap = observedCredit > 0 ? Math.max(0, Math.min(session.positionSeconds, end) - Math.max(session.positionSeconds - observedCredit, start)) : 0;
         const prior = await tx.liveSongViewing.findUnique({ where: { viewingId_songId: { viewingId: view.id, songId: item.songId } } });
-        const seconds = (prior?.watchedSeconds ?? 0) + overlap, threshold = Math.min((end - start) / 2, 240);
-        const earned = seconds >= threshold;
+        const seconds = (prior?.watchedSeconds ?? 0) + overlap;
         await tx.liveSongViewing.upsert({ where: { viewingId_songId: { viewingId: view.id, songId: item.songId } }, create: { viewingId: view.id, songId: item.songId,
-          watchedSeconds: seconds, durationSeconds: end - start, qualifiedAt: earned ? now : null }, update: { watchedSeconds: seconds, qualifiedAt: prior?.qualifiedAt ?? (earned ? now : null) } });
-        if (earned && !prior?.qualifiedAt) await tx.liveSongPerformance.update({ where: { id: item.songId }, data: { qualifiedPlayCount: { increment: 1 } } });
+          watchedSeconds: seconds, durationSeconds: end - start }, update: { watchedSeconds: seconds } });
       }
       await tx.livePlaybackObservation.upsert({ where: { key }, create: { key, viewingId: view.id, partId, positionSeconds: session.positionSeconds, playing: session.playing, lastObservedAt: now },
         update: { viewingId: view.id, partId, positionSeconds: session.positionSeconds, playing: session.playing, lastObservedAt: now } });

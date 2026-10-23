@@ -1,3 +1,4 @@
+import { ActionButton } from './ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -29,14 +30,14 @@ export function LastFmAccountSection() {
       {account?.linked && <p>Linked to <strong>{account.username}</strong>.</p>}
       {account?.linked && !account.scrobblingEnabled && <p role="status">Account linked. Next: enable playback reporting below when you want to send scrobbles.</p>}
       <div className="form-row">
-        <button type="button" disabled={busy} onClick={() => start.mutate()}>
+        <ActionButton type="button" disabled={busy} onClick={() => start.mutate()}>
           {start.isPending ? 'Starting…' : account?.linked ? 'Link another account' : 'Link account'}
-        </button>
+        </ActionButton>
         {authorizationUrl && <a href={authorizationUrl} target="_blank" rel="noopener noreferrer">Authorize on Last.fm ↗</a>}
-        {account?.pendingAuthorization && <button type="button" disabled={busy} onClick={() => complete.mutate()}>
+        {account?.pendingAuthorization && <ActionButton type="button" disabled={busy} onClick={() => complete.mutate()}>
           Complete link after authorizing
-        </button>}
-        {account?.linked && <button type="button" disabled={busy} onClick={() => unlink.mutate()}>Unlink account</button>}
+        </ActionButton>}
+        {account?.linked && <ActionButton type="button" disabled={busy} onClick={() => unlink.mutate()}>Unlink account</ActionButton>}
       </div>
       {account?.linked && <label>
         <input type="checkbox" checked={account.scrobblingEnabled} disabled={busy}

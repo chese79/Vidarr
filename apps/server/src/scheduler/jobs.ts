@@ -19,7 +19,6 @@ import { backfillArtistVideoInventories } from '../pipeline/artistVideoBackfill.
 import { backfillArtistGenres } from '../pipeline/artistGenres.js';
 import { pollLastFmPlayback } from '../pipeline/lastfmScrobbling.js';
 import { processPendingVideoDeletions } from '../pipeline/deleteVideo.js';
-import { pollQualifiedPlayback } from '../pipeline/qualifiedPlayback.js';
 
 export interface ScheduledJob {
   name: string;
@@ -67,9 +66,8 @@ export const JOBS: ScheduledJob[] = [
   { name: 'Live Discovery', defaultIntervalMs: 60000, run: runLiveMonitoring },
   { name: 'Live Local Availability', defaultIntervalMs: 300000, run: auditLocalRecordingAvailability },
   { name: 'Live Delivery', defaultIntervalMs: 60000, run: reconcileRecordingDelivery },
-  { name: 'Live Qualified Playback', defaultIntervalMs: 15000, run: pollLivePlayback },
+  { name: 'Live Playback Resume', defaultIntervalMs: 15000, run: pollLivePlayback },
   { name: 'Live Deletions', defaultIntervalMs: 60000, run: processRecordingDeletions },
-  { name: 'Qualified Playback Tracking', defaultIntervalMs: 15_000, run: () => pollQualifiedPlayback() },
   { name: 'Pending Video Deletions', defaultIntervalMs: 60_000, run: async () => { await processPendingVideoDeletions(); return 'Checked due video deletions'; } },
   { name: 'Last.fm Playback Scrobbling', defaultIntervalMs: 15_000, run: () => pollLastFmPlayback() },
   {

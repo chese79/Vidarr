@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -42,7 +43,7 @@ export default function QualityProfilesPage() {
         <h2>Quality Profiles</h2>
       </div>
 
-      <form className="card" onSubmit={handleSubmit}>
+      <ActionForm className="card" onSubmit={handleSubmit}>
         <div className="form-row">
           <input
             placeholder="Profile name"
@@ -64,7 +65,7 @@ export default function QualityProfilesPage() {
               </option>
             ))}
           </select>
-          <button type="submit">Save</button>
+          <ActionButton type="submit">Save</ActionButton>
         </div>
         <div className="form-row">
           {qualities.data?.map((q) => (
@@ -78,7 +79,7 @@ export default function QualityProfilesPage() {
             </label>
           ))}
         </div>
-      </form>
+      </ActionForm>
 
       {profiles.data?.length ? (
         <table>
@@ -97,13 +98,13 @@ export default function QualityProfilesPage() {
                 <td>{p.name}</td>
                 <td>{p.items.filter((i) => i.allowed).length} allowed</td>
                 <td>
-                  <button
+                  <ActionButton
                     className="secondary"
                     aria-label={`Remove ${p.name}`}
                     onClick={() => removeProfile.mutate(p.id)}
                   >
                     Remove
-                  </button>
+                  </ActionButton>
                 </td>
               </tr>
             ))}

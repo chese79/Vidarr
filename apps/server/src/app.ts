@@ -35,6 +35,7 @@ import { googleAuthRoutes } from './api/googleAuth.js';
 import { localAuthRoutes } from './api/localAuth.js';
 import { videoReviewRoutes } from './api/videoReview.js';
 import { redactMessage } from './security/redact.js';
+import { withoutRetiredPlayCounters } from './media/serverPlayCounts.js';
 
 // Prisma returns BigInt for byte-count fields (RootFolder.freeSpaceBytes,
 // MusicVideoFile.sizeBytes); JSON.stringify can't serialize BigInt natively.
@@ -62,6 +63,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   } });
 
+  app.addHook('preSerialization', async (_req, _reply, payload) => withoutRetiredPlayCounters(payload));
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ZodError) {
       reply.code(400).send({ error: 'ValidationError', issues: err.issues });

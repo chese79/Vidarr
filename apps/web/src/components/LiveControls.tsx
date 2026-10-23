@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from './ButtonFeedback';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,25 +28,33 @@ export function LiveDiscoveryControls({ artistId, performanceId }: { artistId: n
   const activate = useMutation({ mutationFn: () => api.live.action('monitoring', { ...input, approved: true }), onSuccess: () => { cache.invalidateQueries({ queryKey: ['live-monitoring'] }); } });
   return <details className="card"><summary>Discovery and monitoring</summary>
     <p>Browse one setlist.fm history page at a time. Adding an artist does not import its entire live history. Video searches are separate and send uncertain candidates to review.</p>
-    <button disabled={discover.isPending} onClick={() => discover.mutate()}>Load event history, page {page}</button>{' '}
-    {discover.data?.hasMore && <button onClick={() => { setPage(page + 1); discover.reset(); }}>Next history page</button>}
+    <ActionButton disabled={discover.isPending} onClick={() => discover.mutate()}>Load event history, page {page}</ActionButton>{' '}
+    {discover.data?.hasMore && <ActionButton onClick={() => { setPage(page + 1); discover.reset(); }}>Next history page</ActionButton>}
     {discover.isSuccess && <p role="status">Reviewed {discover.data.ids.length} reference events. <a href="https://www.setlist.fm" target="_blank" rel="noreferrer">Setlist data from setlist.fm</a></p>}
-    {performanceId && <button disabled={search.isPending} onClick={() => search.mutate()}>Search videos now</button>}
+    {performanceId && <ActionButton disabled={search.isPending} onClick={() => search.mutate()}>Search videos now</ActionButton>}
     {search.data && <p role="status">{search.data.candidates} new candidates. {search.data.deferred && 'Budget reached; unfinished work is deferred.'} {search.data.errors.join(' ')}</p>}
     <h4>Preview automatic monitoring</h4><p>Monitoring authorizes bounded searches and eligible acquisition. Narrow the scope before activating.</p>
-    <label>Tour <input value={tour} onChange={e => { setTour(e.target.value); setPreview(undefined); }} placeholder="All tours" /></label>
+    <div className="live-monitoring-layout">
+    <div className="live-monitoring-fields">
+      <label>Tour <input value={tour} onChange={e => { setTour(e.target.value); setPreview(undefined); }} placeholder="All tours" /></label>
+      <label>From year or date <input value={from} onChange={e => { setFrom(e.target.value); setPreview(undefined); }} placeholder="YYYY or YYYY-MM-DD" /></label>
+      <label>To year or date <input value={to} onChange={e => { setTo(e.target.value); setPreview(undefined); }} placeholder="YYYY or YYYY-MM-DD" /></label>
+      <label>Daily search budget <input type="number" min="1" max="500" value={budget} onChange={e => { setBudget(Number(e.target.value)); setPreview(undefined); }} /></label>
+    </div>
+    <div className="live-monitoring-selectors">
     <label>Setting <select value={setting} onChange={e => { setSetting(e.target.value); setPreview(undefined); }}><option value="">All settings</option><option value="concert">Concert</option><option value="festival">Festival</option><option value="televisionRadio">Television / radio</option><option value="studioSession">Studio session</option><option value="informalGathering">Informal gathering</option></select></label>
     <label>Style <select value={style} onChange={e => { setStyle(e.target.value); setPreview(undefined); }}><option value="">All styles</option><option value="acoustic">Acoustic</option><option value="electric">Electric</option><option value="mixed">Mixed</option><option value="unknown">Unknown</option></select></label>
     <label>Recording origin <select value={origin} onChange={e => { setOrigin(e.target.value); setPreview(undefined); }}><option value="">All origins</option><option value="professional">Professional</option><option value="audience">Audience</option><option value="unknown">Unknown</option></select></label>
     <label>Recording coverage <select value={coverage} onChange={e => { setCoverage(e.target.value); setPreview(undefined); }}><option value="">All coverage</option><option value="entirePerformance">Entire performance</option><option value="severalSongs">Several songs</option><option value="individualSong">Individual song</option><option value="excerpt">Excerpt</option></select></label>
-    <label>From year or date <input value={from} onChange={e => { setFrom(e.target.value); setPreview(undefined); }} placeholder="YYYY or YYYY-MM-DD" /></label>
-    <label>To year or date <input value={to} onChange={e => { setTo(e.target.value); setPreview(undefined); }} placeholder="YYYY or YYYY-MM-DD" /></label>
-    <label>Daily search budget <input type="number" min="1" max="500" value={budget} onChange={e => { setBudget(Number(e.target.value)); setPreview(undefined); }} /></label>
-    <button disabled={estimate.isPending} onClick={() => estimate.mutate()}>Estimate searches</button>
     <label>Search sources <select value={source} onChange={e => { setSource(e.target.value); setPreview(undefined); }}><option value="all">YouTube and enabled indexers</option><option value="youtube">YouTube</option><option value="indexer">Enabled indexers</option></select></label>
+    </div>
+    <div className="live-monitoring-actions">
+    <ActionButton disabled={estimate.isPending} onClick={() => estimate.mutate()}>Estimate searches</ActionButton>
     {preview && <><p>{preview.performances} performances · {preview.knownRecordings} known recordings · {preview.shared} already shared with monitoring.</p>
       <p>Estimated {preview.estimatedSearches.min}–{preview.estimatedSearches.max} searches over {preview.estimatedDays.min}–{preview.estimatedDays.max} budget days.</p><p>{preview.explanation}</p>
-      <button disabled={activate.isPending} onClick={() => activate.mutate()}>Activate this monitoring scope</button></>}
+      <ActionButton disabled={activate.isPending} onClick={() => activate.mutate()}>Activate this monitoring scope</ActionButton></>}
+    </div>
+    </div>
     {activate.isSuccess && <p role="status">Monitoring activated. <Link to="/live/settings">Manage monitoring and budgets</Link>.</p>}
     {[discover.error, search.error, estimate.error, activate.error].filter(Boolean).map((error, index) => <p role="alert" key={index}>{error?.message}</p>)}
   </details>;
@@ -67,7 +76,7 @@ export function LiveSettings() {
   const ruleAction = useMutation({ mutationFn: ({ id, state }: { id: number; state: string }) => api.live.action(`monitoring/${id}`, { state }, 'PATCH'), onSuccess: () => cache.invalidateQueries({ queryKey: ['live-monitoring'] }) });
   if (!policy) return <p>{config.isError ? config.error.message : 'Loading live settings…'}</p>;
   const change = (values: Partial<typeof policy>) => setDraft({ ...policy, ...values });
-  return <><Link to="/live">Live</Link><h2>Live settings</h2><form onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+  return <><Link to="/live">Live &amp; Concerts</Link><h2>Live &amp; Concerts settings</h2><ActionForm onSubmit={e => { e.preventDefault(); save.mutate(); }}>
     <section className="card"><h3>Setlist.fm</h3><label>API key <input type="password" autoComplete="new-password" placeholder={config.data?.hasSetlistApiKey ? 'Configured; leave blank to retain' : 'Enter API key'} value={key} onChange={e => setKey(e.target.value)} /></label>
       {config.data?.setlistPaused && <p role="alert">Authentication paused. Save a corrected key to resume.</p>}{config.data?.providerRetryAt && <p>Provider retry: {new Date(config.data.providerRetryAt).toLocaleString()}</p>}
       <p>Event references and setlists use <a href="https://www.setlist.fm" target="_blank" rel="noreferrer">setlist.fm</a>. A reference does not prove an eligible video exists.</p></section>
@@ -91,11 +100,11 @@ export function LiveSettings() {
       }}>{(['coverage', 'audio', 'visual', 'resolution'] as const).map(item => <option key={item} value={item}>{item}</option>)}</select></label>)}
       <label>Origin preference when otherwise eligible <select value={policy.preferredOrigin} onChange={e => change({ preferredOrigin: e.target.value as typeof policy.preferredOrigin })}><option value="unknown">No origin preference</option><option value="professional">Professional</option><option value="audience">Audience</option></select></label>
       <label><input type="checkbox" checked={policy.cleanupRedundantRecordings} onChange={e => change({ cleanupRedundantRecordings: e.target.checked })} /> Offer cleanup of redundant recordings after verified replacement delivery</label><p>Older versions are retained by default. Cleanup protects pins, unique song coverage, playlists and unfinished viewings. Delete warnings, delays and playback checks still apply.</p>
-    </section><button disabled={save.isPending}>Save live settings</button>{save.isSuccess && <p role="status">Live settings saved; queued downloads read these choices when validation starts.</p>}{save.isError && <p role="alert">{save.error.message}</p>}
-  </form><h3>Discovery exclusions</h3><p>Restoring an exclusion allows future discovery. It does not restore deleted media.</p>{exclusions.data?.map(item => <p key={item.id}>{item.artistName} · {item.scope} · {item.fingerprint}{' '}<button disabled={restoreExclusion.isPending} onClick={() => restoreExclusion.mutate(item.id)}>Allow future discovery again</button></p>)}
-  <button disabled={!exclusionOffset} onClick={() => setExclusionOffset(Math.max(0, exclusionOffset - 25))}>Previous exclusions</button>{' '}<button disabled={(exclusions.data?.length ?? 0) < 25} onClick={() => setExclusionOffset(exclusionOffset + 25)}>Next exclusions</button>
+    </section><ActionButton disabled={save.isPending}>Save live settings</ActionButton>{save.isSuccess && <p role="status">Live settings saved; queued downloads read these choices when validation starts.</p>}{save.isError && <p role="alert">{save.error.message}</p>}
+  </ActionForm><h3>Discovery exclusions</h3><p>Restoring an exclusion allows future discovery. It does not restore deleted media.</p>{exclusions.data?.map(item => <p key={item.id}>{item.artistName} · {item.scope} · {item.fingerprint}{' '}<ActionButton disabled={restoreExclusion.isPending} onClick={() => restoreExclusion.mutate(item.id)}>Allow future discovery again</ActionButton></p>)}
+  <ActionButton disabled={!exclusionOffset} onClick={() => setExclusionOffset(Math.max(0, exclusionOffset - 25))}>Previous exclusions</ActionButton>{' '}<ActionButton disabled={(exclusions.data?.length ?? 0) < 25} onClick={() => setExclusionOffset(exclusionOffset + 25)}>Next exclusions</ActionButton>
   {[exclusions.error, restoreExclusion.error, ruleAction.error].filter(Boolean).map((error, index) => <p role="alert" key={index}>{error?.message}</p>)}
   <h3>Discovery recovery</h3>{failures.data?.map(item => <p key={item.key}>{item.provider}: {item.outcome} · {item.retryAt ? `Retry after ${new Date(item.retryAt).toLocaleString()}` : 'Review required'}. Use Search videos now on the performance after correcting source credentials; content failures require recording review.</p>)}
   <h3>Monitoring rules</h3>{rules.data?.map(rule => <div className="card" key={rule.id}>Rule {rule.id} · {rule.dailyBudget} requests/day · {rule.state}{' '}
-    <button onClick={() => ruleAction.mutate({ id: rule.id, state: rule.state === 'active' ? 'paused' : 'active' })}>{rule.state === 'active' ? 'Pause' : 'Resume'}</button>{' '}<button onClick={() => ruleAction.mutate({ id: rule.id, state: 'cancelled' })}>Cancel monitoring</button></div>)}</>;
+    <ActionButton onClick={() => ruleAction.mutate({ id: rule.id, state: rule.state === 'active' ? 'paused' : 'active' })}>{rule.state === 'active' ? 'Pause' : 'Resume'}</ActionButton>{' '}<ActionButton onClick={() => ruleAction.mutate({ id: rule.id, state: 'cancelled' })}>Cancel monitoring</ActionButton></div>)}</>;
 }

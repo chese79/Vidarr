@@ -1,3 +1,4 @@
+import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -93,12 +94,12 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
                 onChange={(e) => setApiKey(e.target.value)}
               />
             )}
-            <button onClick={() => update.mutate()} disabled={update.isPending}>
+            <ActionButton onClick={() => update.mutate()} disabled={update.isPending}>
               {update.isPending ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" className="secondary" onClick={() => setEditing(false)}>
+            </ActionButton>
+            <ActionButton type="button" className="secondary" onClick={() => setEditing(false)}>
               Cancel
-            </button>
+            </ActionButton>
           </div>
           {update.isError && (
             <p className="empty-state" role="alert">
@@ -119,15 +120,15 @@ function DownloadClientRow({ client, status, onTest, onRemove }: {
       </td>
       <td role="status">{status ?? '—'}</td>
       <td style={{ display: 'flex', gap: 6 }}>
-        <button className="secondary" aria-label={`Test ${client.name}`} onClick={onTest}>
+        <ActionButton className="secondary" aria-label={`Test ${client.name}`} onClick={onTest}>
           Test
-        </button>
-        <button className="secondary" aria-label={`Edit ${client.name}`} onClick={startEditing}>
+        </ActionButton>
+        <ActionButton className="secondary" aria-label={`Edit ${client.name}`} onClick={startEditing}>
           Edit
-        </button>
-        <button className="secondary" aria-label={`Remove ${client.name}`} onClick={onRemove}>
+        </ActionButton>
+        <ActionButton className="secondary" aria-label={`Remove ${client.name}`} onClick={onRemove}>
           Remove
-        </button>
+        </ActionButton>
       </td>
     </tr>
   );
@@ -177,7 +178,7 @@ export default function DownloadClientsPage() {
         <h2>Download Clients</h2>
       </div>
 
-      <form
+      <ActionForm
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
@@ -253,9 +254,9 @@ export default function DownloadClientsPage() {
               onChange={(e) => setApiKey(e.target.value)}
             />
           )}
-          <button type="submit">Add</button>
+          <ActionButton type="submit">Add</ActionButton>
         </div>
-      </form>
+      </ActionForm>
 
       {clients.data?.length ? (
         <table>
