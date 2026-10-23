@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<component name="MtvOverlay" extends="Group">
+  <interface>
+    <field id="position" type="float" onChange="updateOverlay" />
+    <field id="duration" type="float" onChange="updateOverlay" />
+    <field id="state" type="string" onChange="updateOverlay" />
+    <field id="item" type="assocarray" onChange="setItem" />
+    <field id="enabled" type="boolean" value="false" onChange="updateOverlay" />
+  </interface>
+  <children>
+    <!-- FHD scene coordinates; 5% horizontal and 8% bottom safe area. -->
+    <Group id="panel" translation="[96,770]" visible="false">
+      <Rectangle width="760" height="224" color="0x000000A0" />
+      <Rectangle width="4" height="224" color="0xFFFFFFFF" />
+      <Label id="brand" text="MTV" translation="[22,12]" width="716" height="44" font="font:LargeBoldSystemFont" />
+      <Label id="artist" translation="[22,58]" width="716" height="44" font="font:MediumBoldSystemFont" />
+      <Label id="title" translation="[22,104]" width="716" height="44" font="font:MediumSystemFont" />
+      <Label id="details" translation="[22,150]" width="716" height="44" font="font:SmallSystemFont" />
+    </Group>
+  </children>
+</component>

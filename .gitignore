@@ -1,4 +1,5 @@
 node_modules/
+research/native-overlay-upstream/
 dist/
 build/
 *.tsbuildinfo

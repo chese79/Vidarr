@@ -1,0 +1,37 @@
+import "pkg:/source/utils/mtvOverlayLogic.bs"
+
+sub init()
+    m.panel = m.top.findNode("panel")
+    m.metadata = mtvMetadata(invalid)
+    m.started = false
+end sub
+
+sub clearItem()
+    m.metadata = mtvMetadata(invalid)
+    m.started = false
+    m.panel.visible = false
+end sub
+
+sub setItem()
+    m.started = false
+    m.metadata = mtvMetadata(m.top.item)
+    m.top.findNode("artist").text = m.metadata.artist
+    m.top.findNode("title").text = m.metadata.title
+    m.top.findNode("details").text = m.metadata.details
+    updateOverlay()
+end sub
+
+sub updateOverlay()
+    m.panel.visible = false
+    if not m.top.enabled or not m.metadata.eligible then return
+    state = m.top.state
+    if state = "playing" then m.started = true
+    if state <> "playing" and state <> "paused" and state <> "buffering"
+        m.started = false
+        return
+    end if
+    if not m.started then return
+    duration = m.metadata.duration
+    if duration <= 0 then duration = m.top.duration
+    m.panel.visible = mtvWindow(m.top.position, duration)
+end sub

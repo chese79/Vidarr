@@ -1,0 +1,19 @@
+{
+  "web": {
+    "revision": "ee8efb417e5377ba444509a68ed22af33e45950b",
+    "files": {
+      "src/components/playbackSettings/playbackSettings.js": "80dd85a578a1f0a3a827786a8114c15fa283edde96d59ef1880904ee3fe26060",
+      "src/components/playbackSettings/playbackSettings.template.html": "1ac609c1a5236b2f5793003fca340e762944c8c297f03cbcac59f915f512b4d8",
+      "src/plugins/htmlVideoPlayer/plugin.js": "c194b4aa10d13be7b0831ff77a52e30c0003e3f029970d35ce2d1e2494037578"
+    }
+  },
+  "roku": {
+    "revision": "72cfe985d4567e40f98dc098490a73eb141de85a",
+    "files": {
+      "settings/settings.json": "2325e809fc342814b8cfad99462c012137de15ba08cb9b99f5cab6ed21da4db7",
+      "components/ItemGrid/LoadVideoContentTask.bs": "a6426843e72fbfd77f68593b5157a1e430b680446bb41d38fe19cf5084a05a9b",
+      "components/video/VideoPlayerView.xml": "90237f94f1f15a9a74421855cc8fd070efca9d995ac44d2f4e9fc2d33fdf1251",
+      "components/video/VideoPlayerView.bs": "54d5b464143eaa2b045025b8c01e6612d3a809b99d707118cec6528fd7a2be02"
+    }
+  }
+}

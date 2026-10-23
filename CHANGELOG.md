@@ -5,6 +5,22 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — Native MTV overlay direction
+
+- Remove the abandoned, undeployed pre-render renderer, migration, jobs/settings APIs, scheduler
+  hooks, UI and packaging additions. Keep existing media, deployed configuration and other work.
+- Document the replacement as player-side native drawing over the original video, using imported
+  metadata and the first/last six seconds. No rendered copies or forced transcoding are required.
+- Add separate optional Jellyfin Roku SceneGraph and web HTML-player components, each with an
+  off-by-default playback setting, music-video metadata and position-based intro/outro windows.
+  Preserve original playback URLs/methods and reporting; no server database change is required.
+- Add pinned-source compatibility checks, reversible installers and timing/metadata/state/installer
+  tests. Client builds and device deployment remain independent of Vidarr's deployment. No standard
+  Roku store app is changed by installing Vidarr. The local pre-render migration was never applied.
+- Verify 10 overlay/lifecycle/metadata/installer tests under Node 22, the full Roku client build,
+  and the web client's complete TypeScript check plus minified production bundle under Node 24.
+  Package local source and client artifacts; actual server/device installation remains separate.
+
 ### Deployment — Live review fixes
 
 - Merge `170bd6b` into local main and deploy local image `vidarr:170bd6b` after 885 passing tests

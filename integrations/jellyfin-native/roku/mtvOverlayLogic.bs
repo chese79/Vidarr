@@ -1,0 +1,50 @@
+' Pure timeline/metadata functions, also executed in the BrightScript test interpreter.
+function mtvWindow(position as double, duration as double) as boolean
+    if position < 0 then return false
+    if duration > 0 and position >= duration then return false
+    return position < 6 or (duration > 0 and position >= duration - 6)
+end function
+
+function mtvText(value as dynamic) as string
+    if type(value) <> "String" and type(value) <> "roString" then return ""
+    value = value.replace(chr(10), " ").replace(chr(13), " ").replace(chr(9), " ").trim()
+    return left(value, 240)
+end function
+
+function mtvMetadata(item as dynamic) as object
+    result = { eligible: false, artist: "", title: "", details: "", duration: 0 }
+    if type(item) <> "roAssociativeArray" then return result
+    if lcase(mtvText(item.Type)) <> "musicvideo" then return result
+    result.eligible = true
+    artists = []
+    if type(item.Artists) = "roArray"
+        for each artist in item.Artists
+            value = mtvText(artist)
+            if value <> "" then artists.push(value)
+        end for
+    end if
+    if artists.count() = 0 and type(item.ArtistItems) = "roArray"
+        for each artist in item.ArtistItems
+            if type(artist) = "roAssociativeArray"
+                value = mtvText(artist.Name)
+                if value <> "" then artists.push(value)
+            end if
+        end for
+    end if
+    result.artist = left(artists.join(", "), 240)
+    if result.artist = "" then result.artist = mtvText(item.AlbumArtist)
+    title = mtvText(item.Name)
+    if title <> "" then result.title = chr(34) + title + chr(34)
+    result.details = mtvText(item.Album)
+    if type(item.ProductionYear) = "Integer" or type(item.ProductionYear) = "roInt"
+        if item.ProductionYear > 0
+            if result.details <> "" then result.details += " / "
+            result.details += item.ProductionYear.toStr()
+        end if
+    end if
+    ticksType = type(item.RunTimeTicks)
+    if ticksType = "LongInteger" or ticksType = "roLongInteger" or ticksType = "Integer" or ticksType = "roInt" or ticksType = "Double" or ticksType = "roDouble" or ticksType = "Float" or ticksType = "roFloat"
+        if item.RunTimeTicks > 0 then result.duration = item.RunTimeTicks / 10000000.0
+    end if
+    return result
+end function
