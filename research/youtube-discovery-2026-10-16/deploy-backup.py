@@ -26,6 +26,8 @@ with sqlite3.connect(backup / 'vidarr.db') as source:
     assert source.execute('PRAGMA quick_check').fetchone()[0] == 'ok'
     source.execute('PRAGMA wal_checkpoint(TRUNCATE)')
     tables = ['Artist', 'MusicVideo', 'DownloadQueueItem', 'VideoReviewCandidate', 'MusicVideoFile']
+    existing_tables = {row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    tables += [table for table in ['LivePerformance', 'LiveSongPerformance', 'Recording', 'RecordingPart', 'LiveMonitoringRule', 'Playlist'] if table in existing_tables]
     snapshot = {table: [r[0] for r in source.execute(f'SELECT id FROM "{table}" ORDER BY id')] for table in tables}
 source.close()
 with tarfile.open(backup / 'config.tar', 'w') as archive:

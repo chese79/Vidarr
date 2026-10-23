@@ -1,5 +1,40 @@
 # Deployment
 
+### Local artist-first Live release — 2026-10-22
+
+Deployed source `4529a3b` with the MTV pause in `2b3be32` on local `main`, using
+`vidarr-live-artists-20261022:release` (manifest
+`sha256:d157dce1a215becb50c4c4aeaf76af37816ee2b5182465448722ea2913320c79`).
+The address remains `http://192.168.0.8:3434`. Enter the setlist.fm key under
+**Settings → General → Library**, beside IMVDb, and click Save. The reported Adele history
+request failed because no setlist.fm key was configured; the new UI explains that prerequisite.
+Saving a key does not itself confirm provider access. Native MTV work is archived and excluded.
+
+Verification under Node 22: both production builds, all 72 web tests across 19 files, and 93
+relevant Live/settings/authentication/recovery server tests across seven files passed. Live checks
+confirmed nine HTTP routes, protected API access, rejection of artist-less catalog searches,
+successful artist-scoped reads, boolean-only setlist credential status, new JS/CSS assets,
+SQLite quick/foreign-key checks, and identical general and Live configuration fingerprints.
+A separate browser tab confirmed the empty password field in the Library settings panel.
+
+Only Vidarr was recreated; all four configuration/media/D-drive/staging mounts, environment,
+explicit `192.168.0.8:3434` binding, non-root user and `unless-stopped` policy were preserved.
+SABnzbd stayed running. Offline backup `vidarr-backup-20261022-live-artists` was verified before
+cutover. The extended snapshot includes optional Live/playlist tables when present, preserving
+compatibility with older schemas; disposable legacy and Live fixture tests verify checksums,
+ID coverage and unchanged source databases (`research/youtube-discovery-2026-10-16/test-deploy-backup.py`).
+
+Post-cutover checks retained every original artist (3,051), music video (4,296), owned file record
+(677), review candidate (48,049), queue entry (3,156), shared recording/part (4,296 each) and
+playlist (six). No Live performance, song occurrence or monitoring rule existed at backup.
+Staging retained its existing volume and had 58 files at backup. No schema migration was added.
+
+The previous application is retained as `vidarr-rollback-20261022-live-artists`, using
+`vidarr-feedback-20261022:local`. Rollback should recreate only Vidarr from that image with the
+current preserved mounts/environment and explicit port binding; inspect the binding rather than
+assuming the stopped container's ports. Keep backups private and do not blindly restore over new
+work. No media files, Jellyfin/Roku clients, other services or public repositories were changed.
+
 ### Current scope — artist-scoped Live browsing; MTV development paused
 
 Live mode retains the shared artist index/list and opens searches only within a selected artist.

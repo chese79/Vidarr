@@ -5,6 +5,16 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Deployment — Local artist-first Live release (2026-10-22)
+
+- Deploy `vidarr-live-artists-20261022:release` locally after Node 22 server/web production builds,
+  72 web tests and 93 relevant Live/settings/authentication/recovery server tests pass.
+- Verify live artist-only search guards, masked global setlist key status, new assets, browser
+  Library key placement, service health and database integrity. Preserve general/Live configuration
+  fingerprints, all checked catalog/queue/recording/playlist IDs and existing runtime mounts/ports.
+- Retain an offline backup and the previous container. Extend backup ID verification to optional
+  Live/playlist tables, with disposable legacy/Live fixture checks. Recreate only Vidarr.
+
 ### Changed — Artist-first Live catalog and global credentials
 
 - Keep the artist index/list in Live mode, including artists without music videos. Open or expand
