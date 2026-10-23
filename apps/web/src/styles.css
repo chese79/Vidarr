@@ -309,7 +309,7 @@ select {
   gap: 6px;
 }
 
-button.video-inline-action {
+button.video-inline-action, .catalog-live button {
   padding: 3px 7px;
   border-radius: 4px;
   font-size: 12px;

@@ -1,5 +1,29 @@
 # Process flows and consistency review
 
+## Artist-first Live browsing (2026-10-22)
+
+Select Live mode → retain the shared artist index, letter rail, name/genre filters and artist list
+→ open/expand a confirmed artist → browse/filter only that artist's performances or recordings
+→ load a bounded event-history page or search an identified performance → normal identity/content
+review, acquisition, validation, import and exact server delivery confirmation. Artists without
+music videos remain visible; music-video counts and bulk acquisition controls are not Live controls.
+Root Live/Discover/workflow views present the artist list instead of a global Live search. Both
+mode keeps the shared artist list, with both catalogs available on an artist's page.
+
+Catalog text searches without artist context are rejected by the server. Existing unfiltered,
+paged catalog reads remain compatible. Performance search and monitoring already require an
+artist-linked performance/artist scope. Missing/paused setlist.fm credentials disable event-history
+loading with an explanation and settings link; saved browsing and independent entry remain usable.
+Enter/replace the single global setlist.fm key in Settings → General → Library beside IMVDb →
+Save → clear the in-memory key field and refresh configuration status → retry the artist's history
+page. Blank input preserves the saved key; responses expose only a configured flag. The existing
+Live configuration row remains its storage, and key changes preserve policy/budgets/destinations.
+Live settings link to this global field rather than duplicating credential entry. Failed requests
+never imply empty results. Saving a key establishes configuration, not successful provider access.
+
+MTV overlay development is paused: archived source under `future/mtv-overlay` is excluded from
+current builds/deployment. Previous native-overlay flow below is historical, pending future work.
+
 ## Button engagement and request feedback
 
 Activate an enabled button → immediately acknowledge the click → run existing validation and
@@ -39,8 +63,9 @@ this documentation request changes no runtime behavior or deployed build.
 ## Global catalog browsing filter
 
 Choose Music Videos, Live & Concerts or Both in the global navigation bar → retain the choice
-in browser storage across pages and reloads → display the selected catalog(s). Both shows
-independent labeled sections and keeps Live search/pagination in `live.*` URL parameters so
+in browser storage across pages and reloads → retain the artist index/list → open the selected
+artist's catalog(s). Both shows independent labeled sections on artist pages and keeps embedded
+Live search/pagination in `live.*` URL parameters so
 music-video filters do not change Live results. Live & Concerts uses an inverted light palette;
 images are not inverted. Hide Artists w/o Videos remains the existing music-video artist rule
 and sits at the right of the Library navigation bar. Shared identities and settings remain common.

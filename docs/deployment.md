@@ -1,5 +1,21 @@
 # Deployment
 
+### Current scope — artist-scoped Live browsing; MTV development paused
+
+Live mode retains the shared artist index/list and opens searches only within a selected artist.
+Enter the single shared setlist.fm API key under Settings → General → Library beside IMVDb,
+then use that panel's Save button. Its input stays empty with a saved placeholder after success;
+blank saves retain the key. The credential remains in the existing LiveConfiguration row and
+is shared with artist discovery. General settings updates write both settings atomically without
+resetting Live policies, destinations or budgets; reads return only `hasSetlistApiKey`. The older
+Live configuration API remains compatible, while its UI links to the global credential field.
+Saving a replacement resets the provider's authentication pause/retry delay, but actual access is
+confirmed only by a subsequent artist-scoped event-history request. No schema migration is needed.
+The optional MTV client prototype is now preserved under `future/mtv-overlay`, excluded from
+application builds and current deployment. No Jellyfin web or Roku overlay was installed by the
+previous Vidarr deployment. Earlier deployment records below describe the prototype's old paths;
+ignored local client packages remain at those paths for preservation, not active installation.
+
 ### Local action feedback release — 2026-10-22
 
 Integrated the optional native client source in `43f47cc` and the application changes in
@@ -46,7 +62,7 @@ The undeployed pre-render component and its migration were removed after the use
 table; no live schema/data rollback is required. There is no overlay output mount or FFmpeg/font
 installation option to configure. Native Roku support needs a modified/updated Roku client;
 web support needs its own player integration. Both are supplied as separate source components in
-[`integrations/jellyfin-native`](../integrations/jellyfin-native/README.md), with pinned client
+the [archived future component](../future/mtv-overlay/README.md), with pinned client
 revisions, compatibility checks, settings, tests and reversible source installation. Build and
 deploy each Jellyfin client separately; Vidarr's Docker image does not bundle them. The current
 web source base requires Node 24/npm 11 for its own build; Vidarr stays on Node 22. Roku sideloading

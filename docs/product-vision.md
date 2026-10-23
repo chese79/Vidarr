@@ -1,5 +1,17 @@
 # Vidarr product vision
 
+Live browsing retains the same artist index/list as music videos. Open or expand a confirmed
+artist before browsing or searching performances/recordings; there is no global Live search.
+Music-video ownership/missing-count filters do not hide artists in Live mode. Live controls use
+the compact music-video action dimensions. Event-history discovery requires configured setlist.fm
+credentials entered globally under Settings → General → Library beside the IMVDb key, and
+explains missing/paused configuration before a request. Blank input retains the saved key;
+only its configured status is returned. Identity/content review,
+bounded budgets, validation and delivery confirmation remain required.
+
+MTV text overlays are paused for future development. Their prototype is isolated under
+`future/mtv-overlay` and excluded from the application build and current deployment.
+
 Review queues use the same compact, expandable row pattern as the Library. Match Review is paged on the server so large observation sets remain quick to browse. The artist detail page keeps source diagnostics in a collapsed summary above the canonical video list.
 
 Vidarr is a self-hosted music-video catalog, acquisition, library-management, and playlist system.

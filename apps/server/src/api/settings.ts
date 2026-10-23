@@ -33,17 +33,20 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 
   app.put('/api/v1/config', async (req, reply) => {
-    const body = UpdateSettingsSchema.parse(req.body);
+    const { setlistApiKey, ...body } = UpdateSettingsSchema.parse(req.body);
     if (body.defaultPlaybackConnectorId != null) {
       const connector = await prisma.libraryConnector.findUnique({ where: { id: body.defaultPlaybackConnectorId } });
       if (!connector?.enabled || !connector.videoLibraryId || !['plex', 'jellyfin'].includes(connector.type)) {
         return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin video library' });
       }
     }
-    const settings = await prisma.settings.upsert({
-      where: { id: 1 },
-      update: body,
-      create: { id: 1, ...body },
+    const settings = await prisma.$transaction(async tx => {
+      const saved = await tx.settings.upsert({ where: { id: 1 }, update: body, create: { id: 1, ...body } });
+      if (setlistApiKey !== undefined) {
+        const credentials = { setlistApiKey, setlistPaused: false, providerRetryAt: null };
+        await tx.liveConfiguration.upsert({ where: { id: 1 }, update: credentials, create: { id: 1, ...credentials } });
+      }
+      return saved;
     });
     if (body.maxConcurrentDownloads != null) wakeDownloadQueue();
     return serializeSettings(settings);
@@ -63,7 +66,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   });
 }
 
-function serializeSettings<
+async function serializeSettings<
   T extends {
     imvdbApiKey: string | null;
     googleClientSecret: string | null;
@@ -71,12 +74,14 @@ function serializeSettings<
   },
 >(settings: T) {
   const { imvdbApiKey, googleClientSecret, adminPasswordHash: _adminPasswordHash, ...safe } = settings;
+  const live = await prisma.liveConfiguration.findUnique({ where: { id: 1 }, select: { setlistApiKey: true } });
   return {
     ...safe,
     imvdbApiKey: null,
     googleClientSecret: null,
     adminPasswordHash: null,
     hasImvdbApiKey: Boolean(imvdbApiKey),
+    hasSetlistApiKey: Boolean(live?.setlistApiKey),
     hasGoogleClientSecret: Boolean(googleClientSecret),
   };
 }

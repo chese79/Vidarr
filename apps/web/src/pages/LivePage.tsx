@@ -61,10 +61,16 @@ function AddPerformance({ artistId, onSaved }: { artistId?: number; onSaved: (id
   </ActionForm>;
 }
 
-export default function LivePage({ embedded = false }: { embedded?: boolean }) {
-  const navigate = useNavigate();
+export default function LivePage({ embedded = false, artistId: contextArtistId }: { embedded?: boolean; artistId?: number }) {
   const { id } = useParams();
-  const artistId = id ? Number(id) : undefined;
+  const artistId = contextArtistId ?? Number(id);
+  if (!Number.isSafeInteger(artistId) || artistId < 1) return <p role="status">Choose an artist from the <Link to="/">artist index</Link> before browsing or searching Live &amp; Concerts.</p>;
+  return <ArtistLivePage key={artistId} artistId={artistId} embedded={embedded} />;
+}
+
+function ArtistLivePage({ artistId, embedded }: { artistId: number; embedded: boolean }) {
+  const navigate = useNavigate();
+  const artist = useQuery({ queryKey: ['live-artist', artistId], queryFn: () => api.live.artists('', artistId) });
   const [allParams, setAllParams] = useSearchParams();
   const params = embedded ? new URLSearchParams([...allParams].filter(([key]) => key.startsWith('live.')).map(([key, value]) => [key.slice(5), value])) : allParams;
   function setParams(next: URLSearchParams) {
@@ -86,12 +92,12 @@ export default function LivePage({ embedded = false }: { embedded?: boolean }) {
   const error = recordings ? candidates.error : performances.error;
   function change(key: string, value: string) { const next = new URLSearchParams(params); if (value) next.set(key, value); else next.delete(key); next.delete('offset'); setParams(next); }
   return <>
-    <h2>Live &amp; Concerts</h2><Link to="/live/settings">Live &amp; Concerts settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link>{artistId && <LiveDiscoveryControls artistId={artistId} />}
+    <h2>{artist.data?.items[0]?.name ?? 'Artist'} · Live &amp; Concerts</h2><Link to="/">Artist index</Link>{' · '}<Link to="/live/settings">Live &amp; Concerts settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link><LiveDiscoveryControls key={artistId} artistId={artistId} />
     {artistId && <nav aria-label="Artist catalog"><CatalogLink catalog="musicVideos" to={`/artist/${artistId}`}>Music Videos</CatalogLink> · <strong>Live &amp; Concerts</strong></nav>}
     <nav aria-label="Live views"><ActionButton aria-pressed={!recordings} onClick={() => change('view', '')}>Performances</ActionButton> <ActionButton aria-pressed={recordings} onClick={() => change('view', 'recordings')}>Recordings</ActionButton></nav>
     <p>Browse performances and recording versions. Identity review, verified coverage, acquisition and playback readiness remain distinct.</p>
     <div className="toolbar">
-      <label>Search <input value={params.get('search') ?? ''} onChange={e => change('search', e.target.value)} /></label>
+      <label>Search this artist’s Live catalog <input value={params.get('search') ?? ''} onChange={e => change('search', e.target.value)} /></label>
       <label>Setting <select value={params.get('setting') ?? ''} onChange={e => change('setting', e.target.value)}><option value="">All settings</option>{LiveSetting.options.map(value => <option key={value} value={value}>{liveLabels[value]}</option>)}</select></label>
       <label>Style <select value={params.get('style') ?? ''} onChange={e => change('style', e.target.value)}><option value="">All styles</option>{LiveStyle.options.map(value => <option key={value} value={value}>{liveLabels[value]}</option>)}</select></label>
       <ActionButton onClick={() => setAdding(value => !value)}>{adding ? 'Close form' : 'Add performance'}</ActionButton>

@@ -30,6 +30,21 @@ describe('live catalog first increment', () => {
     }
   });
 
+  it('requires artist context for catalog searches and scopes matching results to that artist', async () => {
+    await performance({ title: 'Shared title' });
+    for (const kind of ['performances', 'recordings']) {
+      const global = await app.inject({ url: `/api/v1/live/${kind}?search=Shared`, headers: authHeaders() });
+      expect(global.statusCode).toBe(400);
+      expect(global.json().issues[0].message).toContain('Choose an artist');
+      const scoped = await app.inject({ url: `/api/v1/live/${kind}?search=Shared&artistId=${artistId}`, headers: authHeaders() });
+      expect(scoped.statusCode).toBe(200);
+      const otherArtist = await app.inject({ url: `/api/v1/live/${kind}?search=Shared&artistId=${artistId + 1000}`, headers: authHeaders() });
+      expect(otherArtist.json().items).toEqual([]);
+      if (kind === 'performances') expect(scoped.json().items.map((row: { artistId: number }) => row.artistId)).toEqual([artistId]);
+    }
+    expect((await app.inject({ url: '/api/v1/live/artists?search=Artist', headers: authHeaders() })).statusCode).toBe(200);
+  });
+
   it('reuses the confirmed artist and preserves repeated song occurrences and unknown dates', async () => {
     const row = await performance({ songs: [{ title: 'Song A' }, { title: 'Song A', section: 'Encore', kind: 'snippet' }] });
     const result = await app.inject({ url: `/api/v1/live/performances/${row.id}`, headers: authHeaders() });

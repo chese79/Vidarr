@@ -1,5 +1,6 @@
 import { ActionButton } from '../components/ButtonFeedback';
 import AddArtistForm from '../components/AddArtistForm';
+import LivePage from './LivePage';
 import { confirmEligibleSearch } from '../utils/confirmEligibleSearch';
 import { ArtistProgress, NewArtistBadge } from '../components/ArtistProgress';
 import { useEffect, useState } from 'react';
@@ -189,6 +190,7 @@ function ArtistRow({
   onToggleSelect,
   onToggleExpand,
   onMonitorChange,
+  live = false,
 }: {
   artist: ArtistSummary;
   selected: boolean;
@@ -196,6 +198,7 @@ function ArtistRow({
   onToggleSelect: (id: number) => void;
   onToggleExpand: (id: number) => void;
   onMonitorChange: (id: number, monitored: boolean) => void;
+  live?: boolean;
 }) {
   const queryClient = useQueryClient();
   const confirmMusicbrainz = useMutation({
@@ -208,19 +211,19 @@ function ArtistRow({
   return (
     <div className="artist-row" role="listitem">
       <div className="artist-row-header">
-        <input
+        {!live && <input
           type="checkbox"
           aria-label={`Select ${artist.name}`}
           checked={selected}
           onChange={() => onToggleSelect(artist.id)}
-        />
+        />}
         <ArtistImage artist={artist} />
         <div className="artist-row-main">
           <Link to={`/artist/${artist.id}`} className="artist-name">
             {artist.name}
           </Link>
           <NewArtistBadge addedAt={artist.addedAt} />
-          <ArtistProgress id={artist.id} status={artist.videoInventoryStatus} pending={artist.pendingVideoReviewCount ?? 0} error={artist.videoInventoryError} />
+          {!live && <ArtistProgress id={artist.id} status={artist.videoInventoryStatus} pending={artist.pendingVideoReviewCount ?? 0} error={artist.videoInventoryError} />}
           <span className="artist-meta">{artist.genre ?? 'Unknown genre'}</span>
           <span className="artist-meta">MusicBrainz: {artist.musicbrainzMatchStatus}</span>
           {artist.musicbrainzCandidateId && <span className="artist-meta">
@@ -228,7 +231,7 @@ function ArtistRow({
             {' '}<ActionButton type="button" className="secondary" onClick={() => confirmMusicbrainz.mutate()} disabled={confirmMusicbrainz.isPending}>Confirm</ActionButton>
           </span>}
         </div>
-        <div className="artist-counts">
+        {!live && <div className="artist-counts">
           <span>
             {artist.availableVideoCount} available / {artist.knownVideoCount} known
           </span>
@@ -241,9 +244,9 @@ function ArtistRow({
             <span className="downloading">{artist.downloadingVideoCount} downloading</span>
           )}
           <span>{artist.aggregatePlayCount != null ? `${artist.aggregatePlayCount} server plays` : 'server plays unknown'}</span>
-        </div>
+        </div>}
         <div className="artist-row-actions">
-          <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13 }}>
+          {!live && <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 13 }}>
             <input
               type="checkbox"
               checked={artist.monitored}
@@ -251,24 +254,24 @@ function ArtistRow({
               aria-label={`Monitored — ${artist.name}`}
             />
             Monitored
-          </label>
+          </label>}
           <ActionButton
             type="button"
             className="secondary"
             aria-expanded={expanded}
-            aria-label={expanded ? `Collapse ${artist.name}'s videos` : `Expand ${artist.name}'s videos`}
+            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${artist.name}'s ${live ? 'Live catalog' : 'videos'}`}
             onClick={() => onToggleExpand(artist.id)}
           >
             {expanded ? '▾' : '▸'}
           </ActionButton>
         </div>
       </div>
-      {expanded && <ArtistAccordion artistId={artist.id} />}
+      {expanded && (live ? <LivePage artistId={artist.id} embedded /> : <ArtistAccordion artistId={artist.id} />)}
     </div>
   );
 }
 
-export default function LibraryPage() {
+export default function LibraryPage({ live = false }: { live?: boolean }) {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [params, setParams] = useSearchParams();
@@ -293,14 +296,14 @@ export default function LibraryPage() {
 
   const search = params.get('q') ?? '';
   const genre = params.get('genre') ?? '';
-  const monitored = params.get('monitored') as 'true' | 'false' | null;
+  const monitored = (live ? null : params.get('monitored')) as 'true' | 'false' | null;
   const musicbrainzStatus = params.get('musicbrainzStatus') as 'unmatched' | 'suggested' | 'ambiguous' | 'confirmed' | 'notFound' | 'failed' | null;
   const letter = params.get('letter');
-  const hasMissing = params.get('missing') === 'true';
-  const hideWithoutVideos = params.get('hideWithoutVideos') !== 'false';
-  const completeness = (params.get('completeness') ?? '') as '' | 'complete' | 'unmatched' | 'activeDownloads';
-  const minLocalVideos = params.get('minLocalVideos') ?? params.get('minKnownVideos') ?? '';
-  const minPlayCount = params.get('minPlayCount') ?? '';
+  const hasMissing = !live && params.get('missing') === 'true';
+  const hideWithoutVideos = !live && params.get('hideWithoutVideos') !== 'false';
+  const completeness = (live ? '' : params.get('completeness') ?? '') as '' | 'complete' | 'unmatched' | 'activeDownloads';
+  const minLocalVideos = live ? '' : params.get('minLocalVideos') ?? params.get('minKnownVideos') ?? '';
+  const minPlayCount = live ? '' : params.get('minPlayCount') ?? '';
   const page = Number(params.get('page') ?? '1');
 
   // Debounce the search box so typing doesn't fire a request per keystroke —
@@ -434,14 +437,16 @@ export default function LibraryPage() {
     <div>
       <div className="page-header">
         <div className="form-row" style={{ alignItems: 'center' }}>
-          <h2>Music Videos</h2>
+          <h2>{live ? 'Live & Concerts — Artists' : 'Music Videos'}</h2>
           <span className="library-result-count">{summary.isLoading ? 'Loading…' : `${summary.data?.total ?? 0} artist(s)`}</span>
         </div>
         <div className="form-row">
-          <ActionButton className="secondary" onClick={() => searchAll.mutate()} disabled={searchAll.isPending}>Search all eligible</ActionButton>
+          {!live && <ActionButton className="secondary" onClick={() => searchAll.mutate()} disabled={searchAll.isPending}>Search all eligible</ActionButton>}
           <ActionButton onClick={() => setShowAdd((v) => !v)} disabled={!canAdd}>Add Artist</ActionButton>
         </div>
       </div>
+
+      {live && <p>Choose or expand an artist to browse performances and search for Live recordings. Searches and monitoring stay within that artist; artists without music videos remain visible.</p>}
 
       {!canAdd && (
         <p className="empty-state">
@@ -492,7 +497,7 @@ export default function LibraryPage() {
                 </option>
               ))}
             </select>
-            <select
+            {!live && <><select
               aria-label="Filter by library completeness"
               value={completeness}
               onChange={(e) => updateParams({ completeness: e.target.value || null, page: null })}
@@ -554,6 +559,7 @@ export default function LibraryPage() {
                 style={{ width: 64 }}
               />
             </label>
+            </>}
             {anyFilterActive && (
               <ActionButton type="button" className="secondary" onClick={clearAllFilters}>
                 Clear all
@@ -561,7 +567,7 @@ export default function LibraryPage() {
             )}
           </div>
 
-          {selectedIds.size > 0 && (
+          {!live && selectedIds.size > 0 && (
             <div className="bulk-action-bar">
               <span>{selectedIds.size} selected</span>
               <ActionButton
@@ -592,7 +598,7 @@ export default function LibraryPage() {
             </div>
           )}
 
-          {items.length > 0 && (
+          {!live && items.length > 0 && (
             <div className="form-row" style={{ alignItems: 'center' }}>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
                 <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
@@ -607,6 +613,7 @@ export default function LibraryPage() {
                 <ArtistRow
                   key={artist.id}
                   artist={artist}
+                  live={live}
                   selected={selectedIds.has(artist.id)}
                   expanded={expandedIds.has(artist.id)}
                   onToggleSelect={toggleSelect}

@@ -5,6 +5,16 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — Artist-first Live catalog and global credentials
+
+- Keep the artist index/list in Live mode, including artists without music videos. Open or expand
+  an artist for scoped performance/recording browsing; remove global Live search surfaces and
+  reject catalog text searches without artist context. Preserve normal review and delivery stages.
+- Match Live buttons to compact music-video action dimensions. Explain missing/paused setlist.fm
+  credentials before event-history discovery; retain saved browsing and independent performance entry.
+- Put the shared setlist.fm API key in Settings → General → Library next to IMVDb. Preserve the
+  existing global credential/policy storage, retain keys on blank saves and return only saved status.
+
 ### Changed — Pause MTV overlay development
 
 - Archive optional MTV client source under `future/mtv-overlay`, exclude it from current builds,

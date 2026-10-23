@@ -354,6 +354,7 @@ export default function SettingsPage() {
   const [warnBeforeDelete, setWarnBeforeDelete] = useState(true);
   const [excludeDeletedVideosFromScans, setExcludeDeletedVideosFromScans] = useState(false);
   const [imvdbApiKey, setImvdbApiKey] = useState('');
+  const [setlistApiKey, setSetlistApiKey] = useState('');
 
   useEffect(() => {
     if (settings.data) {
@@ -364,12 +365,17 @@ export default function SettingsPage() {
       setWarnBeforeDelete(settings.data.warnBeforeDelete ?? true);
       setExcludeDeletedVideosFromScans(settings.data.excludeDeletedVideosFromScans ?? false);
       setImvdbApiKey('');
+      setSetlistApiKey('');
     }
   }, [settings.data]);
 
   const update = useMutation({
     mutationFn: api.settings.update,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
+    onSuccess: () => {
+      setImvdbApiKey(''); setSetlistApiKey('');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['live-configuration'] });
+    },
   });
 
   return (
@@ -390,6 +396,7 @@ export default function SettingsPage() {
             warnBeforeDelete,
             excludeDeletedVideosFromScans,
             ...(imvdbApiKey ? { imvdbApiKey } : {}),
+            ...(setlistApiKey.trim() ? { setlistApiKey: setlistApiKey.trim() } : {}),
           });
         }}
       >
@@ -403,6 +410,13 @@ export default function SettingsPage() {
             value={imvdbApiKey}
             onChange={(e) => setImvdbApiKey(e.target.value)}
           />
+        </div>
+        <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <label htmlFor="setlist-api-key">setlist.fm API key</label>
+          <input id="setlist-api-key" type="password" autoComplete="new-password" maxLength={500}
+            placeholder={credentialPlaceholder(settings.data?.hasSetlistApiKey, 'API key')}
+            value={setlistApiKey} onChange={e => setSetlistApiKey(e.target.value)} />
+          <span className="empty-state" style={{ padding: '4px 0 0' }}>Global event-history key for every artist in Live &amp; Concerts. Leave blank to keep the saved key.</span>
         </div>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label htmlFor="naming-format">Naming format</label>

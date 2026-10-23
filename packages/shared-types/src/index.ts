@@ -281,6 +281,7 @@ export const SettingsSchema = z.object({
   maxConcurrentDownloads: z.number().int().min(1).max(20).default(3),
   imvdbApiKey: z.string().nullable(),
   hasImvdbApiKey: z.boolean(),
+  hasSetlistApiKey: z.boolean().default(false),
   // vidarr's own API key — read-only via this schema (UpdateSettingsSchema
   // strips it, since it's Zod .partial()'d from this one); rotate it only
   // via POST /config/regenerate-api-key.
@@ -353,8 +354,9 @@ export const UpdateSettingsSchema = SettingsSchema.omit({
   adminUsername: true,
   adminPasswordHash: true,
   hasImvdbApiKey: true,
+  hasSetlistApiKey: true,
   hasGoogleClientSecret: true,
-}).partial();
+}).partial().extend({ setlistApiKey: z.string().trim().min(1).max(500).nullable().optional() });
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>;
 
 // --- Library Connectors & Artist Recommendations (M2.5) ---

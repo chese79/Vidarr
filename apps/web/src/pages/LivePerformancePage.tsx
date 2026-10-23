@@ -45,7 +45,7 @@ export default function LivePerformancePage() {
     <p>Known order; setlist completeness and recording coverage are unverified.</p>
     <ol>{row.songs.map(song => <li key={song.id}>{song.title} (occurrence {song.id}){song.section && ` (${song.section})`} · {song.kind}</li>)}</ol>
     <h3>Recording candidates ({row._count.recordings})</h3>
-    {row._count.recordings > 25 && <p>Showing the latest 25. <Link to="/live?view=recordings">Browse recordings</Link>.</p>}
+    {row._count.recordings > 25 && <p>Showing the latest 25. <Link to={`/artist/${row.artistId}/live?view=recordings`}>Browse this artist’s recordings</Link>.</p>}
     {row.recordings.map(link => <RecordingRow key={link.recording.id} recording={link.recording} />)}
     <ActionForm className="card" onSubmit={event => { event.preventDefault(); create.mutate({ title, performanceIds: [id], evidenceUrl: url.trim() || null, claimedCoverage: coverage }); }}>
       <h3>Add recording evidence</h3>

@@ -12,6 +12,9 @@ const querySchema = z.object({
   setting: LiveSetting.optional(), style: LiveStyle.optional(),
 });
 const artistSelect = { id: true, name: true } as const;
+const catalogQuerySchema = querySchema.refine(query => !query.search || query.artistId !== undefined, {
+  message: 'Choose an artist before searching Live performances or recordings', path: ['artistId'],
+});
 const summaryInclude = { artist: { select: artistSelect }, _count: { select: { songs: true, recordings: true } } } as const;
 const recordingInclude = { performances: { include: { performance: { select: { id: true, title: true, artist: { select: artistSelect } } } } } } as const;
 
@@ -25,7 +28,7 @@ export async function liveRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/v1/live/performances', async req => {
-    const query = querySchema.parse(req.query);
+    const query = catalogQuerySchema.parse(req.query);
     const where: Prisma.LivePerformanceWhereInput = {
       removedAt: null, artistId: query.artistId, setting: query.setting, style: query.style,
       ...(query.search ? { OR: [{ title: { contains: query.search } }, { venue: { contains: query.search } },
@@ -70,7 +73,7 @@ export async function liveRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/v1/live/recordings', async req => {
-    const query = querySchema.parse(req.query);
+    const query = catalogQuerySchema.parse(req.query);
     const where: Prisma.RecordingWhereInput = { catalogType: 'live', reviewStatus: { notIn: ['returnedToMusicVideos', 'deleted', 'identifiedDuplicate'] }, performances: { some: { performance: { removedAt: null, artistId: query.artistId, setting: query.setting, style: query.style } } },
       ...(query.search ? { title: { contains: query.search } } : {}) };
     const [total, items] = await prisma.$transaction([prisma.recording.count({ where }),

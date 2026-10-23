@@ -14,6 +14,8 @@ function PlaybackLibraryPicker({ connectorId, value, onChange }: { connectorId: 
 interface Preview { performances: number; knownRecordings: number; shared: number; estimatedSearches: { min: number; max: number }; estimatedDays: { min: number; max: number }; explanation: string }
 export function LiveDiscoveryControls({ artistId, performanceId }: { artistId: number; performanceId?: number }) {
   const cache = useQueryClient();
+  const config = useQuery({ queryKey: ['live-configuration'], queryFn: api.live.configuration });
+  const historyReady = config.data?.hasSetlistApiKey && !config.data.setlistPaused;
   const [page, setPage] = useState(1), [from, setFrom] = useState(''), [to, setTo] = useState(''), [budget, setBudget] = useState(50);
   const [preview, setPreview] = useState<Preview>();
   const [source, setSource] = useState('all');
@@ -28,7 +30,8 @@ export function LiveDiscoveryControls({ artistId, performanceId }: { artistId: n
   const activate = useMutation({ mutationFn: () => api.live.action('monitoring', { ...input, approved: true }), onSuccess: () => { cache.invalidateQueries({ queryKey: ['live-monitoring'] }); } });
   return <details className="card"><summary>Discovery and monitoring</summary>
     <p>Browse one setlist.fm history page at a time. Adding an artist does not import its entire live history. Video searches are separate and send uncertain candidates to review.</p>
-    <ActionButton disabled={discover.isPending} onClick={() => discover.mutate()}>Load event history, page {page}</ActionButton>{' '}
+    {!historyReady && <p role="status">{config.isError ? 'Could not check event-history configuration.' : config.isPending ? 'Checking event-history configuration…' : config.data?.setlistPaused ? 'setlist.fm authentication is paused. Correct the API key to resume event history.' : 'Event history requires a setlist.fm API key.'}{' '}<Link to="/settings">Open Library settings</Link> (Settings → General → Library). You can still browse saved performances or add one independently.</p>}
+    <ActionButton disabled={discover.isPending || !historyReady} onClick={() => discover.mutate()}>Load event history, page {page}</ActionButton>{' '}
     {discover.data?.hasMore && <ActionButton onClick={() => { setPage(page + 1); discover.reset(); }}>Next history page</ActionButton>}
     {discover.isSuccess && <p role="status">Reviewed {discover.data.ids.length} reference events. <a href="https://www.setlist.fm" target="_blank" rel="noreferrer">Setlist data from setlist.fm</a></p>}
     {performanceId && <ActionButton disabled={search.isPending} onClick={() => search.mutate()}>Search videos now</ActionButton>}
@@ -70,14 +73,14 @@ export function LiveSettings() {
   const [exclusionOffset, setExclusionOffset] = useState(0);
   const exclusions = useQuery({ queryKey: ['live-exclusions', exclusionOffset], queryFn: () => api.live.read<Array<{ id: number; artistName: string; scope: string; fingerprint: string }>>(`exclusions?offset=${exclusionOffset}`) });
   const restoreExclusion = useMutation({ mutationFn: (id: number) => api.live.action(`exclusions/${id}/restore`, {}), onSuccess: () => cache.invalidateQueries({ queryKey: ['live-exclusions'] }) });
-  const [draft, setDraft] = useState<LiveConfigurationView['policy']>(), [key, setKey] = useState('');
+  const [draft, setDraft] = useState<LiveConfigurationView['policy']>();
   const policy = draft ?? config.data?.policy;
-  const save = useMutation({ mutationFn: () => api.live.action('configuration', { policy, ...(key ? { setlistApiKey: key } : {}) }, 'PUT'), onSuccess: () => { setKey(''); cache.invalidateQueries({ queryKey: ['live-configuration'] }); } });
+  const save = useMutation({ mutationFn: () => api.live.action('configuration', { policy }, 'PUT'), onSuccess: () => { cache.invalidateQueries({ queryKey: ['live-configuration'] }); } });
   const ruleAction = useMutation({ mutationFn: ({ id, state }: { id: number; state: string }) => api.live.action(`monitoring/${id}`, { state }, 'PATCH'), onSuccess: () => cache.invalidateQueries({ queryKey: ['live-monitoring'] }) });
   if (!policy) return <p>{config.isError ? config.error.message : 'Loading live settings…'}</p>;
   const change = (values: Partial<typeof policy>) => setDraft({ ...policy, ...values });
   return <><Link to="/live">Live &amp; Concerts</Link><h2>Live &amp; Concerts settings</h2><ActionForm onSubmit={e => { e.preventDefault(); save.mutate(); }}>
-    <section className="card"><h3>Setlist.fm</h3><label>API key <input type="password" autoComplete="new-password" placeholder={config.data?.hasSetlistApiKey ? 'Configured; leave blank to retain' : 'Enter API key'} value={key} onChange={e => setKey(e.target.value)} /></label>
+    <section className="card"><h3>Setlist.fm</h3><p>{config.data?.hasSetlistApiKey ? 'Global API key configured.' : 'Global API key not configured.'} Manage it in <Link to="/settings">Settings → General → Library</Link>.</p>
       {config.data?.setlistPaused && <p role="alert">Authentication paused. Save a corrected key to resume.</p>}{config.data?.providerRetryAt && <p>Provider retry: {new Date(config.data.providerRetryAt).toLocaleString()}</p>}
       <p>Event references and setlists use <a href="https://www.setlist.fm" target="_blank" rel="noreferrer">setlist.fm</a>. A reference does not prove an eligible video exists.</p></section>
     <section className="card"><h3>Live destinations and validation</h3><p>These destinations apply to new imports. Existing files remain where they are. Unknown classification always uses all four stages until classified. Import and exact playback-server confirmation are always required. Both optional deep checks default on. Full-file integrity decodes video/audio throughout the file; motion inspection checks for mostly static footage. Disabling a deep check retains basic video and bounded motion eligibility plus identity review.</p>

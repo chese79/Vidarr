@@ -4,6 +4,7 @@ import { buildApp } from '../../src/app.js';
 import { resetDb, ensureSettings } from '../support/db.js';
 import { TEST_API_KEY, authHeaders } from '../support/http.js';
 import { DEFAULT_VALIDATION_SETTINGS } from '@vidarr/shared-types';
+import { prisma } from '../../src/db/client.js';
 
 describe('settings routes', () => {
   let app: FastifyInstance;
@@ -80,6 +81,37 @@ describe('settings routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ transferMode: 'copy', minFreeSpaceMb: 2048 });
+  });
+
+  it('shares the global setlist key with Live, masks it, and preserves policy and unrelated saves', async () => {
+    const policy = JSON.stringify({ globalDailyBudget: 41 });
+    await prisma.liveConfiguration.create({ data: { id: 1, policy, setlistApiKey: 'old-setlist-secret', setlistPaused: true, providerRetryAt: new Date(Date.now() + 60000) } });
+    const original = await app.inject({ url: '/api/v1/config', headers: authHeaders() });
+    expect(original.json().hasSetlistApiKey).toBe(true);
+    expect(original.body).not.toContain('old-setlist-secret');
+    const saved = await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { setlistApiKey: '  replacement-setlist-secret  ', minFreeSpaceMb: 2100 } });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({ hasSetlistApiKey: true, minFreeSpaceMb: 2100 });
+    expect(saved.body).not.toContain('replacement-setlist-secret');
+    expect(saved.json()).not.toHaveProperty('setlistApiKey');
+    expect(await prisma.liveConfiguration.findUniqueOrThrow({ where: { id: 1 } })).toMatchObject({ policy, setlistApiKey: 'replacement-setlist-secret', setlistPaused: false, providerRetryAt: null });
+    await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { transferMode: 'copy', hasSetlistApiKey: false } });
+    expect((await prisma.liveConfiguration.findUniqueOrThrow({ where: { id: 1 } })).setlistApiKey).toBe('replacement-setlist-secret');
+    const live = await app.inject({ url: '/api/v1/live/configuration', headers: authHeaders() });
+    expect(live.json()).toMatchObject({ hasSetlistApiKey: true, policy: { globalDailyBudget: 41 } });
+    expect(live.body).not.toContain('replacement-setlist-secret');
+    const cleared = await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { setlistApiKey: null } });
+    expect(cleared.json().hasSetlistApiKey).toBe(false);
+    expect((await prisma.liveConfiguration.findUniqueOrThrow({ where: { id: 1 } })).policy).toBe(policy);
+  });
+
+  it('authenticates and validates global setlist credentials before changing any settings', async () => {
+    expect((await app.inject({ method: 'PUT', url: '/api/v1/config', payload: { setlistApiKey: 'not-authorized' } })).statusCode).toBe(401);
+    for (const setlistApiKey of ['', '   ', 'x'.repeat(501), 12]) {
+      expect((await app.inject({ method: 'PUT', url: '/api/v1/config', headers: authHeaders(), payload: { setlistApiKey, minFreeSpaceMb: 9999 } })).statusCode).toBe(400);
+    }
+    expect((await prisma.settings.findUniqueOrThrow({ where: { id: 1 } })).minFreeSpaceMb).toBe(1024);
+    expect(await prisma.liveConfiguration.count()).toBe(0);
   });
 
   it('saves the download limit and rejects zero, fractional and excessive values', async () => {

@@ -104,7 +104,7 @@ export default function App() {
           <Route path="/quality-profiles" element={<Navigate to="/validation-quality" replace />} />
           <Route path="/validation-quality" element={<ValidationQualityPage />} />
           <Route path="/root-folders" element={<RootFoldersPage />} />
-          <Route path="/discover" element={<DiscoverPage />} />
+          <Route path="/discover" element={<CatalogWorkflow music={<DiscoverPage />} />} />
           <Route path="/match-review" element={<MatchReviewPage />} />
           <Route path="/video-review" element={<CatalogWorkflow music={<VideoReviewPage />} />} />
           <Route path="/import" element={<CatalogWorkflow music={<ImportPage />} />} />
@@ -128,7 +128,7 @@ export default function App() {
 
 function CatalogLibrary() {
   const { mode } = useCatalogMode();
-  return <>{mode !== 'live' && <LibraryPage />}{mode !== 'musicVideos' && <section className="catalog-live"><LivePage embedded={mode === 'both'} /></section>}</>;
+  return <LibraryPage live={mode === 'live'} />;
 }
 function ArtistCatalog() {
   const { mode } = useCatalogMode();
@@ -136,11 +136,11 @@ function ArtistCatalog() {
 }
 function CatalogWorkflow({ music }: { music: React.ReactNode }) {
   const { mode } = useCatalogMode();
-  return <>{mode !== 'live' && music}{mode !== 'musicVideos' && <section className="catalog-live"><LivePage embedded={mode === 'both'} /></section>}</>;
+  return mode === 'live' ? <LibraryPage live /> : music;
 }
 function LiveOnly({ children }: { children: React.ReactNode }) {
   const { mode } = useCatalogMode();
-  return mode === 'musicVideos' ? <p role="status">This entry is in Live &amp; Concerts. Select Live &amp; Concerts or Both to view it.</p> : <>{children}</>;
+  return mode === 'musicVideos' ? <p role="status">This entry is in Live &amp; Concerts. Select Live &amp; Concerts or Both to view it.</p> : <section className="catalog-live">{children}</section>;
 }
 function HideEmptyArtists() {
   const { mode } = useCatalogMode();
