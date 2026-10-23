@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Changed — Pause MTV overlay development
+
+- Archive optional MTV client source under `future/mtv-overlay`, exclude it from current builds,
+  and remove unused application overlay styling. Preserve local packages; no deployed client changes.
+
 ### Deployment — Local action feedback release (2026-10-22)
 
 - Integrate the native client source and application changes on local `main`; deploy only

@@ -1,5 +1,12 @@
 # Native MTV overlay
 
+## Status: paused for future development (2026-10-22)
+
+The user has temporarily removed MTV text overlays from current development. Source is preserved
+in [`future/mtv-overlay`](../future/mtv-overlay/README.md), excluded from the application build.
+No overlay is installed by Vidarr, and none was installed on Jellyfin or Roku by earlier work.
+The details below record the prototype for a future restart; they are not current setup steps.
+
 Direction changed on 2026-10-19: abandon pre-rendered video copies and draw the information block
 inside the playback client. The undeployed pre-render renderer, job APIs/settings, migration,
 worker, UI and optional image dependencies have been removed from the Vidarr source.
@@ -29,7 +36,7 @@ or accepted upstream contribution. Web support needs a separate Jellyfin web int
 client implementation is supplied merely by installing or rebuilding Vidarr.
 
 The user selected both Roku and web. The separate source components and compatibility-checked
-installer are in [`integrations/jellyfin-native`](../integrations/jellyfin-native/README.md).
+installer are archived in [`future/mtv-overlay`](../future/mtv-overlay/README.md).
 Roku uses a SceneGraph group, fed from the already loaded item metadata and scalar fields forwarded
 by the player's existing position/state handlers; it holds no reference back to its parent video.
 Web mounts literal DOM text inside the HTML video container, attaches media event
@@ -90,7 +97,7 @@ Local artifacts under `integrations/jellyfin-native/build/`:
 The extracted web output contains the overlay, HTML-player integration and user Playback setting
 in their emitted chunks. Build dependencies/caches are excluded from the final web artifact image.
 These local development artifacts require the compatibility and installation steps in the
-[component guide](../integrations/jellyfin-native/README.md); they are not store/catalog releases.
+[archived component guide](../future/mtv-overlay/README.md); they are not store/catalog releases.
 
 References: [Jellyfin Roku source](https://github.com/jellyfin/jellyfin-roku),
 [Roku Video position/duration events](https://developer.roku.com/dev/docs/video).

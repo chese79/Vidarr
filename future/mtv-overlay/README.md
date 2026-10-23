@@ -1,5 +1,9 @@
 # Native MTV overlays for Jellyfin
 
+**Paused future development.** These sources are archived separately from the active application.
+Do not install or include them in current Vidarr or Jellyfin deployments. Existing ignored build
+artifacts remain at their old local location; no deployed client was changed by this archival move.
+
 Two optional **client source components**, installed independently of Vidarr and of each other.
 They draw a literal `MTV` block at the lower left over the original music video, using Jellyfin's
 imported item metadata. They do not change a playback URL, request a transcode, render/copy media,
@@ -108,7 +112,7 @@ Alternatively, from the Vidarr repository root, the standalone test image keeps 
 inside Linux rather than on a Windows bind mount:
 
 ```sh
-docker build -f integrations/jellyfin-native/Dockerfile.test -t vidarr-native-overlay:test integrations/jellyfin-native
+docker build -f future/mtv-overlay/Dockerfile.test -t vidarr-native-overlay:test future/mtv-overlay
 docker run --rm vidarr-native-overlay:test
 ```
 

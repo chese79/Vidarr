@@ -1,6 +1,7 @@
 node_modules
 research/native-overlay-upstream
 integrations/jellyfin-native
+future/mtv-overlay
 **/node_modules
 **/dist
 **/build
