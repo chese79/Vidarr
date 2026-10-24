@@ -1,4 +1,5 @@
 import { ActionButton } from '../components/ButtonFeedback';
+import { LiveStartingArtists } from '../components/LiveStartingView';
 import AddArtistForm from '../components/AddArtistForm';
 import LivePage from './LivePage';
 import { confirmEligibleSearch } from '../utils/confirmEligibleSearch';
@@ -435,6 +436,7 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
 
   return (
     <div>
+      {live && <LiveStartingArtists />}
       <div className="page-header">
         <div className="form-row" style={{ alignItems: 'center' }}>
           <h2>{live ? 'Live & Concerts — Artists' : 'Music Videos'}</h2>

@@ -45,7 +45,7 @@ export async function startScheduler(): Promise<void> {
       create: { name: job.name, intervalMs: job.defaultIntervalMs },
     });
     setInterval(() => void runJob(job), task.intervalMs);
-    if ((job.name === 'Artist Video Inventory Backfill' || job.name === 'Artist Genre Backfill') && process.env.NODE_ENV === 'production') {
+    if ((job.name === 'Artist Video Inventory Backfill' || job.name === 'Artist Genre Backfill' || job.name === 'Existing Artist Source Discovery') && process.env.NODE_ENV === 'production') {
       void runJob(job);
     }
   }

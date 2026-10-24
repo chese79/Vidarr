@@ -5,6 +5,7 @@ import { prisma } from '../../src/db/client.js';
 // beforeEach in any DB-backed test file so tests don't see each other's rows
 // (tests share one on-disk SQLite file — see vitest.config.ts).
 export async function resetDb(): Promise<void> {
+  await prisma.liveDiscoveryItem.deleteMany();
   await prisma.playlistItem.deleteMany();
   await prisma.liveSongViewing.deleteMany();
   await prisma.livePlaybackObservation.deleteMany();

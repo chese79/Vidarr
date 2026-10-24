@@ -80,6 +80,35 @@ export async function lookupMusicBrainzArtist(mbid: string): Promise<MusicBrainz
   return mapArtist(value);
 }
 
+export interface LiveReference {
+  id: string; title: string; url: string; rank: number;
+  releaseDate: string | null; primaryType: string | null;
+}
+// One bounded reference page, not the artist's event history or audio discography.
+// Website-default excludes groups containing only bootleg/pseudo/promotional releases.
+export async function getMusicBrainzLiveReferences(mbid: string): Promise<LiveReference[]> {
+  const body = await rateLimitedGet(`/release-group?artist=${encodeURIComponent(mbid)}&type=live&release-group-status=website-default&limit=100&fmt=json&inc=artist-credits+ratings`);
+  return (body['release-groups'] ?? []).filter((group: any) =>
+    group['secondary-types']?.includes('Live') && (group['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === mbid)
+  ).map((group: any) => ({ id: String(group.id), title: String(group.title),
+    url: `https://musicbrainz.org/release-group/${group.id}`, releaseDate: group['first-release-date'] || null,
+    primaryType: group['primary-type'] ?? null,
+    rank: ({ Album: 100, Broadcast: 80, EP: 60 } as Record<string, number>)[group['primary-type']] ?? 40,
+  }));
+}
+
+export async function getMusicBrainzLiveEventReferences(mbid: string): Promise<LiveReference[]> {
+  const body = await rateLimitedGet(`/artist/${encodeURIComponent(mbid)}?fmt=json&inc=event-rels`);
+  if (body.id !== mbid) throw new Error('MusicBrainz returned a different artist identity');
+  return (body.relations ?? []).filter((rel: any) => rel.event?.id && ['main performer', 'guest performer'].includes(rel.type)).slice(0, 100)
+    .map((rel: any) => ({ id: String(rel.event.id), title: String(rel.event.name),
+      url: `https://musicbrainz.org/event/${rel.event.id}`, releaseDate: null, primaryType: 'Event',
+      // Event dates remain provider evidence until review, including broadcast/rebroadcast dates.
+      rank: /brit awards|tiny desk/i.test(rel.event.name) ? 75 : 50,
+      eventDate: rel.event['life-span']?.begin ?? null,
+    }));
+}
+
 function escapeLucene(value: string): string {
   return value.replace(/([+\-&|!(){}[\]^"~*?:\\/])/g, '\\$1');
 }

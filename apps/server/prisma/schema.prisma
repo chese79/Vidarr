@@ -12,6 +12,11 @@ datasource db {
 }
 
 model Artist {
+  liveDiscoveryItems LiveDiscoveryItem[]
+  liveDiscoveryStatus String @default("pending")
+  liveDiscoveryAttemptedAt DateTime?
+  liveDiscoveryCompletedAt DateTime?
+  liveDiscoveryError String?
   id               Int          @id @default(autoincrement())
   name             String
   sortName         String
@@ -324,6 +329,7 @@ model ScheduledTask {
 }
 
 model Settings {
+  liveEnabled Boolean @default(true)
   warnBeforeDelete Boolean @default(true)
   excludeDeletedVideosFromScans Boolean @default(false)
   validationSettings String @default("{\"policies\":{\"imports\":{\"file\":true,\"motion\":true},\"canonical\":{\"file\":false,\"motion\":false},\"additional\":{\"file\":true,\"motion\":true}},\"minimumDimension\":64,\"maximumStaticPercent\":80}")
@@ -745,6 +751,7 @@ model LiveSongPerformance {
 // Shared capture/edit identity, suitable for either catalog. This first increment
 // records candidates only; a URL/coverage claim never creates file ownership.
 model Recording {
+  discoveryItems LiveDiscoveryItem[]
   catalogType String @default("live")
   legacySources AcquisitionSource[]
   legacyServerObservations LibraryVideo[]
@@ -782,6 +789,28 @@ model Recording {
 
   @@index([musicVideoId])
   @@index([reviewStatus, id])
+}
+
+// Reference/discovery inventory is not a performance, accepted source or owned video.
+model LiveDiscoveryItem {
+  id Int @id @default(autoincrement())
+  artistId Int
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  kind String // video | reference
+  provider String
+  externalId String
+  title String
+  url String
+  evidence String @default("{}")
+  rank Int @default(0)
+  dismissed Boolean @default(false)
+  recordingId Int?
+  recording Recording? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
+  performanceId Int? // promoted reference; retained identity, never matched by title
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([artistId, provider, externalId])
+  @@index([artistId, kind, dismissed, rank, id])
 }
 
 model RecordingPerformance {

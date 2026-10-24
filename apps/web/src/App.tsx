@@ -26,6 +26,8 @@ import SystemTasksPage from './pages/SystemTasksPage';
 import GenresPage from './pages/GenresPage';
 import DownloadProgress from './components/DownloadProgress';
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from './api/client';
 import { scrollContentTo } from './contentScroll';
 import { QueueResultsPage } from './components/QueueResults';
 
@@ -54,16 +56,19 @@ const SETTINGS_NAV_ITEMS = [
 
 export default function App() {
   const location = useLocation();
-  const [mode, setMode] = useState<CatalogMode>(() => {
+  const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings.get });
+  const liveEnabled = settings.data?.liveEnabled !== false && settings.data?.liveAvailable !== false;
+  const [selectedMode, setMode] = useState<CatalogMode>(() => {
     try { return parseCatalogMode(localStorage.getItem(CATALOG_MODE_KEY) ?? (location.pathname.includes('/live') ? 'live' : null)); }
     catch { return 'musicVideos'; }
   });
-  useEffect(() => { try { localStorage.setItem(CATALOG_MODE_KEY, mode); } catch { /* Session selection still works when storage is unavailable. */ } }, [mode]);
+  const mode = liveEnabled ? selectedMode : 'musicVideos';
+  useEffect(() => { try { localStorage.setItem(CATALOG_MODE_KEY, selectedMode); } catch { /* Session selection still works when storage is unavailable. */ } }, [selectedMode]);
   const unfiltered = isUnfilteredScreen(location.pathname);
   useEffect(() => { scrollContentTo(0); }, [location.pathname]);
   return (
-    <CatalogModeContext.Provider value={{ mode, setMode }}>
-    <div className={`app-shell${mode === 'live' && !unfiltered ? ' catalog-live' : ''}`}>
+    <CatalogModeContext.Provider value={{ mode, setMode, liveEnabled }}>
+    <div className={`app-shell${!unfiltered && mode === 'live' ? ' catalog-live' : !unfiltered && mode === 'both' ? ' catalog-both' : ''}`}>
       <aside className="sidebar">
         <h1 className="brand"><img src="/vidarr-rune-mark.png" alt="" /><span>VID<span className="brand-arr">ARR</span></span></h1>
         <nav aria-label="Primary">

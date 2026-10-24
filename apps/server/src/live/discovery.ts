@@ -1,4 +1,5 @@
 import { prisma } from '../db/client.js';
+import { liveEnabled, requireLiveEnabled } from './capability.js';
 import { searchYoutube } from '../providers/youtube/ytdlp.js';
 import { searchIndexer } from '../providers/indexer/torznab.js';
 import { redactMessage } from '../security/redact.js';
@@ -67,6 +68,7 @@ export function discoverRecordings(performanceId: number, ruleId?: number, force
   const result = operation.catch(() => {}).then(() => discover(performanceId, ruleId, force)); operation = result; return result;
 }
 async function discover(performanceId: number, ruleId?: number, force = false) {
+  await requireLiveEnabled();
   const performance = await prisma.livePerformance.findUniqueOrThrow({ where: { id: performanceId }, include: { artist: true } });
   if (performance.ignored) throw new LiveError('This performance is excluded from monitoring');
   if (await liveScanExcluded([`artistSet:${performance.artistId}:${performance.id}`])) return { candidates: 0, deferred: false, errors: [] };
@@ -74,7 +76,7 @@ async function discover(performanceId: number, ruleId?: number, force = false) {
   const rule = ruleId ? await prisma.liveMonitoringRule.findUniqueOrThrow({ where: { id: ruleId } }) : null;
   const selectedSources = rule ? MonitoringInput.parse(JSON.parse(rule.filters)).sources : ['youtube', 'indexer'];
   const providers = [...(selectedSources.includes('youtube') ? ['youtube'] : []), ...(selectedSources.includes('indexer') ? indexers.map(value => `indexer:${value.id}`) : [])];
-  const query = [performance.artist.name, performance.performanceDate, performance.venue, 'live'].filter(Boolean).join(' ');
+  const query = [performance.artist.name, performance.title, performance.performanceDate, performance.venue, 'live'].filter(Boolean).join(' ');
   let candidates = 0, deferred = false; const errors: string[] = [];
   for (const provider of providers) {
     const key = `search:${performanceId}:${performance.revision}:${provider}`;
@@ -113,6 +115,7 @@ async function discover(performanceId: number, ruleId?: number, force = false) {
   return { candidates, deferred, errors };
 }
 export async function runLiveMonitoring() {
+  if (!await liveEnabled()) return 'Live discovery is disabled';
   const rules = await prisma.liveMonitoringRule.findMany({ where: { state: 'active' }, orderBy: [{ lastRunAt: 'asc' }, { id: 'asc' }], take: 20 });
   let searched = 0;
   for (const rule of rules) {

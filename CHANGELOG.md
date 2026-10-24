@@ -5,6 +5,36 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Catalog color schemes (2026-10-23)
+
+- Give Live & Concerts a pale-yellow palette and Both a separate magenta palette based on the logo.
+  Use blue border accents for both. Retain Music Videos' charcoal/blue colors and neutral
+  unfiltered utility screens.
+- Deploy `vidarr-catalog-colors-20261023:release` locally after 76 passing web tests and Node 22
+  production builds, preserving the existing discovery batch and service mounts with a new backup.
+
+### Compact Live controls and existing-artist discovery (2026-10-23)
+
+- Size Live monitoring inputs/selectors to their content while retaining the right-side selector
+  column and narrow-screen stacking.
+- Add an explicitly requested, resumable source-discovery batch for confirmed existing artists,
+  with visible progress, provider failures and restart-safe checkpoints. No automatic setlist.fm
+  traversal, acquisition search or download submission is introduced.
+- Deploy `vidarr-live-start-20261023:release` locally with a verified configuration backup and
+  preserved mounts, settings and original catalog/review/queue/playlist IDs. Start the requested
+  background collection for 802 confirmed artists; unconfirmed identities remain in review.
+
+### Live starting inventory (2026-10-23)
+
+- Add artist-first Live starting lists: saved channel upload candidates and five ranked
+  MusicBrainz Live release/broadcast/event search leads, independent of catalog display mode.
+- Preserve discovery provenance, dismissal and retry progress without creating a missing-event
+  backlog; explicit actions enter existing source review/search and acquisition safeguards.
+- Add General Live enablement and independent installed-capability activation. Disabling retains
+  data. The additive migration preserves existing media/configuration and review identities.
+- Make setlist.fm strictly on request, retiring automatic metadata traversal while retaining
+  explicit artist history pages, credentials, saved references and existing task identities.
+
 ### Deployment — Local artist-first Live release (2026-10-22)
 
 - Deploy `vidarr-live-artists-20261022:release` locally after Node 22 server/web production builds,

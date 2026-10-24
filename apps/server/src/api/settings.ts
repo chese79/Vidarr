@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { liveAvailable } from '../live/capability.js';
 import type { FastifyInstance } from 'fastify';
 import { UpdateSettingsSchema, ValidationSettingsSchema } from '@vidarr/shared-types';
 import { loadValidationSettings } from '../pipeline/validationPolicy.js';
@@ -77,6 +78,7 @@ async function serializeSettings<
   const live = await prisma.liveConfiguration.findUnique({ where: { id: 1 }, select: { setlistApiKey: true } });
   return {
     ...safe,
+    liveAvailable: liveAvailable(),
     imvdbApiKey: null,
     googleClientSecret: null,
     adminPasswordHash: null,

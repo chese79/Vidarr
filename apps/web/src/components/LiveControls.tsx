@@ -29,9 +29,9 @@ export function LiveDiscoveryControls({ artistId, performanceId }: { artistId: n
   const estimate = useMutation({ mutationFn: () => api.live.action<Preview>('monitoring/preview', input), onSuccess: setPreview });
   const activate = useMutation({ mutationFn: () => api.live.action('monitoring', { ...input, approved: true }), onSuccess: () => { cache.invalidateQueries({ queryKey: ['live-monitoring'] }); } });
   return <details className="card"><summary>Discovery and monitoring</summary>
-    <p>Browse one setlist.fm history page at a time. Adding an artist does not import its entire live history. Video searches are separate and send uncertain candidates to review.</p>
+    <p>setlist.fm is checked only when you explicitly request a history page below. Artist addition, opening Live and monitoring never search or traverse setlist.fm. Video searches remain separate and uncertain candidates require review.</p>
     {!historyReady && <p role="status">{config.isError ? 'Could not check event-history configuration.' : config.isPending ? 'Checking event-history configuration…' : config.data?.setlistPaused ? 'setlist.fm authentication is paused. Correct the API key to resume event history.' : 'Event history requires a setlist.fm API key.'}{' '}<Link to="/settings">Open Library settings</Link> (Settings → General → Library). You can still browse saved performances or add one independently.</p>}
-    <ActionButton disabled={discover.isPending || !historyReady} onClick={() => discover.mutate()}>Load event history, page {page}</ActionButton>{' '}
+    <ActionButton disabled={discover.isPending || !historyReady} onClick={() => discover.mutate()}>Explore setlist.fm performances, page {page}</ActionButton>{' '}
     {discover.data?.hasMore && <ActionButton onClick={() => { setPage(page + 1); discover.reset(); }}>Next history page</ActionButton>}
     {discover.isSuccess && <p role="status">Reviewed {discover.data.ids.length} reference events. <a href="https://www.setlist.fm" target="_blank" rel="noreferrer">Setlist data from setlist.fm</a></p>}
     {performanceId && <ActionButton disabled={search.isPending} onClick={() => search.mutate()}>Search videos now</ActionButton>}

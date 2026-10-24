@@ -14,7 +14,8 @@ export default function LiveRecordingPage() {
   const [packSize, setPackSize] = useState(''), [contents, setContents] = useState(''), [selected, setSelected] = useState(''), [packApproved, setPackApproved] = useState(false);
   const [audio, setAudio] = useState(''), [visual, setVisual] = useState(''), [completeness, setCompleteness] = useState(''), [assessed, setAssessed] = useState(false);
   const [eventSearch, setEventSearch] = useState('');
-  const events = useQuery({ queryKey: ['live-review-events', eventSearch], queryFn: () => api.live.performances(`search=${encodeURIComponent(eventSearch)}`), enabled: eventSearch.length > 1 });
+  const reviewArtistId = recording.data?.performances[0]?.performance.artist.id;
+  const events = useQuery({ queryKey: ['live-review-events', reviewArtistId, eventSearch], queryFn: () => api.live.performances(`artistId=${reviewArtistId}&search=${encodeURIComponent(eventSearch)}`), enabled: !!reviewArtistId && eventSearch.length > 1 });
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [deleteScope, setDeleteScope] = useState('recording'), [deleteSong, setDeleteSong] = useState('');
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings.get });

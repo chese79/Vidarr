@@ -272,6 +272,8 @@ export const DEFAULT_VALIDATION_SETTINGS: ValidationSettings = {
 };
 
 export const SettingsSchema = z.object({
+  liveEnabled: z.boolean().default(true),
+  liveAvailable: z.boolean().default(true),
   warnBeforeDelete: z.boolean().default(true),
   excludeDeletedVideosFromScans: z.boolean().default(false),
   defaultPlaybackConnectorId: z.number().int().positive().nullable().optional(),
@@ -350,6 +352,7 @@ export type LocalLoginResponse = z.infer<typeof LocalLoginResponseSchema>;
 // POST /api/v1/auth/login/credentials, which hashes the plaintext password;
 // a generic PUT could otherwise store an unhashed value into adminPasswordHash.
 export const UpdateSettingsSchema = SettingsSchema.omit({
+  liveAvailable: true,
   apiKey: true,
   adminUsername: true,
   adminPasswordHash: true,

@@ -29,6 +29,8 @@ beforeEach(() => {
   vi.spyOn(api.live, 'recordings').mockResolvedValue(page);
   vi.spyOn(api.live, 'configuration').mockResolvedValue({ hasSetlistApiKey: false, setlistPaused: false } as never);
   vi.spyOn(api.live, 'action');
+  vi.spyOn(api.settings, 'get').mockResolvedValue({ liveEnabled: true, liveAvailable: true } as never);
+  vi.spyOn(api.live, 'read').mockResolvedValue({ enabled: false, items: [], total: 0 } as never);
 });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); localStorage.clear(); vi.restoreAllMocks(); });
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
@@ -50,12 +52,22 @@ it('retains the artist index and list in Live mode without music-video exclusion
   await click('[aria-label="Expand Adele\'s Live catalog"]');
   expect(api.live.performances).toHaveBeenCalledWith(expect.stringContaining('artistId=42'));
   expect(host.textContent).toContain('Event history requires a setlist.fm API key');
-  const historyButton = [...host.querySelectorAll('button')].find(button => button.textContent?.startsWith('Load event history'))!;
+  const historyButton = [...host.querySelectorAll('button')].find(button => button.textContent?.startsWith('Explore setlist.fm performances'))!;
   expect(historyButton.disabled).toBe(true);
   expect(api.live.action).not.toHaveBeenCalled();
   const recordingsButton = [...host.querySelectorAll('button')].find(button => button.textContent === 'Recordings')!;
   await act(async () => recordingsButton.click()); await flush();
   expect(api.live.recordings).toHaveBeenCalledWith(expect.stringContaining('artistId=42'));
+});
+
+it('uses distinct Live and Both themes and restores the Music Videos theme when switching', async () => {
+  await mount(<App />);
+  expect(host.querySelector('.app-shell')?.classList.contains('catalog-live')).toBe(true);
+  await click('[aria-label="Global media filter"] button:nth-child(3)');
+  expect(host.querySelector('.app-shell')?.classList.contains('catalog-both')).toBe(true);
+  expect(host.querySelector('.app-shell')?.classList.contains('catalog-live')).toBe(false);
+  await click('[aria-label="Global media filter"] button:nth-child(1)');
+  expect(host.querySelector('.app-shell')?.className).toBe('app-shell');
 });
 
 it('preserves artist filters and the index when switching between Live and music-video modes', async () => {
@@ -80,7 +92,7 @@ it('explains missing or paused history credentials while permitting a configured
   for (const state of [{ hasSetlistApiKey: false, setlistPaused: false }, { hasSetlistApiKey: true, setlistPaused: true }, { hasSetlistApiKey: true, setlistPaused: false }]) {
     client.setQueryData(['live-configuration'], state);
     const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><LiveDiscoveryControls artistId={42} /></MemoryRouter></QueryClientProvider>);
-    expect(/disabled=""[^>]*>Load event history/.test(html)).toBe(!state.hasSetlistApiKey || state.setlistPaused);
+    expect(/disabled=""[^>]*>Explore setlist.fm performances/.test(html)).toBe(!state.hasSetlistApiKey || state.setlistPaused);
     if (!state.hasSetlistApiKey || state.setlistPaused) expect(html).toContain('Open Library settings');
   }
 });

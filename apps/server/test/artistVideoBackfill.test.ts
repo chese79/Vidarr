@@ -14,6 +14,8 @@ vi.mock('../src/providers/metadata/musicbrainz.js', async (importOriginal) => ({
     type: 'Person', country: null, disambiguation: null, genres: [], aliases: [],
     imvdbSlug: null, youtubeChannels: ['https://www.youtube.com/@testartist'],
   }),
+  getMusicBrainzLiveReferences: vi.fn().mockResolvedValue([]),
+  getMusicBrainzLiveEventReferences: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../src/providers/youtube/ytdlp.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/providers/youtube/ytdlp.js')>()),

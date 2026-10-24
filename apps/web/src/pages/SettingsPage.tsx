@@ -355,6 +355,7 @@ export default function SettingsPage() {
   const [excludeDeletedVideosFromScans, setExcludeDeletedVideosFromScans] = useState(false);
   const [imvdbApiKey, setImvdbApiKey] = useState('');
   const [setlistApiKey, setSetlistApiKey] = useState('');
+  const [liveEnabled, setLiveEnabled] = useState(true);
 
   useEffect(() => {
     if (settings.data) {
@@ -366,6 +367,7 @@ export default function SettingsPage() {
       setExcludeDeletedVideosFromScans(settings.data.excludeDeletedVideosFromScans ?? false);
       setImvdbApiKey('');
       setSetlistApiKey('');
+      setLiveEnabled(settings.data.liveEnabled ?? true);
     }
   }, [settings.data]);
 
@@ -395,12 +397,15 @@ export default function SettingsPage() {
             maxConcurrentDownloads,
             warnBeforeDelete,
             excludeDeletedVideosFromScans,
+            liveEnabled,
             ...(imvdbApiKey ? { imvdbApiKey } : {}),
             ...(setlistApiKey.trim() ? { setlistApiKey: setlistApiKey.trim() } : {}),
           });
         }}
       >
         <h3 style={{ marginTop: 0 }}>Library</h3>
+        <label><input type="checkbox" checked={liveEnabled} disabled={settings.data?.liveAvailable === false} onChange={e => setLiveEnabled(e.target.checked)} /> Enable Live &amp; Concerts</label>
+        <p>{settings.data?.liveAvailable === false ? 'The Live component is unavailable in this installation. Saved data is retained.' : 'Collect Live video candidates and a short MusicBrainz starting list alongside Music Videos. setlist.fm is accessed only when explicitly requested for an artist.'}</p>
         <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
           <label htmlFor="imvdb-api-key">IMVDb API key</label>
           <input

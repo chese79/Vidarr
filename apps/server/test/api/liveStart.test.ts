@@ -1,0 +1,51 @@
+import { beforeAll, beforeEach, afterAll, expect, it, vi } from 'vitest';
+import { buildApp } from '../../src/app.js';
+import { prisma } from '../../src/db/client.js';
+import { authHeaders, TEST_API_KEY } from '../support/http.js';
+import { resetDb, ensureSettings, createArtist, createRootFolder, createQuality, createQualityProfile } from '../support/db.js';
+import { prepareLiveStartingInventory } from '../../src/live/startingInventory.js';
+
+vi.mock('../../src/providers/metadata/musicbrainz.js', async original => ({ ...await original<typeof import('../../src/providers/metadata/musicbrainz.js')>(), getMusicBrainzLiveReferences: vi.fn().mockResolvedValue([]), getMusicBrainzLiveEventReferences: vi.fn().mockResolvedValue([]) }));
+let app: Awaited<ReturnType<typeof buildApp>>, artistId: number;
+beforeAll(async()=>{app=await buildApp();await app.ready();});
+afterAll(async()=>app.close());
+beforeEach(async()=>{
+  await resetDb();await ensureSettings({apiKey:TEST_API_KEY});
+  artistId=(await createArtist((await createRootFolder()).id,(await createQualityProfile((await createQuality()).id)).id)).id;
+  await prisma.artist.update({where:{id:artistId},data:{musicbrainzArtistId:'cc2c9c3c-b7bc-4b8b-84d8-4fbd8779e493',musicbrainzMatchStatus:'confirmed'}});
+});
+const url=(path='')=>`/api/v1/live/artists/${artistId}/start${path}`;
+async function item(){return prisma.liveDiscoveryItem.create({data:{artistId,kind:'video',provider:'youtube',externalId:'Ri7-vnrJD3k',title:'Live video',url:'https://www.youtube.com/watch?v=Ri7-vnrJD3k'}});}
+it('authenticates discovery reads and mutations',async()=>{
+ expect((await app.inject(url())).statusCode).toBe(401);
+ expect((await app.inject({method:'POST',url:`/api/v1/live/artists/${artistId}/prepare`,payload:{}})).statusCode).toBe(401);
+});
+it('pages and scopes discoveries without invoking a provider',async()=>{
+ await item(); await prepareLiveStartingInventory(artistId);
+ const response=await app.inject({url:url(),headers:authHeaders()});
+ expect(response.statusCode).toBe(200);expect(response.json().total).toBe(1);expect(response.json().items[0].artistId).toBe(artistId);
+ expect((await app.inject({url:url('?limit=5000'),headers:authHeaders()})).statusCode).toBe(400);
+});
+it('hides dismissed suggestions without deleting data or allowing cross-artist promotion',async()=>{
+ const row=await item();
+ expect((await app.inject({method:'POST',url:`/api/v1/live/artists/${artistId+1}/start/${row.id}/open`,headers:authHeaders(),payload:{}})).statusCode).toBe(409);
+ await app.inject({method:'PATCH',url:url(`/${row.id}`),headers:authHeaders(),payload:{dismissed:true}});
+ expect((await app.inject({url:url(),headers:authHeaders()})).json().items).toEqual([]);
+ expect(await prisma.liveDiscoveryItem.count()).toBe(1);
+ expect(await prisma.recording.count()).toBe(0);
+});
+it('persists global enablement, omits mutable capability input and blocks preparation when disabled',async()=>{
+ const save=await app.inject({method:'PUT',url:'/api/v1/config',headers:authHeaders(),payload:{liveEnabled:false,liveAvailable:false}});
+ expect(save.json()).toMatchObject({liveEnabled:false,liveAvailable:true});
+ expect((await app.inject({method:'POST',url:`/api/v1/live/artists/${artistId}/prepare`,headers:authHeaders(),payload:{}})).statusCode).toBe(409);
+ expect((await app.inject({method:'POST',url:`/api/v1/live/artists/${artistId}/discover`,headers:authHeaders(),payload:{}})).statusCode).toBe(409);
+});
+it('removes rejected recordings from both artist suggestions and the root starting list',async()=>{
+ const row=await item();
+ const opened=await app.inject({method:'POST',url:url(`/${row.id}/open`),headers:authHeaders(),payload:{}});
+ expect(opened.statusCode).toBe(200);
+ await prisma.recording.update({where:{id:opened.json().recordingId},data:{reviewStatus:'rejected'}});
+ expect((await app.inject({url:url(),headers:authHeaders()})).json().total).toBe(0);
+ expect((await app.inject({url:'/api/v1/live/start',headers:authHeaders()})).json().items).toEqual([]);
+ expect(await prisma.liveDiscoveryItem.count()).toBe(1);
+});

@@ -1,5 +1,41 @@
 # Process flows and consistency review
 
+## Existing-artist source population (2026-10-23)
+
+Explicitly request collection for all existing artists → snapshot confirmed MusicBrainz artist IDs
+→ persist the requested batch and cursor → collect shared artist/VEVO sources and enabled Live
+leads one artist at a time → checkpoint success/partial failure → immediately continue while work
+remains → show progress and current artist in Live. Restart repeats an interrupted artist safely.
+Unconfirmed observations remain in identity review. Failed providers preserve earlier discoveries
+and are counted for retry; a completed pass does not claim every provider succeeded.
+
+This batch performs source discovery only: no missing-video acquisition search, IMVDb expansion,
+local-file traversal, monitoring changes or download submission. setlist.fm is never consulted.
+The discovery/review/validation/import/delivery stages above retain their existing requirements.
+
+## Live starting points and on-request references (2026-10-23)
+
+Confirm shared MusicBrainz artist → resolve artist/VEVO links → existing shared source collection
+→ independently retain MV observations and enabled Live candidates → retain bounded MusicBrainz
+Live releases/broadcasts/direct performer events as search leads → show a short starting list
+on first Live entry and artist opening. Display choice never gates background persistence.
+Progress and partial errors are visible; retries retain prior data and dismissed suggestions.
+General enablement and installed capability gate new Live preparation/searches, preserving data.
+
+Choose Review video for download → create/reuse exact-source pending recording and independent
+unknown-date/place performance → normal artist/occasion and moving-video review → accepted source
+→ existing acquisition, validation, import and exact playback-server delivery confirmation.
+Choose Open performance search → create/reuse a reference identity → explicitly Search videos
+now → normal candidate review and remaining stages. Release/publication dates stay evidence;
+they never populate a performance date. Opening a lead starts no provider video search/download.
+
+setlist.fm: user opens artist discovery controls → explicitly requests one history page → provider
+budget/cache/authentication checks → save reference results → optionally request another page.
+Opening Live, adding artists, monitoring and old metadata cursors never fetch or traverse history.
+This supersedes automatic metadata traversal described in the historical Unified Live section.
+Existing saved references/rules and credentials are retained; monitoring uses saved performances.
+See [implementation and recovery](live-starting-inventory.md).
+
 ## Artist-first Live browsing (2026-10-22)
 
 Select Live mode → retain the shared artist index, letter rail, name/genre filters and artist list

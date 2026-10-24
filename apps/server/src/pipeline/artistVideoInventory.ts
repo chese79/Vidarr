@@ -1,4 +1,5 @@
 import { prisma, logActivity } from '../db/client.js';
+import { prepareLiveStartingInventory } from '../live/startingInventory.js';
 import { refreshArtistMetadata } from './metadataRefresh.js';
 import { scanLocalVideoCandidates } from './localVideoReview.js';
 import { syncYoutubeSource } from './youtubeSync.js';
@@ -91,6 +92,8 @@ async function runCollection(
       await logActivity('warn', `${source}:local`, error);
     }
   }
+  try { await prepareLiveStartingInventory(artistId); }
+  catch (error) { await logActivity('warn', `${source}:live-start`, error); }
   await prisma.artist.update({ where: { id: artistId }, data: {
     videoInventoryCheckedAt: new Date(), videoInventoryError: errors.join('; ') || null,
     videoInventoryStatus: errors.length ? 'partial' : 'complete',

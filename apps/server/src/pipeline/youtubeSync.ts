@@ -1,4 +1,6 @@
 import { prisma } from '../db/client.js';
+import { liveEnabled } from '../live/capability.js';
+import { saveLiveUpload } from '../live/startingInventory.js';
 import { discoverYoutubeChannel, type DiscoveredYoutubeVideo } from '../providers/youtube/musicDiscovery.js';
 import { parseArtistAndTitle } from './bulkImport.js';
 import { excludedMusicVideoTitleReason } from './youtubeValidation.js';
@@ -26,6 +28,7 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
   const isInitialSync = source.lastPolledAt === null;
   const discovery = await discoverYoutubeChannel(source.url);
   const videos = discovery.videos;
+  const collectLive = await liveEnabled();
   const exclusions = await loadScanExclusions(source.artistId);
   const existing = await prisma.musicVideo.findMany({
     where: { artistId: source.artistId }, select: { id: true, youtubeVideoId: true, sourcePublishedAt: true },
@@ -47,6 +50,10 @@ export async function syncYoutubeSource(sourceId: number): Promise<YoutubeSyncRe
   for (const video of videos) {
     const parsedForExclusion = parseArtistAndTitle(video.title, source.artist.name);
     if (isScanExcluded(exclusions, source.artistId, { youtubeVideoId: video.youtubeVideoId, title: parsedForExclusion.title })) continue;
+    const previousReview = reviewByYoutubeId.get(video.youtubeVideoId);
+    if (collectLive && (!previousReview?.artistId || previousReview.artistId === source.artistId)
+      && !(previousReview?.decision === 'rejected' && !previousReview.reason?.startsWith('Title indicates live'))
+      && !byYoutubeId.has(video.youtubeVideoId)) await saveLiveUpload(source.artistId, video, source.url);
     const catalogVideo = byYoutubeId.get(video.youtubeVideoId);
     if (catalogVideo) {
       if (video.sourcePublishedAt && !catalogVideo.sourcePublishedAt) await prisma.musicVideo.update({

@@ -53,10 +53,38 @@ a {
 .catalog-mode-switch { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .catalog-mode-switch button[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalog-mode-switch > span { color: var(--text-muted); font-size: .85rem; }
-.catalog-live { color-scheme: light; --bg: #e6e8eb; --bg-elevated: #f5f6f8; --text: #14161a; --text-muted: #4c535e; --border: #30343b; --surface-divider: #b6bbc4; --accent: #234fa8; --button-bg: #234fa8; --status-missing: #855210; --status-queued: #505969; --status-downloading: #234fa8; --status-failed: #a32137; --status-review: #704095; color: var(--text); background: var(--bg); }
+.catalog-live {
+  color-scheme: dark;
+  --bg: #222216;
+  --bg-elevated: #303024;
+  --text: #ffffe5;
+  --text-muted: #c6c6a4;
+  --border: #4f8cff;
+  --surface-divider: #344e77;
+  --accent: #ffffc5;
+  --button-bg: #68621e;
+  --status-downloading: #ffffc5;
+  color: var(--text);
+  background: var(--bg);
+}
+/* Both has its own palette, including any embedded Live panels. */
+.catalog-both, .catalog-both .catalog-live {
+  color-scheme: dark;
+  --bg: #291923;
+  --bg-elevated: #392331;
+  --text: #fff0f8;
+  --text-muted: #d6acc4;
+  --border: #4f8cff;
+  --surface-divider: #344e77;
+  --accent: #ff008e;
+  --button-bg: #9d245f;
+  --status-downloading: #ff84c8;
+  color: var(--text);
+  background: var(--bg);
+}
 section.catalog-live { padding: 1.25rem; margin-top: 1.5rem; border: 1px solid var(--border); border-radius: 8px; }
-.catalog-live .sidebar .brand { color: var(--text); }
-.catalog-live .new-artist { color: #9b1460; }
+.catalog-live .sidebar .brand, .catalog-both .sidebar .brand { color: var(--text); }
+.catalog-live .new-artist, .catalog-both .new-artist { color: #ff9bce; }
 
 .sidebar {
   display: flex;
@@ -743,29 +771,34 @@ button.add-new-artist { background: #2563eb; border: 1px solid var(--border); }
 .artist-videos-header input { min-width: 180px; }
 .live-monitoring-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 15rem);
   grid-template-rows: auto 1fr;
   grid-template-areas: "fields selectors" "actions selectors";
-  gap: 1rem 2rem;
+  gap: .75rem 1.5rem;
   align-items: start;
 }
 .live-monitoring-fields {
   grid-area: fields;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  max-width: 36rem;
+  grid-template-columns: repeat(2, minmax(0, 12rem));
+  gap: .65rem 1rem;
+  max-width: 25rem;
 }
 .live-monitoring-fields > label:first-child { grid-column: 1 / -1; }
-.live-monitoring-selectors { grid-area: selectors; display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.live-monitoring-selectors { grid-area: selectors; display: flex; flex-direction: column; gap: .65rem; min-width: 0; width: 100%; max-width: 15rem; justify-self: end; }
 .live-monitoring-layout label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
-.live-monitoring-layout input, .live-monitoring-layout select { width: 100%; min-width: 0; box-sizing: border-box; }
-.live-monitoring-fields input[type="number"] { max-width: 8rem; }
+.live-monitoring-layout input, .live-monitoring-layout select { width: 100%; min-width: 0; box-sizing: border-box; font-size: .875rem; line-height: 1.25; padding: .35rem .5rem; }
+.live-monitoring-fields > label:first-child input { max-width: 20rem; }
+.live-monitoring-fields input[type="number"] { max-width: 5rem; }
 .live-monitoring-actions { grid-area: actions; min-width: 0; }
-@media (max-width: 1100px) { .live-monitoring-fields { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1100px) { .live-monitoring-fields { grid-template-columns: minmax(0, 12rem); } }
 @media (max-width: 800px) {
   .live-monitoring-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "fields" "selectors" "actions"; }
   .live-monitoring-fields { max-width: none; }
+  .live-monitoring-selectors { justify-self: start; }
 }
 @media (max-width: 1100px) { .validation-policy { grid-template-columns: repeat(4, minmax(0, 1fr)); } .validation-policy > div { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .validation-explanations { grid-template-columns: 1fr; } .validation-policy { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.live-starting-view { margin: 1rem 0; }
+.live-start-item { border-top: 1px solid var(--border, #77808b); padding: .65rem 0; }
+.live-start-item h4 { margin: 0 0 .3rem; }

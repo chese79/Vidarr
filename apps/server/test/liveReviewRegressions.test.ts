@@ -93,7 +93,7 @@ it('protects another recording owning the same physical file through an equivale
  expect((await prisma.recordingPart.findUniqueOrThrow({where:{id:other.id}})).available).toBe(true);
  expect(await fs.stat(file).then(()=>true,()=>false)).toBe(true);
 });
-it('pages complete history with an upper date bound and repairs old upper-year cursors',async()=>{
+it('never traverses setlist.fm in background, including existing active rules and old cursors',async()=>{
  await prisma.liveConfiguration.update({where:{id:1},data:{setlistApiKey:'fixture-key'}});
  const rule=await prisma.liveMonitoringRule.create({data:{artistId,filters:JSON.stringify(MonitoringInput.parse({artistId,to:'2025'}))}});
  await prisma.liveSearchJournal.create({data:{key:`metadata-cursor:${rule.id}`,provider:'metadata-cursor',payload:JSON.stringify({year:2025,page:1,refreshAfter:'2099-01-01'}),expiresAt:new Date('2099-01-01')}});
@@ -103,9 +103,9 @@ it('pages complete history with an upper date bound and repairs old upper-year c
  try {
   await runLiveMetadataMonitoring();
   const journal=await prisma.liveSearchJournal.findUniqueOrThrow({where:{key:`metadata-cursor:${rule.id}`}});
-  expect(JSON.parse(journal.payload!).year).toBeUndefined();
-  expect(fetcher.mock.calls[0][0]).not.toContain('year=');
-  expect(await prisma.livePerformance.count({where:{setlistFmId:'older'}})).toBe(1);
+  expect(JSON.parse(journal.payload!).year).toBe(2025);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(await prisma.livePerformance.count({where:{setlistFmId:'older'}})).toBe(0);
   expect(await prisma.livePerformance.count({where:{setlistFmId:'newer'}})).toBe(0);
  } finally {vi.unstubAllGlobals();}
 });

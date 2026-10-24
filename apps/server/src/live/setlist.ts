@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { requireLiveEnabled } from './capability.js';
 import { prisma } from '../db/client.js';
 import { rememberSecrets } from '../security/redact.js';
 import { DAY, LiveError, liveConfiguration } from './policy.js';
@@ -21,6 +22,7 @@ let requests: Promise<unknown> = Promise.resolve();
 // Serialize transport access so concurrent manual and scheduled work share the provider limit.
 async function transport(resource: string, ruleId?: number) {
   const request = requests.catch(() => {}).then(async () => {
+    await requireLiveEnabled();
     const { row } = await liveConfiguration();
     if (!row?.setlistApiKey || row.setlistPaused) throw new LiveError('Configure or correct the setlist.fm API key in Live settings');
     if (row.providerRetryAt && row.providerRetryAt > new Date()) throw new LiveError('setlist.fm is cooling down; retry after the displayed provider delay');
@@ -62,6 +64,7 @@ async function transport(resource: string, ruleId?: number) {
 }
 
 export async function discoverSetlists(artistId: number, page = 1, date?: string, scope?: { year?: number; tour?: string; from?: string; to?: string; ruleId?: number }) {
+  await requireLiveEnabled();
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
   if (!artist.musicbrainzArtistId || artist.musicbrainzMatchStatus !== 'confirmed') throw new LiveError('Confirm the shared MusicBrainz artist first');
   const parameters = new URLSearchParams({ artistMbid: artist.musicbrainzArtistId, p: String(page) });

@@ -1,5 +1,24 @@
 # Vidarr product vision
 
+Catalog colors identify the selected view using the primary logo colors: Music Videos retains
+charcoal/blue, Live & Concerts uses pale yellow, and Both uses magenta, including embedded Live
+panels. Live and Both share blue border accents. The text labels
+and pressed selection remain visible. Shared unfiltered utility screens retain the neutral theme.
+
+Live opens with useful, bounded starting points rather than an unmatched-performance backlog.
+Shared artist/VEVO channel scans save Live video candidates alongside MV observations when
+Settings → General → Library → Enable Live & Concerts and the installed capability are active.
+The selected catalog view never controls discovery/persistence. The Live artist index highlights
+five artists with discoveries; each artist shows five video candidates and five ranked
+MusicBrainz Live release/broadcast/event leads, with review/search actions and optional paged
+exploration/dismissal. References remain discovery inventory until explicitly opened, not
+missing-video obligations or automatically accepted performances.
+
+setlist.fm is strictly on request: no automatic lookup/traversal on addition, Live entry,
+source checks or monitoring. Its explicit artist-level page action and manual linking remain.
+The existing scheduled metadata job is inert, including for previously active rules/cursors.
+See [Live starting inventory](live-starting-inventory.md).
+
 Live browsing retains the same artist index/list as music videos. Open or expand a confirmed
 artist before browsing or searching performances/recordings; there is no global Live search.
 Music-video ownership/missing-count filters do not hide artists in Live mode. Live controls use
