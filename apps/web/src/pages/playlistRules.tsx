@@ -1,6 +1,7 @@
 import { ActionButton } from '../components/ButtonFeedback';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { genreFilterOptions } from '../genreOptions';
 import type { MatchMode, PlaylistFilters } from '@vidarr/shared-types';
 
 // The editable form state behind a smart playlist's rules. Kept separate from
@@ -123,7 +124,8 @@ export function PlaylistRuleFields({ draft, onChange, targetConnectorId, idPrefi
     queryFn: () => api.musicVideos.list(targetConnectorId ? { playableConnectorId: targetConnectorId } : { playable: true }),
   });
 
-  const genres = [...new Set((artists.data ?? []).flatMap((a) => a.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? []))].sort();
+  const genreStats = useQuery({ queryKey: ['genreStats', 1], queryFn: () => api.genres.stats(1) });
+  const genres = genreFilterOptions(genreStats.data, artists.data ?? []);
   const directors = [...new Set((playable.data ?? []).map((v) => v.director).filter((v): v is string => Boolean(v)))].sort();
 
   return (
@@ -192,7 +194,7 @@ export function PlaylistRuleFields({ draft, onChange, targetConnectorId, idPrefi
           style={{ minWidth: 180 }}
         />
         <span className="empty-state" style={{ padding: 0 }}>
-          matches artist or video genre, partial match
+          Broad genres include sub-genres; specific labels and aliases match exactly. Uses artist genres and retained video tags.
         </span>
       </div>
 

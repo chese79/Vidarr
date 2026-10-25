@@ -39,6 +39,31 @@ describe('genre routes', () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/genres/stats' })).statusCode).toBe(401);
   });
 
+  it('uses the same broad group in statistics, Library filtering and pagination', async () => {
+    const a = await confirmed('Alpha Trip Hop'); const b = await confirmed('Beta House'); const c = await confirmed('Gamma Rock');
+    for(const [artist, genre] of [[a,'trip hop'],[b,'house'],[c,'rock']] as const) await app.inject({method:'PUT',url:`/api/v1/artist/${artist.id}/genres`,headers:authHeaders(),payload:{genres:[genre]}});
+    const stats=(await app.inject({url:'/api/v1/genres/stats',headers:authHeaders()})).json();
+    expect(stats.genres.find((g: {name:string})=>g.name==='electronic').artistCount).toBe(2);
+    const page=(await app.inject({url:'/api/v1/artist/summary?genre=Electronic&hideWithoutVideos=false&pageSize=1',headers:authHeaders()})).json();
+    expect(page.total).toBe(2); expect(page.items).toHaveLength(1);expect(page.availableLetters).toEqual(['A','B']);
+    const exact=(await app.inject({url:'/api/v1/artist/summary?genre=trip%20hop&hideWithoutVideos=false',headers:authHeaders()})).json();
+    expect(exact.items.map((x:{id:number})=>x.id)).toEqual([a.id]);
+  });
+
+  it('filters a broad genre containing more artists than SQLite parameter limits', async () => {
+    await prisma.artist.createMany({data:Array.from({length:1005},(_,i)=>({name:`Large ${i}`,sortName:`Large ${i}`,rootFolderId,qualityProfileId,genre:'trip hop',musicbrainzMatchStatus:'confirmed',musicbrainzArtistId:`00000000-0000-4000-8000-${i.toString(16).padStart(12,'0')}`}))});
+    const response=await app.inject({url:'/api/v1/artist/summary?genre=electronic&hideWithoutVideos=false&pageSize=10',headers:authHeaders()});
+    expect(response.statusCode).toBe(200);expect(response.json().total).toBe(1005);expect(response.json().items).toHaveLength(10);
+  });
+
+  it('does not mark lower-priority same-name source candidates as contributing', async () => {
+    const artist=await confirmed('Source Priority');
+    await prisma.artistGenre.create({data:{artistId:artist.id,name:'rock',level:'genre',source:'musicbrainz',votes:9}});
+    const result=(await app.inject({method:'PUT',url:`/api/v1/artist/${artist.id}/genres`,headers:authHeaders(),payload:{genres:['rock']}})).json();
+    expect(result.sources.user[0].inEffect).toBe(true);expect(result.sources.musicbrainz[0].inEffect).toBe(false);
+    expect(await prisma.artistGenre.count({where:{artistId:artist.id}})).toBe(2);
+  });
+
   it('404s for an unknown artist on every artist genre route', async () => {
     for (const [method, url] of [['GET', '/api/v1/artist/999/genres'], ['PUT', '/api/v1/artist/999/genres'], ['POST', '/api/v1/artist/999/genres/refresh']] as const) {
       const res = await app.inject({ method, url, headers: authHeaders(), payload: method === 'PUT' ? { genres: ['rock'] } : undefined });

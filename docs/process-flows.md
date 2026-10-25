@@ -1,5 +1,26 @@
 # Process flows and consistency review
 
+## Consistent genres and playlist generation (2026-10-25)
+
+View effective artist genres with source attribution → choose a broad group (including its mapped
+subgenres) or a normalized specific label → Library applies the same hierarchy before counts,
+letters and pagination (genre-page links explicitly include artists without videos so their totals
+match the group) → optionally open Create playlist with that genre prefilled → choose the
+playback library/count/order and active rules → Generate acknowledges the request and refreshes
+inventory/matches available videos → review the saved membership → explicitly Push → confirm the
+target server publication. Retained video tags use the same matcher; available-video membership
+and artist-based genre counts remain different measures. Existing static membership is retained;
+smart rules use the matcher only on regeneration. Failures remain visible and retryable.
+
+Live mode offers Generate music-video playlist as an explicit mode switch, preserving the reviewed
+recording-to-static-playlist flow for Live. It never silently adds unreviewed Live discoveries to
+generated playlists. If the current media filter hides every saved playlist, explain that state
+and offer Show all playlists. Loading/failure is not reported as an empty collection.
+
+Genre accuracy/cleanup: inspect source candidates and effective labels → preserve source precedence
+and manual edits → review advisory alias/small-group hints → explicitly edit an artist if desired.
+No hint, page visit or provider refresh performs mass consolidation or removes stored candidates.
+
 ## Existing-artist source population (2026-10-23)
 
 Explicitly request collection for all existing artists → snapshot confirmed MusicBrainz artist IDs

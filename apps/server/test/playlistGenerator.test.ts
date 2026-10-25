@@ -99,7 +99,7 @@ describe('generatePlaylistFromFilters', () => {
     expect(items[0].musicVideoId).toBe(inRange.id);
   });
 
-  it('matches genre as a substring against either video genre or artist genre', async () => {
+  it('matches broad genres through mapped artist or retained video subgenres', async () => {
     const artist = await createArtist(rootFolderId, qualityProfileId, { genre: 'Album Rock' });
     const viaArtistGenre = await createMusicVideo(artist.id, { title: 'A', hasFile: true, genre: null });
     await createMusicVideoFile(viaArtistGenre.id, { path: '/a.mp4' });
@@ -113,6 +113,15 @@ describe('generatePlaylistFromFilters', () => {
 
     const result = await generatePlaylistFromFilters('Test', { genre: 'rock' }, 'all');
     expect(result.matchedCount).toBe(2);
+  });
+
+  it('includes Electronic children without relying on text substrings', async () => {
+    const artist = await createArtist(rootFolderId, qualityProfileId, { name: 'Trip Hop Artist', genre: 'trip hop' });
+    await createMusicVideo(artist.id, { title: 'Included', hasFile: true });
+    const other = await createArtist(rootFolderId, qualityProfileId, { name: 'Custom Artist', genre: 'electronicity' });
+    await createMusicVideo(other.id, { title: 'Excluded', hasFile: true });
+    expect((await generatePlaylistFromFilters('Electronic', { genre: 'electronic' }, 'all')).matchedCount).toBe(1);
+    expect((await generatePlaylistFromFilters('No substring', { genre: 'trip' }, 'all')).matchedCount).toBe(0);
   });
 
   it('filters by minimum play count, treating a missing play count as 0', async () => {

@@ -1,6 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { MUSICBRAINZ_GENRES } from '../src/data/musicbrainzGenres.js';
-import { BROAD_GENRES, classifyGenre, isOfficialGenre, normalizeGenreName, parseGenreList } from '../src/pipeline/genreTaxonomy.js';
+import { BROAD_GENRES, classifyGenre, isOfficialGenre, matchesGenre, normalizeGenreName, parseGenreList } from '../src/pipeline/genreTaxonomy.js';
+
+describe('consistent genre matching', () => {
+  it('includes mapped children even when their names do not contain their parent', () => {
+    expect(matchesGenre('trip hop, drum and bass', 'Electronic')).toBe(true);
+    expect(matchesGenre('shoegaze', 'rock')).toBe(true);
+    expect(matchesGenre('electronicity', 'electronic')).toBe(false);
+  });
+  it('normalizes aliases and keeps specific and custom labels exact', () => {
+    expect(matchesGenre('Hip-Hop', 'rap')).toBe(true);
+    expect(matchesGenre('synthpop', 'synth-pop')).toBe(true);
+    expect(matchesGenre('dream pop', 'dream')).toBe(false);
+    expect(matchesGenre('space ska', 'space ska')).toBe(true);
+    expect(matchesGenre(null, 'rock')).toBe(false);
+  });
+});
 
 describe('genre vocabulary', () => {
   it('bundles the MusicBrainz list, lowercase and de-duplicated', () => {

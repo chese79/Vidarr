@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { GenreStats } from '@vidarr/shared-types';
 import { api } from '../api/client';
+import { CatalogLink } from '../components/CatalogMode';
 
 const THRESHOLDS = [1, 2, 3, 5, 10];
 
 function libraryLink(genre: string) {
-  return `/?genre=${encodeURIComponent(genre)}`;
+  return `/?genre=${encodeURIComponent(genre)}&hideWithoutVideos=false`;
 }
 
 export function GenreStatsView({ stats, threshold, onThreshold }: {
@@ -41,7 +42,8 @@ export function GenreStatsView({ stats, threshold, onThreshold }: {
             {!genre.isOther && (
               <p className="empty-state" style={{ padding: '4px 0' }}>
                 {genre.directArtistCount} tagged &quot;{genre.name}&quot; directly
-                {genre.directArtistCount > 0 && <> · <Link to={libraryLink(genre.name)}>Show in Library</Link></>}
+                {' · '}<Link to={libraryLink(genre.name)}>Browse {genre.name}, including sub-genres</Link>
+                {' · '}<CatalogLink catalog="musicVideos" to={`/playlists?genre=${encodeURIComponent(genre.name)}`}>Create playlist</CatalogLink>
               </p>
             )}
             {genre.subgenres.length > 0 ? (
@@ -54,7 +56,7 @@ export function GenreStatsView({ stats, threshold, onThreshold }: {
                       <td>{sub.artistCount}</td>
                       <td>{sub.percentOfArtists}%</td>
                       <td>{sub.percentOfParent}%</td>
-                      <td><Link to={libraryLink(sub.name)}>Show in Library</Link></td>
+                      <td><Link to={libraryLink(sub.name)}>Show in Library</Link>{' · '}<CatalogLink catalog="musicVideos" to={`/playlists?genre=${encodeURIComponent(sub.name)}`}>Create playlist</CatalogLink></td>
                     </tr>
                   ))}
                 </tbody>
@@ -115,6 +117,7 @@ export default function GenresPage() {
   return (
     <div>
       <div className="page-header"><h2>Genres</h2></div>
+      <p>Browse a broad genre and its sub-genres, or create a music-video playlist from the same group. Broad groups are Vidarr&apos;s browsing categories; source labels and your edits are preserved.</p>
       {stats.isLoading && <p className="empty-state" role="status">Loading genres…</p>}
       {stats.error && <p className="empty-state" role="alert">{(stats.error as Error).message}</p>}
       {stats.data && <GenreStatsView stats={stats.data} threshold={threshold} onThreshold={setThreshold} />}

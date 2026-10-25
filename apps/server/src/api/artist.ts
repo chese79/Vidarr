@@ -13,7 +13,7 @@ import { prisma, logActivity } from '../db/client.js';
 import { sortNameFor, normalizeTitle } from '../pipeline/normalize.js';
 import { refreshArtistMetadata } from '../pipeline/metadataRefresh.js';
 import { matchStandardGenre } from '../pipeline/genreMatch.js';
-import { setUserGenres } from '../pipeline/artistGenres.js';
+import { genreArtistIds, setUserGenres } from '../pipeline/artistGenres.js';
 import { parseGenreList } from '../pipeline/genreTaxonomy.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
@@ -304,7 +304,9 @@ export async function artistRoutes(app: FastifyInstance) {
   // total, availableLetters) rather than a single shared temp table — still
   // entirely inside SQLite over indexed FKs, and vastly cheaper than the
   // previous approach of loading every artist's full video/file/queue graph
-  // into JS on every request.
+  // into JS on every request. A genre filter resolves only lightweight artist/
+  // provenance rows first, using the same effective hierarchy as genre statistics;
+  // the resulting IDs are applied in SQL before counts, letters and pagination.
   //
   // A video counts as "available" if it has a local file OR is matched
   // (`LibraryVideo.musicVideoId`) to a still-`available` row synced from an
@@ -328,10 +330,10 @@ export async function artistRoutes(app: FastifyInstance) {
     if (query.search) {
       baseConditions.push(Prisma.sql`a."name" LIKE ${'%' + escapeLikeTerm(query.search) + '%'} ESCAPE '\\'`);
     }
-    if (query.genre === '__unknown__') {
-      baseConditions.push(Prisma.sql`(a."genre" IS NULL OR TRIM(a."genre") = '')`);
-    } else if (query.genre) {
-      baseConditions.push(Prisma.sql`(',' || LOWER(REPLACE(a."genre", ', ', ',')) || ',') LIKE ${'%,' + query.genre.toLowerCase() + ',%'}`);
+    if (query.genre) {
+      const genreIds = await genreArtistIds(query.genre);
+      // One bound JSON value avoids SQLite's parameter limit in large genres.
+      baseConditions.push(Prisma.sql`a."id" IN (SELECT CAST(value AS INTEGER) FROM json_each(${JSON.stringify(genreIds)}))`);
     }
     if (query.monitored) baseConditions.push(Prisma.sql`a."monitored" = ${query.monitored === 'true' ? 1 : 0}`);
     if (query.musicbrainzStatus) baseConditions.push(Prisma.sql`a."musicbrainzMatchStatus" = ${query.musicbrainzStatus}`);

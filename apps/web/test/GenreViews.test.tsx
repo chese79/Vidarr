@@ -88,6 +88,14 @@ const stats: GenreStats = {
 describe('GenreStatsView', () => {
   const render = (s: GenreStats) => renderToStaticMarkup(<MemoryRouter><GenreStatsView stats={s} threshold={1} onThreshold={() => {}} /></MemoryRouter>);
 
+  it('links complete broad groups and specific subgenres to browsing and generation', () => {
+    const html=render({...stats,genres:stats.genres.map(g=>({...g,directArtistCount:0}))});
+    expect(html).toContain('Browse rock, including sub-genres');
+    expect(html).toContain('href="/?genre=rock&amp;hideWithoutVideos=false"');
+    expect(html).toContain('href="/playlists?genre=rock"');
+    expect(html).toContain('href="/playlists?genre=shoegaze"');
+  });
+
   it('shows counts and both percentages for genres and sub-genres', () => {
     const html = render(stats);
     expect(html).toContain('60 of 80 Library artists have a genre');

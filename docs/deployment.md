@@ -1,5 +1,35 @@
 # Deployment
 
+### Local genre and playlist usability release — 2026-10-25
+
+Image `vidarr-genres-20261025:final` (manifest
+`sha256:dd279f0ac2da232893e3cb7a0e620c5314ac2a8991873077ab5cf065705de5aa`)
+is healthy at `http://192.168.0.8:3434`. The
+[tracked request](requests/2026-10-25-genres-and-playlist-usability.md) records the matching,
+source-attribution, advisory cleanup and playlist UI contract. No schema migration was added.
+
+Verification: 129 relevant backend tests and 41 web tests pass, with 16 affected UI tests rerun
+after the final group-link correction. Both Node 22 production builds pass. Browser checks confirm
+Live-to-generator navigation, prefilled Electronic rules, three-video generation with explicit
+publication, and 73 Electronic artists in complete Library browsing. Protected API checks match
+Electronic 73 and Rock 335 to genre statistics.
+
+Only Vidarr was recreated, preserving all four configuration/media/D-drive/staging mounts, exact
+environment, non-root user, working directory, explicit `192.168.0.8:3434` binding and restart
+policy. SQLite quick/foreign-key checks and original IDs match the offline backup: 3,051 artists,
+6,299 MusicVideo rows, 4,224 queue rows, 60,176 review candidates, 677 owned file records, 21 Live
+performances, 420 song occurrences, 6,300 recordings, 6,299 parts and 10 playlists (including the
+two explicitly named UI-verification playlists). Manual genre rows and selected general/connector/
+setlist configuration are unchanged. Staging retains 58 files. No media was moved or removed.
+
+Retain private backup volume `vidarr-backup-20261025-genres-playlists-final-6f84` and stopped
+rollback container `vidarr-rollback-20261025-genres-playlists-final-6f84`. That rollback is the
+intermediate genre release; the pre-feature image/container is retained as
+`vidarr-rollback-20261025-genres-playlists-6f84` with its separate offline backup. Rollback must
+reuse current mounts/environment rather than restore old data over newer work. Jellyfin and
+SABnzbd were not restarted. Private pending Jellyfin overlay helpers/state were restored into
+Vidarr's temporary directory after cutover; overlay activation remains a separate idle-only step.
+
 ### Local artist-first Live release — 2026-10-22
 
 Deployed source `4529a3b` with the MTV pause in `2b3be32` on local `main`, using

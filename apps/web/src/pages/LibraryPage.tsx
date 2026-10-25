@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { genreFilterOptions } from '../genreOptions';
 import type { ArtistSummary, VideoOwnership } from '@vidarr/shared-types';
 
 const RAIL_LETTERS = ['#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
@@ -286,12 +287,11 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
     queryKey: ['qualityProfiles'],
     queryFn: api.qualityProfiles.list,
   });
-  // Reuses the existing plain artist list purely to derive the genre filter's
-  // options — no new endpoint needed just for a distinct-values dropdown.
+  // Use the same effective labels and parent groups as Genres and playlists;
+  // the existing artist list remains a fallback while statistics are loading.
   const allArtists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
-  // An artist can carry several genres ("rock, shoegaze"); offer each one, not the
-  // joined string, since the server filter matches a single genre within the list.
-  const genreOptions = [...new Set((allArtists.data ?? []).flatMap((a) => a.genre?.split(',').map((g) => g.trim()).filter(Boolean) ?? []))].sort();
+  const genreStats = useQuery({ queryKey: ['genreStats', 1], queryFn: () => api.genres.stats(1) });
+  const genreOptions = genreFilterOptions(genreStats.data, allArtists.data ?? []);
 
   const canAdd = (rootFolders.data?.length ?? 0) > 0 && (qualityProfiles.data?.length ?? 0) > 0;
 

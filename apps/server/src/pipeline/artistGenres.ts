@@ -1,7 +1,7 @@
 import { prisma, logActivity } from '../db/client.js';
 import { lookupMusicBrainzArtist } from '../providers/metadata/musicbrainz.js';
 import { getEnabledProviders } from './recommendations.js';
-import { BROAD_GENRES, classifyGenre, parseGenreList, type GenreLevel } from './genreTaxonomy.js';
+import { BROAD_GENRES, classifyGenre, matchesGenre, parseGenreList, type GenreLevel } from './genreTaxonomy.js';
 
 // Where a genre value came from. Several sources are stored side by side
 // (ArtistGenre rows) so the user can see and judge them; `selectEffective`
@@ -389,6 +389,13 @@ export async function getGenreStats(smallThreshold = 1): Promise<GenreStats> {
   return buildGenreStats(await loadLibraryEffective(), smallThreshold);
 }
 
+export async function genreArtistIds(genre: string): Promise<number[]> {
+  const library = await loadLibraryEffective();
+  return [...library].filter(([, effective]) => genre === '__unknown__'
+    ? effective.length === 0
+    : matchesGenre(effective.map(g => g.name).join(', '), genre)).map(([id]) => id);
+}
+
 // ---- Per-artist editor view ----------------------------------------------
 
 export interface GenreView {
@@ -418,7 +425,7 @@ export async function getArtistGenreView(artistId: number): Promise<GenreView> {
 
   const sources: GenreView['sources'] = { user: [], connector: [], embedded: [], musicbrainz: [], lastfm: [] };
   for (const r of rows) {
-    sources[r.source].push({ name: r.name, level: r.level, parent: r.parent, votes: r.votes, inEffect: effectiveNames.has(r.name) });
+    sources[r.source].push({ name: r.name, level: r.level, parent: r.parent, votes: r.votes, inEffect: effective.some(g => g.name === r.name && g.sources.includes(r.source)) });
   }
   for (const list of Object.values(sources)) list.sort((a, b) => (b.votes ?? 0) - (a.votes ?? 0) || a.name.localeCompare(b.name));
 

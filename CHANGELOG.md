@@ -5,6 +5,21 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Consistent genres and playlist usability (2026-10-25)
+
+- Share broad-genre/subgenre and alias matching across Library and playlist rules; keep specific
+  labels exact, apply Library filtering before pagination, and avoid SQLite parameter limits.
+- Use canonical broad/subgenre choices in Library and playlist filters; link genre groups directly
+  into browsing and prefilled playlist generation. Group links include artists without videos so
+  Library totals match the genre page. Keep cleanup hints advisory and manual edits.
+- Correct source attribution so lower-priority same-name candidates are not marked in force.
+- Replace Live's disabled Generate control with an explicit switch to the music-video generator.
+  Explain playlists hidden by the current media filter and show loading, request progress and
+  retryable failures. Preserve generation, review, Push and publication confirmation stages.
+- No schema migration or automatic changes to existing saved playlist membership or genre data.
+- Verify 129 backend and 41 UI tests plus both production builds; deploy only Vidarr locally with
+  offline rollback backups, preserved configuration/catalog data and browser-confirmed generation.
+
 ### Music-video-only Jellyfin plugin (2026-10-24)
 
 - Add version 0.1.2 targeted registration through Jellyfin's public stream repository, avoiding

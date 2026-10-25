@@ -1,5 +1,6 @@
 import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useCatalogMode } from '../components/CatalogMode';
@@ -68,7 +69,9 @@ function GeneratePlaylistPanel() {
   const [regenerateIntervalMinutes, setRegenerateIntervalMinutes] = useState<number | null>(null);
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
   const [sortMode, setSortMode] = useState<'artist_title' | 'shuffle'>('shuffle');
-  const [draft, setDraft] = useState<RuleDraft>(emptyRuleDraft());
+  const [searchParams] = useSearchParams();
+  const [draft, setDraft] = useState<RuleDraft>(() => ({ ...emptyRuleDraft(),
+    enableGenre: Boolean(searchParams.get('genre')?.trim()), genre: searchParams.get('genre')?.trim() ?? '' }));
   const [result, setResult] = useState<string | null>(null);
   const [maxVideos, setMaxVideos] = useState<number | ''>(20);
   const defaults = useDefaultPlaybackLibrary();
@@ -155,12 +158,13 @@ function GeneratePlaylistPanel() {
         {smart && <ScheduleSelect value={regenerateIntervalMinutes} onChange={setRegenerateIntervalMinutes} />}
       </div>
       <p className="empty-state">Generate saves the playlist in Vidarr. Open it and Push to your playback library to publish it.{smart && ' Later membership changes republish to that library automatically.'}</p>
+      {generate.isPending && <p role="status">Refreshing the playback library and finding matching videos…</p>}
 
       <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix="generate" />
 
       </div>
       {result && (
-        <p className="empty-state" role="status">
+        <p className="empty-state" role={generate.isError ? 'alert' : 'status'}>
           {result}
         </p>
       )}
@@ -621,7 +625,7 @@ function PlaylistCard({ playlistId, onDeleted }: {
 }
 
 export default function PlaylistsPage() {
-  const { mode } = useCatalogMode();
+  const { mode, setMode } = useCatalogMode();
   const queryClient = useQueryClient();
   const [nameDraft, setName] = useState<string | null>(null);
   const [targetConnectorId, setTargetConnectorId] = useState<number | ''>('');
@@ -670,7 +674,7 @@ export default function PlaylistsPage() {
       {notice && <p className="empty-state" role={notice.kind === 'alert' ? 'alert' : 'status'}>{notice.text}</p>}
 
       {mode !== 'live' && <GeneratePlaylistPanel />}
-      {mode === 'live' && <><div className="form-row playlist-top-actions"><ActionButton disabled>Generate playlist</ActionButton><PlaylistPushAction /></div><p>Add reviewed Live &amp; Concerts recordings to a static playlist from their recording pages. Automatic filter generation is available for Music Videos.</p></>}
+      {mode === 'live' && <><div className="form-row playlist-top-actions"><ActionButton onClick={() => setMode('musicVideos')}>Generate music-video playlist</ActionButton><PlaylistPushAction /></div><p>Add reviewed Live &amp; Concerts recordings to a static playlist from their recording pages. Automatic filter generation is available for Music Videos; the button switches to that generator.</p></>}
       <details style={{ marginTop: 16, marginBottom: 16 }}><summary>Create an empty playlist manually</summary>
       <ActionForm className="form-row" onSubmit={handleSubmit}>
         <input
@@ -690,8 +694,13 @@ export default function PlaylistsPage() {
 
       </details>
 
-      {playlists.data?.length ? (
+      {playlists.isPending ? <p role="status">Loading playlists…</p> : playlists.isError ? <p role="alert">Unable to load playlists: {playlists.error.message}</p> : playlists.data?.length ? (
+        <>
+        {!playlists.data.some(p => !p.items.length || p.items.some(item => matchesCatalog(mode, item))) && <p role="status">Your saved playlists are hidden by the current media filter. <ActionButton className="secondary" onClick={() => setMode('both')}>Show all playlists</ActionButton></p>}
+        {
         playlists.data.filter(p => !p.items.length || p.items.some(item => matchesCatalog(mode, item))).map((p) => <PlaylistCard key={p.id} playlistId={p.id} onDeleted={handleDeleted} />)
+        }
+        </>
       ) : (
         <p className="empty-state">No playlists yet.</p>
       )}

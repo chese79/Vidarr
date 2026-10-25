@@ -1,6 +1,8 @@
 import { prisma } from '../db/client.js';
 import { MatchMode, PlaylistFiltersSchema } from '@vidarr/shared-types';
 import { normalizeTitle } from './normalize.js';
+import { matchesGenre } from './genreTaxonomy.js';
+import { loadLibraryEffective } from './artistGenres.js';
 import { createHash, randomInt } from 'node:crypto';
 
 export interface PlaylistFilters {
@@ -61,14 +63,11 @@ async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'an
   }
 
   if (filters.genre) {
-    // Substring match (not exact) so a broad term like "rock" matches a more
-    // specific stored value like "album rock" (e.g. from Spotify's genre
-    // taxonomy — see pipeline/genreMatch.ts).
-    const wantGenre = normalizeTitle(filters.genre);
+    const wantGenre = filters.genre;
+    const effective = await loadLibraryEffective();
     checks.push((v) => {
-      const videoGenre = v.genre ? normalizeTitle(v.genre) : '';
-      const artistGenre = v.artist.genre ? normalizeTitle(v.artist.genre) : '';
-      return videoGenre.includes(wantGenre) || artistGenre.includes(wantGenre);
+      const artistGenres = effective.get(v.artistId)?.map(g => g.name).join(', ') ?? v.artist.genre;
+      return matchesGenre(artistGenres, wantGenre) || matchesGenre(v.genre, wantGenre);
     });
   }
 

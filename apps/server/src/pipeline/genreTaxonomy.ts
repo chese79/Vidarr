@@ -122,6 +122,15 @@ export function isOfficialGenre(name: string): boolean {
   return OFFICIAL.has(name);
 }
 
+// One rule for browsing and playlists: a broad genre includes mapped children;
+// a specific/custom label matches its normalized identity, never a substring.
+export function matchesGenre(value: string | null | undefined, requested: string): boolean {
+  const wanted = normalizeGenreName(requested);
+  if (!wanted) return false;
+  return parseGenreList(value ?? null).some(name => name === wanted ||
+    (BROAD.has(wanted) && classifyGenre(name)?.parent === wanted));
+}
+
 export function classifyGenre(raw: string): ClassifiedGenre | null {
   const name = normalizeGenreName(raw);
   if (!name) return null;

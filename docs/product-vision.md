@@ -178,6 +178,21 @@ remains ahead of single-source candidates when the effective-genre caps apply. B
 backfill records each attempt independently of a successful refresh. Failed attempts cool down
 for ten minutes while later artists continue; stored candidates and success timestamps are retained.
 
+Genre statistics, Library filtering and playlist rules share normalized identities and the same
+mapped broad-genre hierarchy. Selecting a broad genre includes its mapped subgenres; selecting a
+specific or custom label matches that identity and spelling aliases rather than arbitrary text
+substrings. Retained legacy video genres use the same matcher for playlist compatibility. A source
+candidate is marked in force only when that source contributes under the precedence rules.
+Broad groups are Vidarr browsing categories, not a claim that MusicBrainz publishes a hierarchy.
+Counts remain artist counts, distinct from the available videos a playlist can contain.
+Cleanup suggestions stay advisory; no refresh or browsing action consolidates user labels.
+Genre pages link the complete group into Library and prefilled music-video playlist generation.
+
+In Live playlist view, Generate music-video playlist explicitly switches to the supported generator;
+it does not create a playlist until the user submits it. Hidden saved playlists are explained with
+a Show all playlists action. Generation reports library refresh/matching progress and failures,
+then membership review and Push remain required before a playlist appears on a playback server.
+
 ## Discovery and acquisition
 
 ### Validation/Quality policies
