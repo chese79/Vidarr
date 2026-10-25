@@ -1,9 +1,14 @@
 # mtv style info overlay
 
-Request date: 2026-10-23. Status: gathering requirements; implementation is not authorized
-by this requirements discussion. This reopens design evaluation, not the archived prototype.
+Request date: 2026-10-23. Historical requirements below were reset by the user on 2026-10-24.
+The fresh design prioritizes standard Jellyfin apps including official Roku. The user then
+authorized the recommended isolated subtitle/burn-in proof of concept. Subsequent plugin
+authorization and music-video-only scope are tracked in the
+[follow-on request](2026-10-24-jellyfin-mtv-plugin.md).
+See [current evidence and remaining verification](../../integrations/jellyfin-mtv-poc/README.md).
+Fields, styling and timing used in the fixture are test defaults, not finalized fresh requirements.
 
-## Confirmed requirements
+## Historical requirements before the reset
 
 - Display an MTV-style information block at the lower left of the playing music video.
 - Include artist, song title, album, music video release year, director and the literal `MTV` label.

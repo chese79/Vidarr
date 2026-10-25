@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup>
+  <TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+  <AssemblyName>Jellyfin.Plugin.Mtv</AssemblyName><RootNamespace>Jellyfin.Plugin.Mtv</RootNamespace>
+  <Version>0.1.2</Version><GenerateDocumentationFile>false</GenerateDocumentationFile>
+  <JellyfinRuntimePath Condition="'$(JellyfinRuntimePath)'==''">C:/Program Files/Jellyfin/Server</JellyfinRuntimePath>
+ </PropertyGroup>
+ <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+ <ItemGroup>
+  <Reference Include="MediaBrowser.Common"><HintPath>$(JellyfinRuntimePath)/MediaBrowser.Common.dll</HintPath><Private>false</Private></Reference>
+  <Reference Include="MediaBrowser.Model"><HintPath>$(JellyfinRuntimePath)/MediaBrowser.Model.dll</HintPath><Private>false</Private></Reference>
+  <Reference Include="MediaBrowser.Controller"><HintPath>$(JellyfinRuntimePath)/MediaBrowser.Controller.dll</HintPath><Private>false</Private></Reference>
+  <Reference Include="Jellyfin.Data"><HintPath>$(JellyfinRuntimePath)/Jellyfin.Data.dll</HintPath><Private>false</Private></Reference>
+  <Reference Include="Jellyfin.Database.Implementations"><HintPath>$(JellyfinRuntimePath)/Jellyfin.Database.Implementations.dll</HintPath><Private>false</Private></Reference>
+  <Reference Include="Jellyfin.Api"><HintPath>$(JellyfinRuntimePath)/Jellyfin.Api.dll</HintPath><Private>false</Private></Reference>
+ </ItemGroup>
+ <ItemGroup><EmbeddedResource Include="Configuration/configPage.html" /></ItemGroup>
+</Project>

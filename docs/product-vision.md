@@ -28,8 +28,14 @@ explains missing/paused configuration before a request. Blank input retains the 
 only its configured status is returned. Identity/content review,
 bounded budgets, validation and delivery confirmation remain required.
 
-MTV text overlays are paused for future development. Their prototype is isolated under
+The earlier native-client MTV overlay prototype is paused for future development and isolated under
 `future/mtv-overlay` and excluded from the application build and current deployment.
+The 2026-10-24 restart prioritizes standard Jellyfin clients including Roku. A separate
+[subtitle burn-in proof of concept](../integrations/jellyfin-mtv-poc/README.md) uses synthetic
+media and an isolated server; it does not reactivate or deploy the old native-client prototype.
+The follow-on [server plugin](../integrations/jellyfin-mtv-plugin/README.md) scopes generation and
+activation to typed music videos in selected music-video libraries. It must leave movies, TV and
+general user subtitle preferences untouched; playlist membership is not the activation boundary.
 
 Review queues use the same compact, expandable row pattern as the Library. Match Review is paged on the server so large observation sets remain quick to browse. The artist detail page keeps source diagnostics in a collapsed summary above the canonical video list.
 

@@ -60,6 +60,50 @@ never imply empty results. Saving a key establishes configuration, not successfu
 MTV overlay development is paused: archived source under `future/mtv-overlay` is excluded from
 current builds/deployment. Previous native-overlay flow below is historical, pending future work.
 
+The 2026-10-24 restart authorizes an isolated standard-client proof of concept: create synthetic
+media and timed ASS tracks → start a separate Jellyfin instance → discover subtitles and test
+selection/burn-in through playback APIs → inspect rendered timing and late seeking → verify
+physical Roku playback, playlist transitions and pause/resume → evaluate supported plugin
+activation. API success does not complete device verification. Subtitle-off selection is a
+control case: no selected track means no overlay. Production acquisition/review/delivery stages
+are unchanged. Stop only the recorded lab process after checking its command line; retain lab
+data for inspection. See [test and recovery steps](../integrations/jellyfin-mtv-poc/README.md).
+The user then authorized a production fixture test: snapshot server/user/library/playlist state
+→ checksum-copy only synthetic fixtures → register a separate test library → refresh only that
+test scope → verify ASS discovery → create the dedicated playlist → probe explicit subtitle burn-in
+→ user selects the track in Jellyfin on Roku → record physical playback outcomes. Preserve existing
+subtitle preferences; selecting a track differs from enabling Roku's global closed captions.
+Server/API evidence remains distinct from device confirmation. Recovery targets only the recorded
+test playlist/library and retains files/baseline until checked.
+An explicitly approved temporary default-selection diagnostic snapshots the user's current two
+subtitle fields → arms a five-minute rollback → applies Always/English → verifies server-side
+automatic track selection → user restarts the test queue → observes device behavior → restores
+and verifies the saved fields. Early completion requests early restoration. Recovery state is
+saved before mutation; unrelated current preferences are retained, and independent conflicting
+changes to the two controlled fields stop automatic overwrite for review.
+The subsequent approved plugin flow replaces temporary user-default changes: administrator selects
+music-video libraries/settings → explicit paged generation writes only owned ASS sidecars → public
+Jellyfin stream-repository registration appends the owned track without renumbering existing
+audio/video/foreign-subtitle streams → enabled playback filter selects only a matching owned MusicVideo
+track before negotiation → normal Jellyfin burn-in/transcoding → client verification. Movie/episode
+and unknown/alternate-source requests pass through unchanged. User subtitle defaults are never
+modified. Disabling stops automatic selection but retains generated tracks/backups for recovery.
+See [plugin scope and verification](requests/2026-10-24-jellyfin-mtv-plugin.md).
+For real-library rollout: snapshot exact inventory/configuration and media size/timestamps →
+check idle playback before plugin restart → verify standard Web/Roku playback → generate with
+activation off → report unreadable/unknown-duration files without inventing timing → confirm all
+valid tracks are indexed → enable selected music-video libraries → sample both explicit-source
+and omitted-source playback requests → confirm original libraries/playlists/preferences and media
+attributes are preserved. Web's omitted source ID is supplied only for an eligible primary video.
+An active session defers restart; it is never stopped implicitly. Recovery restores the saved
+prior plugin configuration and retains generated sidecars/ownership records for inspection.
+The 0.1.1 queued full-refresh indexing experiment is superseded by 0.1.2 targeted registration.
+After an interrupted experiment, retain the exact disabled configuration and manifest → load
+the tested release while idle → rerun generation to register unchanged owned files → verify every
+valid track and both playback request styles → activate. Independently confirmed user deletions
+are narrow baseline exceptions, never grounds for recreating deleted playlists or accepting
+unrelated missing data. Preserve the original baseline alongside any authorized exception copy.
+
 ## Button engagement and request feedback
 
 Activate an enabled button → immediately acknowledge the click → run existing validation and

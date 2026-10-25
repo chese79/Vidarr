@@ -1,6 +1,8 @@
 node_modules
 research/native-overlay-upstream
 integrations/jellyfin-native
+integrations/jellyfin-mtv-poc
+integrations/jellyfin-mtv-plugin
 future/mtv-overlay
 **/node_modules
 **/dist

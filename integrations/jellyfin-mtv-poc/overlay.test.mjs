@@ -1,0 +1,11 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { windows, time, literal, lines, generate } from './overlay.mjs';
+test('first and final six seconds use media time, not a playback timer',()=>assert.deepEqual(windows(240),[[0,600],[23400,24000]]));
+test('overlapping short-video windows merge into one cue',()=>{assert.deepEqual(windows(8),[[0,800]]);assert.deepEqual(windows(12),[[0,1200]]);});
+test('unknown and invalid duration cannot invent an outro',()=>{for(const d of [0,-1,NaN,Infinity,undefined])assert.throws(()=>windows(d));});
+test('centisecond endpoint stays within the video',()=>{assert.deepEqual(windows(20.129),[[0,600],[1412,2012]]);assert.equal(time(372345),'1:02:03.45');});
+test('missing fields disappear and album years are not substituted',()=>assert.deepEqual(lines({artist:'Adele',title:'Hello',albumYear:2015}),['Adele','Hello','MTV']));
+test('Jellyfin metadata supplies directors and item year',()=>assert.deepEqual(lines({Artists:['Test Artist'],Name:'Test Song',Album:'Test Album',ProductionYear:2026,People:[{Type:'Director',Name:'Test Director'}]}),['Test Artist','Test Song','Test Album','2026','Director: Test Director','MTV']));
+test('provider metadata cannot inject ASS override commands or extra cues',()=>{const text=literal('{\\p1}x\nDialogue: injected');assert(!text.includes('{'));assert(!text.includes('\\'));assert(!text.includes('\n'));});
+test('ASS uses a bottom-left style and exactly two timed events',()=>{const ass=generate({title:'Fixture'},24);assert.equal(ass.match(/^Dialogue:/gm).length,2);assert.match(ass,/0:00:18.00,0:00:24.00/);assert.match(ass,/,1,64,64,54,1/);});

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><title>MTV Music Video Info</title></head><body>
+<div id="mtvInfoPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+ <div data-role="content"><div class="content-primary">
+  <h1>MTV Music Video Info</h1>
+  <p>Generate small info subtitle tracks for selected music-video libraries, then enable automatic selection. Movie and TV playback and user subtitle defaults are unchanged. Overlays can require video transcoding. While enabled, the generated info track takes priority over other subtitle selections on eligible music videos.</p>
+  <form id="mtvForm">
+   <label class="checkboxContainer"><input is="emby-checkbox" type="checkbox" id="mtvEnabled"><span>Automatically select generated music-video overlays</span></label>
+   <fieldset><legend>Music-video libraries</legend><div id="mtvLibraries"></div></fieldset>
+   <label>Intro seconds <input is="emby-input" id="mtvIntro" type="number" min="0" max="60" step="0.1"></label>
+   <label>Outro seconds <input is="emby-input" id="mtvOutro" type="number" min="0" max="60" step="0.1"></label>
+   <label>Text size <input is="emby-input" id="mtvFont" type="number" min="12" max="64"></label>
+   <p><button is="emby-button" type="submit" class="raised button-submit">Save settings</button></p>
+  </form>
+  <p>Save library/timing settings first, then generate tracks. Regenerate after adding videos or editing their metadata. Generation keeps original video files and foreign subtitles intact.</p>
+  <button is="emby-button" id="mtvGenerate" type="button" class="raised">Generate / refresh info tracks</button>
+  <pre id="mtvStatus" role="status" style="white-space:pre-wrap"></pre>
+ </div></div>
+ <script>
+ (function(){const id='c9298ca5-50d5-4be6-8771-eae3b2bb8b86';let config,timer;
+ const page=document.querySelector('#mtvInfoPage'),status=page.querySelector('#mtvStatus');
+ const read=p=>ApiClient.getJSON(ApiClient.getUrl('MtvOverlay/'+p));
+ async function poll(){try{const s=await read('Status');status.textContent=JSON.stringify(s,null,2);if(s.Running)timer=setTimeout(poll,1500);}catch(e){status.textContent=String(e);}}
+ page.addEventListener('viewshow',async()=>{try{config=await ApiClient.getPluginConfiguration(id);page.querySelector('#mtvEnabled').checked=config.Enabled;page.querySelector('#mtvIntro').value=config.IntroSeconds;page.querySelector('#mtvOutro').value=config.OutroSeconds;page.querySelector('#mtvFont').value=config.FontSize;const list=page.querySelector('#mtvLibraries');list.replaceChildren();for(const lib of await read('Libraries')){const label=document.createElement('label');label.className='checkboxContainer';const input=document.createElement('input');input.type='checkbox';input.value=lib.Id;input.checked=config.LibraryIds.includes(lib.Id);input.dataset.mtvLibrary='true';const text=document.createElement('span');text.textContent=lib.Name;label.append(input,text);list.append(label);}await poll();}catch(e){status.textContent=String(e);}});
+ page.addEventListener('viewhide',()=>clearTimeout(timer));
+ page.querySelector('#mtvForm').addEventListener('submit',async event=>{event.preventDefault();try{const next={...config,Enabled:page.querySelector('#mtvEnabled').checked,LibraryIds:[...page.querySelectorAll('[data-mtv-library]:checked')].map(x=>x.value),IntroSeconds:Number(page.querySelector('#mtvIntro').value),OutroSeconds:Number(page.querySelector('#mtvOutro').value),FontSize:Number(page.querySelector('#mtvFont').value)};await ApiClient.updatePluginConfiguration(id,next);config=next;status.textContent='Settings saved.';}catch(e){status.textContent=String(e);}});
+ page.querySelector('#mtvGenerate').addEventListener('click',async()=>{const button=page.querySelector('#mtvGenerate');button.disabled=true;button.textContent='Starting…';try{await ApiClient.ajax({type:'POST',url:ApiClient.getUrl('MtvOverlay/Generate')});await poll();}catch(e){status.textContent=String(e);}finally{button.disabled=false;button.textContent='Generate / refresh info tracks';}});
+ })();
+ </script>
+</div></body></html>

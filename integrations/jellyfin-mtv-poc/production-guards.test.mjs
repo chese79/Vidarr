@@ -1,0 +1,11 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { assertBaseline,assertTestPath,normalizePath } from './production-guards.mjs';
+const media=String.raw`C:\lab\production-media`;
+const baseline={serverId:'expected',userId:'roku-user',mediaPath:media,userConfiguration:{SubtitleMode:'None'},libraries:[{id:'original',locations:['D:\\Music Videos']}]};
+const info={Id:'expected'},user={Id:'roku-user',Configuration:{SubtitleMode:'None'}},libraries=[{ItemId:'original',Locations:['D:\\Music Videos']}];
+test('baseline permits the expected server without changing subtitle-off preferences',()=>assert.doesNotThrow(()=>assertBaseline(baseline,info,user,libraries,media)));
+test('a different server or user cannot receive fixture mutations',()=>{assert.throws(()=>assertBaseline(baseline,{Id:'wrong'},user,libraries,media));assert.throws(()=>assertBaseline(baseline,info,{...user,Id:'wrong'},libraries,media));});
+test('changed preferences or missing original libraries stop deployment',()=>{assert.throws(()=>assertBaseline(baseline,info,{...user,Configuration:{SubtitleMode:'Always'}},libraries,media));assert.throws(()=>assertBaseline(baseline,info,user,[],media));});
+test('reused library names cannot point into real media or extra folders',()=>{assert.throws(()=>assertTestPath({Locations:['D:\\Music Videos']},media));assert.throws(()=>assertTestPath({Locations:[media,'D:\\Music Videos']},media));});
+test('Windows path casing and redundant separators do not create false collisions',()=>{assert.equal(normalizePath('C:\\\\LAB\\production-media'),normalizePath(media));assert.doesNotThrow(()=>assertTestPath({Locations:['c:\\LAB\\production-media']},media));});

@@ -5,6 +5,54 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Music-video-only Jellyfin plugin (2026-10-24)
+
+- Add version 0.1.2 targeted registration through Jellyfin's public stream repository, avoiding
+  full metadata refresh queues and preserving existing stream indexes and foreign subtitles.
+  Pass 30 core tests and final isolated-server registration/playback/default-preservation checks.
+  Stage the verified upgrade for an idle restart; keep real-library activation off until every
+  valid track is indexed. Retain only the two user-confirmed playlist deletions as baseline exceptions.
+- Add version 0.1.1 compatibility for Web playback requests without a media-source ID; keep the
+  primary-source choice scoped to owned music-video tracks. Verify both request styles in the
+  isolated server. Upgrade while retaining 0.1.0; defer restart during active Roku playback until
+  the user stops it and a fresh idle check passes. Visually verify Web intro/middle/outro and seeking.
+  Generate 4,266 real-library sidecars with exact inventory/configuration and media-attribute
+  snapshots; preserve the three unreadable MP4s without inventing outro timing.
+- Add an independent Jellyfin 12.3.0 plugin with administrator settings, paged owned-ASS generation
+  and a music-video-only playback selection hook. Preserve movie/TV negotiation and user subtitle
+  defaults; activation follows eligible videos rather than playlist context.
+- Protect foreign/edited subtitles, back up generated revisions, retain original video bytes and
+  fail open on ownership/lookup errors. Keep the component outside Vidarr's runtime/build context.
+- Pass 26 core tests and isolated-server movie/episode/default-preservation and administrator-access
+  checks. Install the verified plugin on idle production Jellyfin with activation limited to the
+  three synthetic **MTV Overlay Test** clips; automatic selection/burn-in negotiation passes while
+  user defaults, original libraries and playlists remain unchanged.
+- On 2026-10-25, record user-confirmed title display at both ends on official Roku through the new
+  plugin without manual subtitle selection, followed by Web 0.1.1 verification and the separately
+  authorized real-library rollout described above.
+
+### Isolated MTV subtitle proof of concept (2026-10-24)
+
+- Add the separately authorized production **MTV Overlay Test** library/playlist with two synthetic
+  clips. Verify existing library/playlist identities and user preferences, plus production ASS
+  burn-in, without installing a plugin or restarting Jellyfin. Add five production guard tests
+  (13 total POC tests). Physical Roku confirmation remains pending; subtitle selection is manual.
+- Record failed Roku trials: direct playback omitted burn-in, and forced transcoding still omitted
+  the subtitle filter. Add a synthetic embedded-ASS diagnostic to test subtitle packaging/index
+  selection while retaining the original test clips and avoiding video/audio re-encoding.
+- Add an explicitly approved, timed subtitle-default diagnostic with saved recovery state,
+  automatic rollback and four restoration tests (17 total POC tests). Distinguish server-side
+  automatic track selection from physical Roku success and verified restoration.
+- Record user-confirmed title display on official Roku with server-preselected embedded ASS.
+  Restore and independently verify the original None/empty-language defaults immediately afterward;
+  automatic plugin activation and remaining physical playback checks are still future work.
+
+- Add an independently runnable ASS generator, synthetic media setup and Jellyfin playback/seek/
+  selection probes using a separate local server. Preserve production media, configuration and clients.
+- Verify eight Node 22 tests, two Jellyfin 12.3.0 HLS burn-in streams, intro/middle/outro frames and
+  a late-seek segment. Record that subtitles-off prevents automatic activation; physical Roku
+  and full plugin integration remain unverified. Exclude lab files from Git and the Docker context.
+
 ### Catalog color schemes (2026-10-23)
 
 - Give Live & Concerts a pale-yellow palette and Both a separate magenta palette based on the logo.
