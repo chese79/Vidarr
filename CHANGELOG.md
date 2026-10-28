@@ -10,6 +10,8 @@ under **Unreleased** in the same commit as the change.
 - Use the same artist picture/name heading and catalog navigation for Music Videos and Live.
 - Match standard action-button dimensions by removing the blanket compact Live override; retain
   compact video-row controls where explicitly requested. Preserve authenticated artwork loading.
+- Pass the Node 22 web build and all 87 UI tests; install the combined appearance update locally
+  with verified health, served assets, artwork access and preserved data/operator state.
 
 ### Stronger borders and black Live background (2026-10-27)
 

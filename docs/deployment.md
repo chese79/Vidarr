@@ -1,5 +1,30 @@
 # Deployment
 
+### Local shared artist heading and appearance update — 2026-10-27
+
+The approved local trial now runs `vidarr-live-candidates-20261027:appearance`, manifest
+`sha256:8ebf340d52435487f09444dc964c0058b43bff14cd2cf77407b4c70870944fac`.
+This rebuilds web assets over the verified trial runtime; server code, schema and production
+dependencies are unchanged. Music Videos and Live share their artwork/name heading, catalog
+navigation and standard button sizing. Global selectors retain consistent geometry. Borders are
+two pixels, Music Videos uses vivid `#FFFF66`, and Live uses a black background with dark panels.
+
+The Node 22 production web build and all 87 UI tests pass, including Live artwork loading and
+object-URL cleanup. Only Vidarr was recreated. The active address is unchanged and healthy;
+read-only comparison with the offline backup passes catalog/review/recording IDs, queue accounting,
+credentials, playlist membership and SQLite integrity. Live search/pagination remains verified.
+The page's currently referenced JS/CSS assets contain the new heading and theme, and the
+authenticated artist-image endpoint returns an image. Retained older hashed assets are not
+evidence of the currently served theme. Visual browser acceptance is still not claimed.
+
+Retain `vidarr-backup-20261027-live-appearance-f5dcd6e` and the stopped, restart-disabled
+`vidarr-rollback-20261027-live-appearance-f5dcd6e`. Configuration/media/staging mounts and runtime
+environment are preserved. The old temporary operator archive was root-owned; its refresh as
+the app user failed, so all five current files were recovered directly from the retained prior
+container and restored with verified content hashes. Future archive refreshes should run as root
+and check each native-command exit status. No media or other service was changed, and this update
+has not been published.
+
 ### Local Live candidate trial build — 2026-10-27
 
 Branch `codex/live-discovery-rows` provides music-video-style compact, expandable Live discovery
