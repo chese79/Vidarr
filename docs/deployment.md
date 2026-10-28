@@ -17,13 +17,26 @@ ten filtered results, separate reference scope and zero promoted performances or
 reads. Built UI assets include the new candidate controls. Browser automation could not verify
 the current browser URL, so visual browser acceptance is not claimed.
 
-This build is not installed in the running service or published. Automatic approval review
-rejected the attempted active-service recreation because the request to test locally did not
-clearly authorize stopping/replacing the active installation. The existing genre/playlist service
-and public image remain unchanged. Obtain explicit installation authorization before cutover;
-use the existing offline backup and mount-preserving Vidarr-only procedure. Preserve the five
-private pending Jellyfin operator files from `/tmp`, as well as the persistent staging mount,
-and restore them after cutover. No schema change or Jellyfin restart is needed for this trial.
+After explicit user installation approval, this image is installed locally and healthy at
+`http://192.168.0.8:3434`. The earlier automatic-review rejection of service replacement was
+resolved by that approval; no public push or image publication was performed for this trial.
+
+The read-only post-install audit confirms original IDs for 3,051 artists, 7,182 music videos,
+678 owned files, 68,898 review candidates, 19,566 Live discoveries, 21 Live performances,
+420 song occurrences, 7,183 recordings, 7,182 parts and ten playlists. Queue entries are accounted
+for; credentials, exact playlist membership and SQLite integrity pass. Live HTTP checks verify
+bounded paging, title search, reference scope and new UI assets. Adele has 29 video candidates
+and 20 reference leads at verification. Visual browser acceptance remains unverified as above.
+
+All four mounts, environment, runtime user and working directory are unchanged. The configured
+and actual listener is explicitly `192.168.0.8:3434`; the previous restart policy is retained.
+Retain offline backup `vidarr-backup-20261027-live-candidates-9142378` and stopped rollback
+container `vidarr-rollback-20261027-live-candidates-9142378`, whose automatic restart is disabled.
+Docker Desktop rewrote that stopped container's binding to loopback with an empty host port;
+rollback must recreate the service using the preserved mounts/environment and explicit active
+address rather than trust the stopped binding. The five private pending Jellyfin operator files
+were restored with matching content hashes. Staging retains its persistent mount (58 files at
+backup). No schema change, media move, Jellyfin restart or SABnzbd restart occurred.
 
 ### Local genre and playlist usability release — 2026-10-25
 

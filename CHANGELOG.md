@@ -14,7 +14,9 @@ under **Unreleased** in the same commit as the change.
 - Preserve source/identity review, acquisition validation and delivery confirmation; expanding,
   searching and paging never approve candidates or submit downloads. No schema change is required.
 - Verify 16 backend and 86 UI tests, production builds and disposable-container HTTP/fixture checks.
-  Keep the image local and the active service unchanged pending explicit installation approval.
+  After explicit installation approval, install the local trial with verified backup/rollback,
+  preserved catalog, playlists, credentials, mounts, staging and pending overlay operator state.
+  Verify live candidate search/paging and service health; keep this trial off public images.
 
 ### Consistent genres and playlist usability (2026-10-25)
 
