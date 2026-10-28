@@ -15,6 +15,8 @@ under **Unreleased** in the same commit as the change.
   reuse acquisition/validation/import/server confirmation and preserve dismissals across rescans.
 - Keep song-only references separate from capture identity and release/upload dates separate from
   performance dates. Matching does not create performances or start downloads.
+- Install the verified local trial with catalog/configuration/operator state preserved; confirm
+  thumbnails and background matching progress. Temporary MusicBrainz failures remain retryable.
 
 
 ### Shared music-video and Live artist heading (2026-10-27)
