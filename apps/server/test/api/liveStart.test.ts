@@ -34,6 +34,21 @@ it('hides dismissed suggestions without deleting data or allowing cross-artist p
  expect(await prisma.liveDiscoveryItem.count()).toBe(1);
  expect(await prisma.recording.count()).toBe(0);
 });
+it('filters before counting and paging while preserving artist, kind and dismissal boundaries',async()=>{
+ await item();
+ await prisma.liveDiscoveryItem.createMany({data:[
+  {artistId,kind:'video',provider:'youtube',externalId:'concert-1',title:'Royal Hall Concert first',url:'https://example.test/1'},
+  {artistId,kind:'video',provider:'youtube',externalId:'concert-2',title:'Royal Hall Concert second',url:'https://example.test/2'},
+  {artistId,kind:'video',provider:'youtube',externalId:'dismissed',title:'Royal Hall Concert dismissed',url:'https://example.test/3',dismissed:true},
+  {artistId,kind:'reference',provider:'musicbrainz',externalId:'reference',title:'Royal Hall Concert reference',url:'https://example.test/4'},
+ ]});
+ const response=await app.inject({url:url('?kind=video&search=ROYAL%20HALL&limit=1&offset=1'),headers:authHeaders()});
+ expect(response.statusCode).toBe(200);expect(response.json()).toMatchObject({total:2,offset:1,limit:1});
+ expect(response.json().items.map((row:{title:string})=>row.title)).toEqual(['Royal Hall Concert second']);
+ expect((await app.inject({url:url('?search=not-found'),headers:authHeaders()})).json().total).toBe(0);
+ expect((await app.inject({url:url('?search='+ 'a'.repeat(201)),headers:authHeaders()})).statusCode).toBe(400);
+ expect(await prisma.livePerformance.count()).toBe(0);expect(await prisma.downloadQueueItem.count()).toBe(0);
+});
 it('persists global enablement, omits mutable capability input and blocks preparation when disabled',async()=>{
  const save=await app.inject({method:'PUT',url:'/api/v1/config',headers:authHeaders(),payload:{liveEnabled:false,liveAvailable:false}});
  expect(save.json()).toMatchObject({liveEnabled:false,liveAvailable:true});

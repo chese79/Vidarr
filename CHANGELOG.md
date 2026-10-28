@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Live discovery candidate rows (2026-10-27)
+
+- Present artist-scoped Live video and MusicBrainz reference discoveries as compact, expandable
+  review rows matching music-video candidates, with source details and explicit review/dismiss actions.
+- Add bounded title search before counts/pagination and display 25 candidates per page, with
+  independent paging, visible loading/failures and retry. Retain existing API defaults.
+- Preserve source/identity review, acquisition validation and delivery confirmation; expanding,
+  searching and paging never approve candidates or submit downloads. No schema change is required.
+- Verify 16 backend and 86 UI tests, production builds and disposable-container HTTP/fixture checks.
+  Keep the image local and the active service unchanged pending explicit installation approval.
+
 ### Consistent genres and playlist usability (2026-10-25)
 
 - Share broad-genre/subgenre and alias matching across Library and playlist rules; keep specific

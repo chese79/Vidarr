@@ -98,11 +98,11 @@ export async function backfillLiveStartingInventories() {
   return `${artists.length} artist Live starting inventories prepared; setlist.fm not queried`;
 }
 
-export async function liveStartingItems(artistId: number, kind: 'video' | 'reference', offset = 0, limit = 5) {
+export async function liveStartingItems(artistId: number, kind: 'video' | 'reference', offset = 0, limit = 5, search = '') {
   const enabled = await liveEnabled();
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId }, select: { name: true, liveDiscoveryStatus: true,
     liveDiscoveryAttemptedAt: true, liveDiscoveryCompletedAt: true, liveDiscoveryError: true, videoInventoryStatus: true, videoInventoryError: true } });
-  const where = { ...visibleLiveDiscoveries, artistId, kind };
+  const where = { ...visibleLiveDiscoveries, artistId, kind, ...(search.trim() ? { title: { contains: search.trim() } } : {}) };
   const [total, items] = await prisma.$transaction([prisma.liveDiscoveryItem.count({ where }),
     prisma.liveDiscoveryItem.findMany({ where, orderBy: [{ rank: 'desc' }, { id: 'asc' }], skip: offset, take: limit })]);
   return { enabled, artist, total, items, offset, limit };

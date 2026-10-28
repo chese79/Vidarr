@@ -1,5 +1,30 @@
 # Deployment
 
+### Local Live candidate trial build — 2026-10-27
+
+Branch `codex/live-discovery-rows` provides music-video-style compact, expandable Live discovery
+rows, artist-scoped title search and independent 25-item video/reference pages. Local image
+`vidarr-live-candidates-20261027:local` has manifest
+`sha256:c7caec244daa475f6db3cf7103325fa7aadbe7127584ca407338569fb980e2c4`.
+Both Node 22 production builds pass. Sixteen backend tests pass; the web suite's other 80 tests
+pass and the final affected six-test interaction rerun passes, covering all 86 UI tests.
+The initial interaction failure selected a transient button-feedback label; the corrected test
+uses the stable expansion attributes.
+
+A disposable container with no network or production mounts passes all 47 migrations, SQLite
+integrity, health/web startup and media-tool checks. Thirty fixture videos verify 25/5 paging,
+ten filtered results, separate reference scope and zero promoted performances or downloads from
+reads. Built UI assets include the new candidate controls. Browser automation could not verify
+the current browser URL, so visual browser acceptance is not claimed.
+
+This build is not installed in the running service or published. Automatic approval review
+rejected the attempted active-service recreation because the request to test locally did not
+clearly authorize stopping/replacing the active installation. The existing genre/playlist service
+and public image remain unchanged. Obtain explicit installation authorization before cutover;
+use the existing offline backup and mount-preserving Vidarr-only procedure. Preserve the five
+private pending Jellyfin operator files from `/tmp`, as well as the persistent staging mount,
+and restore them after cutover. No schema change or Jellyfin restart is needed for this trial.
+
 ### Local genre and playlist usability release — 2026-10-25
 
 Image `vidarr-genres-20261025:final` (manifest

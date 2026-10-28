@@ -1,5 +1,17 @@
 # Process flows and consistency review
 
+## Live discovery candidate display (2026-10-27)
+
+Open or expand a confirmed artist in Live → browse video/reference candidates in compact rows →
+optionally search titles and page each list → expand one row to inspect source details → explicitly
+enter Live video review or performance search, or dismiss that suggestion. Reads/search/page changes
+and row expansion do not promote discoveries, confirm identities, search providers or download.
+The existing artist-opening preparation may still collect sources in the background. Subsequent
+artist/occasion/content review, accepted-source acquisition, validation, import and server delivery
+confirmation remain unchanged. Publication dates are labeled as uploads, never performance dates.
+Search counts and pagination share the artist/kind/visibility scope. Failed requests display errors
+and a retry action rather than claiming an empty inventory; dismissal retains the saved discovery.
+
 ## Consistent genres and playlist generation (2026-10-25)
 
 View effective artist genres with source attribution → choose a broad group (including its mapped

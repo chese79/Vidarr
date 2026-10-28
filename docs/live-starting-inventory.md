@@ -1,5 +1,16 @@
 # Live starting inventory
 
+## Candidate display (2026-10-27)
+
+Artist Live discovery uses the same compact `artist-row`/expandable review pattern as music-video
+candidates. Videos and MusicBrainz reference leads have separate counts and 25-row pagination,
+sharing a bounded artist-scoped title search applied before counts/pagination. The endpoint keeps
+its existing five-item default for older callers; the UI explicitly requests 25. Expand a row for
+source provenance, upload date when known, and the existing review/search or dismissal action.
+Expansion is a read-only presentation action. Unknown occasion details remain unknown, and neither
+search nor expansion accepts a recording or submits a download. Loading, empty results and failed
+requests have distinct states; failed reads offer retry without discarding prior discoveries.
+
 Live monitoring fields use compact 14px controls: tour up to 20rem, dates 12rem, daily budget
 5rem and vertically arranged selectors up to 15rem, retaining the right-side panel layout and
 stacking safely on narrow screens.

@@ -28,8 +28,8 @@ export async function liveStartRoutes(app: FastifyInstance) {
   });
   app.get('/api/v1/live/artists/:id/start', req => {
     const { id } = params.parse(req.params);
-    const query = z.object({ kind: z.enum(['video', 'reference']).default('video'), offset: z.coerce.number().int().min(0).default(0), limit: z.coerce.number().int().min(1).max(25).default(5) }).parse(req.query);
-    return liveStartingItems(id, query.kind, query.offset, query.limit);
+    const query = z.object({ kind: z.enum(['video', 'reference']).default('video'), offset: z.coerce.number().int().min(0).default(0), limit: z.coerce.number().int().min(1).max(25).default(5), search: z.string().trim().max(200).default('') }).parse(req.query);
+    return liveStartingItems(id, query.kind, query.offset, query.limit, query.search);
   });
   app.post('/api/v1/live/artists/:id/prepare', async (req, reply) => {
     await requireLiveEnabled();

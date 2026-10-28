@@ -9,9 +9,10 @@ Live opens with useful, bounded starting points rather than an unmatched-perform
 Shared artist/VEVO channel scans save Live video candidates alongside MV observations when
 Settings → General → Library → Enable Live & Concerts and the installed capability are active.
 The selected catalog view never controls discovery/persistence. The Live artist index highlights
-five artists with discoveries; each artist shows five video candidates and five ranked
-MusicBrainz Live release/broadcast/event leads, with review/search actions and optional paged
-exploration/dismissal. References remain discovery inventory until explicitly opened, not
+five artists with discoveries; each artist shows compact, expandable candidate rows matching
+music-video review, with separate video and ranked MusicBrainz release/broadcast/event lists.
+Artist-scoped title search filters before counts and pagination; each list shows 25 rows per page.
+Source details, review/search and dismissal actions are available on expansion. References remain discovery inventory until explicitly opened, not
 missing-video obligations or automatically accepted performances.
 
 setlist.fm is strictly on request: no automatic lookup/traversal on addition, Live entry,
