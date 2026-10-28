@@ -83,6 +83,23 @@ export async function lookupMusicBrainzArtist(mbid: string): Promise<MusicBrainz
 export interface LiveReference {
   id: string; title: string; url: string; rank: number;
   releaseDate: string | null; primaryType: string | null;
+  eventDate?: string | null;
+}
+
+export async function searchLiveSongEvidence(mbid: string, song: string) {
+  const query = `arid:${mbid} AND recording:"${escapeLucene(song)}"`;
+  const body = await rateLimitedGet(`/recording?query=${encodeURIComponent(query)}&limit=10&fmt=json`);
+  return (body.recordings ?? []).filter((row: any) => (row['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === mbid))
+    .map((row: any) => ({ id: String(row.id), title: String(row.title), url: `https://musicbrainz.org/recording/${row.id}` })) as Array<{ id: string; title: string; url: string }>;
+}
+
+export async function lookupLiveEventEvidence(id: string, mbid: string) {
+  if (!/^[\da-f-]{36}$/i.test(id)) throw new Error('Invalid MusicBrainz event identity');
+  const body = await rateLimitedGet(`/event/${id}?inc=artist-rels+place-rels&fmt=json`);
+  if (body.id !== id || !(body.relations ?? []).some((rel: any) => rel.artist?.id === mbid && ['main performer', 'guest performer'].includes(rel.type))) return null;
+  const place = (body.relations ?? []).find((rel: any) => rel.type === 'held at' && rel.place?.name)?.place;
+  return { id, title: String(body.name), url: `https://musicbrainz.org/event/${id}`, date: body['life-span']?.begin as string | undefined,
+    venue: place?.name as string | undefined, city: (place?.area?.name ?? place?.['begin-area']?.name) as string | undefined };
 }
 // One bounded reference page, not the artist's event history or audio discography.
 // Website-default excludes groups containing only bootleg/pseudo/promotional releases.

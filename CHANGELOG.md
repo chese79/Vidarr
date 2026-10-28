@@ -5,6 +5,18 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Live candidate evidence and Confirm and Grab (2026-10-27)
+
+- Show protected video thumbnails, independent MusicBrainz/setlist.fm match flags and vertical
+  fields with source attribution, unknown values and conflicts in Live discovery rows.
+- Automatically check both providers on addition and gradually backfill existing eligible
+  candidates with persisted progress, shared provider limits, cached results and visible retries.
+- Add magenta Confirm and Grab with required identity, occasion, moving-video and source review;
+  reuse acquisition/validation/import/server confirmation and preserve dismissals across rescans.
+- Keep song-only references separate from capture identity and release/upload dates separate from
+  performance dates. Matching does not create performances or start downloads.
+
+
 ### Shared music-video and Live artist heading (2026-10-27)
 
 - Use the same artist picture/name heading and catalog navigation for Music Videos and Live.

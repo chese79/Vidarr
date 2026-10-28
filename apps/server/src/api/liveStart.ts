@@ -5,11 +5,33 @@ import { prisma, logActivity } from '../db/client.js';
 import { liveEnabled, requireLiveEnabled } from '../live/capability.js';
 import { backfillLiveStartingInventories, liveStartingItems, openLiveStartingItem, prepareLiveStartingInventory, visibleLiveDiscoveries } from '../live/startingInventory.js';
 import { collectArtistVideoInventory } from '../pipeline/artistVideoInventory.js';
+import { liveCandidate, liveCandidateMatchingStatus, matchLiveCandidate } from '../live/discoveryEvidence.js';
+import { confirmAndGrabLiveDiscovery, isLiveDiscoveryConfirming } from '../live/discoveryConfirm.js';
+import { fetchImageSafely } from '../pipeline/safeImageFetch.js';
+import { LiveError } from '../live/policy.js';
 
 const params = z.object({ id: z.coerce.number().int().positive() });
 const queued = new Set<number>();
 let rootQueued = false;
 export async function liveStartRoutes(app: FastifyInstance) {
+  app.get('/api/v1/live/candidate-matching-status', liveCandidateMatchingStatus);
+  app.get('/api/v1/live/artists/:id/start/:itemId/thumbnail', async (req, reply) => {
+    const { id, itemId } = z.object({ id: z.coerce.number().int().positive(), itemId: z.coerce.number().int().positive() }).parse(req.params);
+    const item = await liveCandidate(id, itemId);
+    if (item.provider !== 'youtube' || !/^[\w-]{11}$/.test(item.externalId)) return reply.code(404).send({ error: 'Thumbnail unavailable' });
+    const image = await fetchImageSafely(`https://i.ytimg.com/vi/${item.externalId}/hqdefault.jpg`);
+    if (!image) return reply.code(404).send({ error: 'Thumbnail unavailable' });
+    return reply.header('Cache-Control', 'private, max-age=86400').type(image.contentType).send(image.data);
+  });
+  app.post('/api/v1/live/artists/:id/start/:itemId/match', req => {
+    const { id, itemId } = z.object({ id: z.coerce.number().int().positive(), itemId: z.coerce.number().int().positive() }).parse(req.params);
+    const body = z.object({ provider: z.enum(['musicbrainz', 'setlist.fm']), page: z.number().int().min(1).max(10000).default(1) }).strict().parse(req.body);
+    return matchLiveCandidate(id, itemId, body.provider, body.page);
+  });
+  app.post('/api/v1/live/artists/:id/start/:itemId/confirm-grab', req => {
+    const { id, itemId } = z.object({ id: z.coerce.number().int().positive(), itemId: z.coerce.number().int().positive() }).parse(req.params);
+    return confirmAndGrabLiveDiscovery(id, itemId, req.body);
+  });
   app.get('/api/v1/live/source-refresh-status', existingArtistDiscoveryStatus);
   app.get('/api/v1/live/start', async () => {
     const enabled = await liveEnabled();
@@ -53,6 +75,7 @@ export async function liveStartRoutes(app: FastifyInstance) {
   app.patch('/api/v1/live/artists/:id/start/:itemId', async req => {
     const { id } = params.parse(req.params), { itemId } = z.object({ itemId: z.coerce.number().int().positive() }).parse(req.params);
     const body = z.object({ dismissed: z.boolean() }).strict().parse(req.body);
+    if (body.dismissed && isLiveDiscoveryConfirming(id, itemId)) throw new LiveError('Confirmation is in progress; wait before ignoring this candidate');
     await prisma.liveDiscoveryItem.updateMany({ where: { id: itemId, artistId: id }, data: body }); return { ok: true };
   });
 }

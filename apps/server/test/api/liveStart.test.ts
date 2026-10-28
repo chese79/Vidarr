@@ -4,6 +4,8 @@ import { prisma } from '../../src/db/client.js';
 import { authHeaders, TEST_API_KEY } from '../support/http.js';
 import { resetDb, ensureSettings, createArtist, createRootFolder, createQuality, createQualityProfile } from '../support/db.js';
 import { prepareLiveStartingInventory } from '../../src/live/startingInventory.js';
+import { fetchImageSafely } from '../../src/pipeline/safeImageFetch.js';
+vi.mock('../../src/pipeline/safeImageFetch.js',()=>({fetchImageSafely:vi.fn().mockResolvedValue(null)}));
 
 vi.mock('../../src/providers/metadata/musicbrainz.js', async original => ({ ...await original<typeof import('../../src/providers/metadata/musicbrainz.js')>(), getMusicBrainzLiveReferences: vi.fn().mockResolvedValue([]), getMusicBrainzLiveEventReferences: vi.fn().mockResolvedValue([]) }));
 let app: Awaited<ReturnType<typeof buildApp>>, artistId: number;
@@ -19,6 +21,17 @@ async function item(){return prisma.liveDiscoveryItem.create({data:{artistId,kin
 it('authenticates discovery reads and mutations',async()=>{
  expect((await app.inject(url())).statusCode).toBe(401);
  expect((await app.inject({method:'POST',url:`/api/v1/live/artists/${artistId}/prepare`,payload:{}})).statusCode).toBe(401);
+});
+it('authenticates matching, confirmation and thumbnails and validates artist scoping',async()=>{
+ const row=await item();
+ for(const action of ['match','confirm-grab']) expect((await app.inject({method:'POST',url:url(`/${row.id}/${action}`),payload:{}})).statusCode).toBe(401);
+ expect((await app.inject(url(`/${row.id}/thumbnail`))).statusCode).toBe(401);
+ expect((await app.inject({url:`/api/v1/live/artists/${artistId+1}/start/${row.id}/thumbnail`,headers:authHeaders()})).statusCode).toBe(404);
+ expect(fetchImageSafely).not.toHaveBeenCalled();
+ expect((await app.inject({url:url(`/${row.id}/thumbnail`),headers:authHeaders()})).statusCode).toBe(404);
+ expect(fetchImageSafely).toHaveBeenCalledWith('https://i.ytimg.com/vi/Ri7-vnrJD3k/hqdefault.jpg');
+ expect((await app.inject({method:'POST',url:url(`/${row.id}/match`),headers:authHeaders(),payload:{provider:'arbitrary'}})).statusCode).toBe(400);
+ expect((await app.inject({method:'POST',url:url(`/${row.id}/confirm-grab`),headers:authHeaders(),payload:{videoVerified:false}})).statusCode).toBe(400);
 });
 it('pages and scopes discoveries without invoking a provider',async()=>{
  await item(); await prepareLiveStartingInventory(artistId);

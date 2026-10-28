@@ -7,6 +7,7 @@ import { redactMessage } from '../security/redact.js';
 import { liveScanExcluded } from './exclusions.js';
 import { liveEnabled, requireLiveEnabled } from './capability.js';
 import { LiveError } from './policy.js';
+import { discoveryEvidence, queueCandidateMatches } from './discoveryEvidence.js';
 
 export function isLiveUpload(title: string) {
   if (/\b(?:lyrics?|official audio|audio only|visualizer|trailer|teaser|interview|backstage|karaoke)\b|fan reactions|behind the scenes/i.test(title)) return false;
@@ -20,12 +21,14 @@ export async function saveLiveUpload(artistId: number, video: DiscoveredYoutubeV
   const data = { title: video.title, url: `https://www.youtube.com/watch?v=${video.youtubeVideoId}`,
     evidence: JSON.stringify({ discovery: 'shared-artist-channel', sourceUrl, origins: video.discoveryOrigins,
       officialEvidence: video.officialEvidence, publicationDate: video.sourcePublishedAt, occasionUnconfirmed: true }), rank: 100 };
-  await prisma.liveDiscoveryItem.upsert({
+  const item = await prisma.liveDiscoveryItem.upsert({
     where: { artistId_provider_externalId: { artistId, provider: 'youtube', externalId: video.youtubeVideoId } },
     create: { artistId, kind: 'video', provider: 'youtube', externalId: video.youtubeVideoId, ...data },
     // Decisions and promoted identities survive refresh; no title-based event merging.
     update: data,
   });
+  const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId }, select: { musicbrainzArtistId: true } });
+  await queueCandidateMatches(item, artist.musicbrainzArtistId);
 }
 
 const active = new Map<number, Promise<void>>();
@@ -100,12 +103,15 @@ export async function backfillLiveStartingInventories() {
 
 export async function liveStartingItems(artistId: number, kind: 'video' | 'reference', offset = 0, limit = 5, search = '') {
   const enabled = await liveEnabled();
-  const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId }, select: { name: true, liveDiscoveryStatus: true,
+  const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId }, select: { name: true, musicbrainzArtistId: true, liveDiscoveryStatus: true,
     liveDiscoveryAttemptedAt: true, liveDiscoveryCompletedAt: true, liveDiscoveryError: true, videoInventoryStatus: true, videoInventoryError: true } });
   const where = { ...visibleLiveDiscoveries, artistId, kind, ...(search.trim() ? { title: { contains: search.trim() } } : {}) };
   const [total, items] = await prisma.$transaction([prisma.liveDiscoveryItem.count({ where }),
-    prisma.liveDiscoveryItem.findMany({ where, orderBy: [{ rank: 'desc' }, { id: 'asc' }], skip: offset, take: limit })]);
-  return { enabled, artist, total, items, offset, limit };
+    prisma.liveDiscoveryItem.findMany({ where, orderBy: [{ rank: 'desc' }, { id: 'asc' }], skip: offset, take: limit,
+      include: { recording: { select: { claimedCoverage: true, reviewStatus: true, parts: { select: { available: true, serverCopies: { where: { available: true }, select: { id: true } } } },
+        queueItems: { where: { status: { in: ['queued', 'downloading', 'importing', 'submissionUnknown'] } }, select: { status: true }, take: 1 } } } } })]);
+  const evidence = await discoveryEvidence(items, artist);
+  return { enabled, artist, total, items: items.map(item => ({ ...item, evidenceReport: item.kind === 'video' ? evidence.get(item.id) : undefined })), offset, limit };
 }
 
 export async function openLiveStartingItem(artistId: number, itemId: number) {

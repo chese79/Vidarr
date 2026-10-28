@@ -166,6 +166,7 @@ async function requestBlobData(path: string): Promise<Blob> {
 
 export const api = {
   live: {
+    thumbnail: (artistId: number, itemId: number) => requestBlob(`/live/artists/${artistId}/start/${itemId}/thumbnail`),
     read: <T>(path: string) => request<T>(`/live/${path}`),
     recording: (id: number) => request<LiveRecordingDetail>(`/live/recordings/${id}`),
     action: <T = { ok: boolean }>(path: string, data: unknown, method = 'POST') => request<T>(`/live/${path}`, { method, body: JSON.stringify(data) }),

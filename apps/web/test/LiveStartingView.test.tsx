@@ -22,7 +22,7 @@ it('offers videos and a short reference list without requesting setlist.fm histo
 it('dismisses only the chosen suggestion through the artist-scoped endpoint',async()=>{
  await mount();
  await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Review candidate')!.click());
- await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Dismiss suggestion')!.click());
+ await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Ignore')!.click());
  expect(api.live.action).toHaveBeenCalledWith('artists/42/start/1',{dismissed:true},'PATCH');
 });
 it('uses compact expandable review rows without promoting candidates when expanded',async()=>{
@@ -59,4 +59,25 @@ it('reports a failed read as an error rather than an empty collection and permit
 it('does not prepare or contact providers when Live is disabled',async()=>{
  vi.mocked(api.live.read).mockResolvedValue({enabled:false,items:[],total:0,artist:{liveDiscoveryStatus:'pending'}} as never);
  await mount();expect(host.textContent).toContain('disabled or unavailable');expect(api.live.action).not.toHaveBeenCalled();
+});
+it('orders matching and acquisition actions, and requires explicit review before submitting a grab',async()=>{
+ await mount();
+ const actions=[...host.querySelectorAll('.live-candidate-actions button')] as HTMLButtonElement[];
+ expect(actions.map(b=>b.textContent)).toEqual(['setlist.fm match','MusicBrainz match','Confirm and Grab','Ignore']);
+ expect(host.querySelectorAll('.live-candidate-evidence dt')).toHaveLength(6);
+ expect(host.textContent).toContain('setlist.fm: Not checked');
+ await act(async()=>actions[1].click());expect(api.live.action).toHaveBeenCalledWith('artists/42/start/1/match',{provider:'musicbrainz',page:1});
+ await act(async()=>actions[2].click());
+ const dialog=host.querySelector('dialog')!;expect(dialog).not.toBeNull();
+ const submit=dialog.querySelector('button.confirm-and-grab') as HTMLButtonElement;expect(submit.disabled).toBe(true);
+ expect(vi.mocked(api.live.action).mock.calls.some(([path])=>path.endsWith('/confirm-grab'))).toBe(false);
+ for(const checkbox of dialog.querySelectorAll('input[type="checkbox"]')) await act(async()=>(checkbox as HTMLInputElement).click());
+ expect(submit.disabled).toBe(false);
+ await act(async()=>submit.click());
+ expect(api.live.action).toHaveBeenCalledWith('artists/42/start/1/confirm-grab',expect.objectContaining({identityConfirmed:true,videoVerified:true,sourceConfirmed:true,claimedCoverage:'unknown'}));
+ expect(host.textContent).toContain('Queued. Validation, import and server confirmation remain pending.');
+});
+it('shows multiple field sources and labels reference associations as unconfirmed',async()=>{
+ vi.mocked(api.live.read).mockResolvedValue({enabled:true,total:1,artist:{liveDiscoveryStatus:'complete'},items:[{id:1,kind:'video',title:'Adele Live',url:'https://example.test',evidenceReport:{facts:[{field:'venue',value:'Royal Hall',source:'YouTube',basis:'claim'},{field:'venue',value:'Royal Hall',source:'setlist.fm',basis:'reference'}],checks:{musicbrainz:{status:'songOnly',references:[],scope:'Song is not proof of capture'},'setlist.fm':{status:'possible',references:[],scope:'First page'}}}}]} as never);
+ await mount();expect(host.textContent).toContain('MB: Song only');expect(host.textContent).toContain('setlist.fm: Possible');expect(host.textContent).toContain('YouTube (claim)');expect(host.textContent).toContain('setlist.fm (reference; association unconfirmed)');
 });

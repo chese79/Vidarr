@@ -1,16 +1,24 @@
 # Process flows and consistency review
 
-## Live discovery candidate display (2026-10-27)
+## Live discovery matching and confirmation (2026-10-27)
 
-Open or expand a confirmed artist in Live → browse video/reference candidates in compact rows →
-optionally search titles and page each list → expand one row to inspect source details → explicitly
-enter Live video review or performance search, or dismiss that suggestion. Reads/search/page changes
-and row expansion do not promote discoveries, confirm identities, search providers or download.
-The existing artist-opening preparation may still collect sources in the background. Subsequent
-artist/occasion/content review, accepted-source acquisition, validation, import and server delivery
-confirmation remain unchanged. Publication dates are labeled as uploads, never performance dates.
-Search counts and pagination share the artist/kind/visibility scope. Failed requests display errors
-and a retry action rather than claiming an empty inventory; dismissal retains the saved discovery.
+Add a Live video candidate -> queue both MusicBrainz and setlist.fm checks -> inspect thumbnail,
+match flags and vertically stacked source-attributed fields -> optionally retry a provider or
+explicitly check another setlist.fm page -> Confirm and Grab -> attest performer/occasion, actual
+moving video and exact upload (acknowledge conflicts) -> normal recording/source acceptance ->
+acquisition -> validation -> import/delivery -> exact playback-server catalog confirmation.
+Unknown fields stay unknown and no reference is automatically merged into an event identity.
+The same list/search/page position remains after submission. Queue acknowledgement is not delivery.
+Ignore persists through rescans; it does not delete media or cancel downloads. Reference leads
+retain the separate explicit performance-search flow and cannot be grabbed as video sources.
+
+The user also requested existing-candidate backfill. A persisted cursor prepares 50 candidates
+and attempts five provider checks per minute; failures remain visible and retry after 30 minutes.
+Live disablement gates automatic work. Bounded no-match, pending, failed and unavailable remain
+distinct. Reads and presentation actions never acquire media. This supersedes the strictly
+on-request candidate-matching portions of the historical 2026-10-23 sections below; general
+history traversal and the old metadata monitoring task remain unchanged.
+See [matching, budgets and recovery](live-candidate-matching.md).
 
 ## Consistent genres and playlist generation (2026-10-25)
 

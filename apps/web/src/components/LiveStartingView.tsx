@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { ActionButton } from './ButtonFeedback';
+import LiveCandidateRow, { type LiveCandidateItem } from './LiveCandidateRow';
 
-interface Item { id: number; kind: string; title: string; url: string; provider?: string; evidence?: string; createdAt?: string; recordingId?: number | null; performanceId?: number | null }
+interface Item extends LiveCandidateItem { kind: string; provider?: string; evidence?: string; createdAt?: string; recordingId?: number | null; performanceId?: number | null }
 interface Page { enabled: boolean; total: number; items: Item[]; artist: { liveDiscoveryStatus: string; liveDiscoveryError: string | null; videoInventoryStatus: string; videoInventoryError: string | null } }
 const PAGE_SIZE = 25;
 const providerLabel = (item: Item) => item.provider === 'musicbrainz-event' ? 'MusicBrainz event' : item.kind === 'video' ? 'YouTube' : 'MusicBrainz';
@@ -16,6 +17,7 @@ function publicationDate(item: Item): string | null {
 }
 
 export function LiveStartingArtists() {
+  const matching = useQuery({ queryKey: ['live-candidate-matching-status'], queryFn: () => api.live.read<{ pending: number; completed: number; retrying: number }>('candidate-matching-status'), refetchInterval: 15000 });
   const refreshStatus = useQuery({ queryKey: ['existing-artist-discovery'], queryFn: () => api.live.read<{ status: string; total: number; attempted: number; failed: number; currentArtist: string | null }>('source-refresh-status'), refetchInterval: query => query.state.data?.status === 'running' ? 5000 : false });
   const ready = useQuery({ queryKey: ['live-start-artists'], queryFn: () => api.live.read<{ enabled: boolean; items: Array<{ id: number; name: string; _count: { liveDiscoveryItems: number } }> }>('start'), refetchInterval: query => query.state.data?.items.length ? false : 5000 });
   const prepare = useMutation({ mutationFn: () => api.live.action('start/prepare', {}) });
@@ -25,7 +27,9 @@ export function LiveStartingArtists() {
   return <section className="card"><h3>Start exploring Live</h3><p>Open an artist with discovered videos or promising MusicBrainz Live references. Suggestions are not missing-video obligations.</p>
     {!!refreshStatus.data?.total && <p role="status">Existing artist discovery: {refreshStatus.data.attempted} / {refreshStatus.data.total} checked · {refreshStatus.data.failed} need retry{refreshStatus.data.currentArtist ? ` · Checking ${refreshStatus.data.currentArtist}` : ''} · {refreshStatus.data.status}</p>}
     {ready.data?.items.map(artist => <p key={artist.id}><Link to={`/artist/${artist.id}/live`}>{artist.name}</Link> · {artist._count.liveDiscoveryItems} discoveries to explore</p>)}
-    {!ready.data?.items.length && <p role="status">Preparing starting points in the background. You can also open any artist below. setlist.fm is only checked when requested.</p>}
+    {matching.data && <p role="status">Live matching: {matching.data.completed} provider checks completed · {matching.data.pending} queued · {matching.data.retrying} waiting to retry. Existing candidates are added gradually.</p>}
+    {matching.error && <p role="alert">Matching progress could not be loaded: {matching.error.message}</p>}
+    {!ready.data?.items.length && <p role="status">Preparing starting points in the background. You can also open any artist below.</p>}
     {[ready.error, prepare.error].filter(Boolean).map((error, i) => <p role="alert" key={i}>{error?.message}</p>)}
   </section>;
 }
@@ -41,7 +45,8 @@ export default function LiveStartingView({ artistId }: { artistId: number }) {
     const timer = setTimeout(() => { setDebouncedSearch(search); setVideoOffset(0); setReferenceOffset(0); setExpanded(null); }, 250);
     return () => clearTimeout(timer);
   }, [search, debouncedSearch]);
-  const poll = (query: { state: { data?: Page } }) => ['pending', 'running'].includes(query.state.data?.artist?.liveDiscoveryStatus ?? '') || query.state.data?.artist?.videoInventoryStatus === 'running' ? 3000 : false;
+  const poll = (query: { state: { data?: Page } }) => ['pending', 'running'].includes(query.state.data?.artist?.liveDiscoveryStatus ?? '') || query.state.data?.artist?.videoInventoryStatus === 'running'
+    || query.state.data?.items.some(item => Object.values(item.evidenceReport?.checks ?? {}).some(check => check.status === 'pending') || item.recording?.queueItems?.length) ? 5000 : 30000;
   const query = (kind: string, offset: number) => `artists/${artistId}/start?${new URLSearchParams({ kind, offset: String(offset), limit: String(PAGE_SIZE), search: debouncedSearch })}`;
   const videos = useQuery({ queryKey: ['live-start', artistId, 'video', videoOffset, debouncedSearch], queryFn: () => api.live.read<Page>(query('video', videoOffset)), refetchInterval: poll });
   const references = useQuery({ queryKey: ['live-start', artistId, 'reference', referenceOffset, debouncedSearch], queryFn: () => api.live.read<Page>(query('reference', referenceOffset)), refetchInterval: poll });
@@ -65,7 +70,7 @@ export default function LiveStartingView({ artistId }: { artistId: number }) {
       {result.isPending && <p role="status">Loading Live candidates…</p>}
       {result.isError && <p role="alert">Could not load {heading === 'Videos found' ? 'video' : 'reference'} candidates. <ActionButton className="secondary" onClick={() => result.refetch()}>Retry candidates</ActionButton></p>}
       {result.isSuccess && !result.data.items.length && <p className="empty-state">{debouncedSearch ? 'No Live candidates match this search.' : heading === 'Videos found' ? 'No live upload candidates found yet.' : 'No strong Live references found yet.'} {state?.liveDiscoveryStatus === 'running' ? 'Collection is still running.' : ''}</p>}
-      <div className="artist-list" role="list">{result.data?.items.map(item => <div className="artist-row" role="listitem" key={item.id}>
+      <div className="artist-list" role="list">{result.data?.items.map(item => item.kind === 'video' ? <LiveCandidateRow key={item.id} artistId={artistId} item={item} enabled={enabled} expanded={expanded === item.id} onToggle={() => setExpanded(expanded === item.id ? null : item.id)} onRefresh={refresh} onIgnore={() => dismiss.mutate(item)} ignoring={dismiss.isPending} /> : <div className="artist-row" role="listitem" key={item.id}>
         <div className="artist-row-header">
           <div className="artist-image" aria-hidden="true">{item.kind === 'video' ? '▶' : '♫'}</div>
           <div className="artist-row-main"><span className="artist-name">{item.title}</span><span className="artist-meta">{providerLabel(item)} · {item.kind === 'video' ? 'Live video candidate' : 'Performance search lead'}</span></div>

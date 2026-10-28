@@ -1,12 +1,23 @@
 # Live starting inventory
 
+## Automatic candidate evidence (2026-10-27)
+
+New and existing eligible video candidates receive bounded MusicBrainz and setlist.fm checks.
+The approved gradual backfill, source-attributed fields, status flags, protected thumbnails,
+Confirm and Grab review and recovery are documented in [Live candidate matching](live-candidate-matching.md).
+This supersedes the original on-request-only candidate lookup policy described below; general
+history traversal still requires an explicit request and metadata monitoring remains inert.
+Video actions are visible beside the vertical evidence fields; reference search leads keep their
+expandable review/search flow. Matching alone never accepts sources or submits downloads.
+
 ## Candidate display (2026-10-27)
 
 Artist Live discovery uses the same compact `artist-row`/expandable review pattern as music-video
 candidates. Videos and MusicBrainz reference leads have separate counts and 25-row pagination,
 sharing a bounded artist-scoped title search applied before counts/pagination. The endpoint keeps
 its existing five-item default for older callers; the UI explicitly requests 25. Expand a row for
-source provenance, upload date when known, and the existing review/search or dismissal action.
+source provenance and match scope. Video rows show source-attributed fields and review actions;
+reference rows retain the existing review/search or dismissal action.
 Expansion is a read-only presentation action. Unknown occasion details remain unknown, and neither
 search nor expansion accepts a recording or submits a download. Loading, empty results and failed
 requests have distinct states; failed reads offer retry without discarding prior discoveries.
@@ -46,7 +57,7 @@ dismissals and linked recording review outcomes survive rescans. Scan exclusions
 
 MusicBrainz queries a bounded website-default Live release-group page and direct performer-event
 relationships. Live albums rank first, then broadcasts and selected event references; all reference
-facts remain evidence. The UI initially shows five references, with paged exploration. Collection
+facts remain evidence. The UI shows 25 references per page; older API callers default to five. Collection
 never creates a performance for every reference and never imports an artist audio discography.
 The initial implementation does not auto-match recordings to events or adopt research-only
 triangulation rules. Normal review remains responsible for that association.

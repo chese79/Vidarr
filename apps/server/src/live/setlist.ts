@@ -63,7 +63,8 @@ async function transport(resource: string, ruleId?: number) {
   return request;
 }
 
-export async function discoverSetlists(artistId: number, page = 1, date?: string, scope?: { year?: number; tour?: string; from?: string; to?: string; ruleId?: number }) {
+// Read/cache a bounded provider page without creating catalog performances.
+export async function readSetlistPage(artistId: number, page = 1, date?: string, scope?: { year?: number; tour?: string; from?: string; to?: string; ruleId?: number }) {
   await requireLiveEnabled();
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
   if (!artist.musicbrainzArtistId || artist.musicbrainzMatchStatus !== 'confirmed') throw new LiveError('Confirm the shared MusicBrainz artist first');
@@ -78,6 +79,12 @@ export async function discoverSetlists(artistId: number, page = 1, date?: string
   if (!cached?.retryAt || cached.retryAt <= new Date()) await prisma.liveSearchJournal.upsert({ where: { key: cacheKey },
     create: { key: cacheKey, provider: 'setlist.fm', payload: JSON.stringify(data), outcome: 'metadata', lastSearchAt: new Date(), retryAt: new Date(Date.now() + DAY), expiresAt: new Date(Date.now() + 365 * DAY) },
     update: { payload: JSON.stringify(data), lastSearchAt: new Date(), retryAt: new Date(Date.now() + DAY), expiresAt: new Date(Date.now() + 365 * DAY) } });
+  return data;
+}
+
+export async function discoverSetlists(artistId: number, page = 1, date?: string, scope?: { year?: number; tour?: string; from?: string; to?: string; ruleId?: number }) {
+  const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+  const data = await readSetlistPage(artistId, page, date, scope);
   const ids: number[] = [];
   for (const item of data.setlist) {
     if (item.artist.mbid !== artist.musicbrainzArtistId) continue;

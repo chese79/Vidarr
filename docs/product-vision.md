@@ -20,9 +20,12 @@ Artist-scoped title search filters before counts and pagination; each list shows
 Source details, review/search and dismissal actions are available on expansion. References remain discovery inventory until explicitly opened, not
 missing-video obligations or automatically accepted performances.
 
-setlist.fm is strictly on request: no automatic lookup/traversal on addition, Live entry,
-source checks or monitoring. Its explicit artist-level page action and manual linking remain.
-The existing scheduled metadata job is inert, including for previously active rules/cursors.
+Live video candidates automatically receive bounded MusicBrainz and setlist.fm checks on addition,
+with a gradual restart-safe backfill of existing candidates. Source-attributed evidence and match
+flags remain advisory; explicit performer, occasion, moving-video and source review precedes
+Confirm and Grab. General event-history traversal remains on request. The existing metadata
+monitoring job stays inert, including for previously active rules/cursors. See
+[Live candidate matching](live-candidate-matching.md) for scope, limits and recovery.
 See [Live starting inventory](live-starting-inventory.md).
 
 Live browsing retains the same artist index/list as music videos. Open or expand a confirmed

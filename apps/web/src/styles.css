@@ -816,3 +816,26 @@ button.add-new-artist { background: #2563eb; border: 1px solid var(--border); }
 .live-starting-view { margin: 1rem 0; }
 .live-start-item { border-top: 1px solid var(--border, #77808b); padding: .65rem 0; }
 .live-start-item h4 { margin: 0 0 .3rem; }
+
+/* Live candidates use the same row and button sizing as Music Videos. */
+.live-candidate-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 34%); gap: 1rem; }
+.live-candidate-content { min-width: 0; }
+.live-candidate-thumb { width: 128px; flex: 0 0 128px; }
+.live-candidate-thumb .video-thumb { width: 128px; height: 72px; }
+.live-candidate-thumb img { object-fit: cover; width: 100%; height: 100%; }
+.live-match-flags, .live-candidate-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; align-items: center; }
+.live-candidate-evidence { margin: 0; padding-left: 1rem; border-left: var(--border-width) solid var(--border); overflow-wrap: anywhere; }
+.live-candidate-evidence > div { margin-bottom: .65rem; }
+.live-candidate-evidence dt { font-weight: 600; }
+.live-candidate-evidence dd { margin: .15rem 0 0; }
+.live-candidate-evidence small { display: block; opacity: .85; }
+.live-match-conflict, .live-match-ambiguous, .evidence-conflict dt { color: #ffacdd; }
+.live-match-error, .live-match-unavailable { color: #ffd18a; }
+.live-match-strong { color: #8fe0ab; }
+button.confirm-and-grab { background: #c50083; color: #fff; border-color: #ff62cd; }
+button.confirm-and-grab:hover:not(:disabled) { background: #e00099; }
+.live-confirm-dialog { width: min(700px, 90vw); max-height: 85vh; overflow: auto; background: #101014; color: #ffffc5; border: var(--border-width) solid #ff62cd; padding: 1.5rem; border-radius: 8px; }
+.live-confirm-dialog::backdrop { background: #000a; }
+.live-confirm-dialog form > label { display: block; margin: .8rem 0; }
+.live-confirm-dialog textarea { display: block; width: 100%; min-height: 4rem; }
+@media (max-width: 1000px) { .live-candidate-layout { grid-template-columns: 1fr; } .live-candidate-evidence { border-left: 0; padding: .75rem 0 0; border-top: var(--border-width) solid var(--border); } }
