@@ -345,6 +345,16 @@ button.video-inline-action, .catalog-live button {
   vertical-align: middle;
 }
 
+/* View selectors retain their dimensions in every catalog palette. */
+.catalog-mode-switch > button {
+  font: inherit;
+  line-height: 1.25;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.catalog-mode-switch > button.secondary { border-color: var(--text-muted); }
+
 /* ---- Library page: artist-centered list (docs/requests/2026-09-19-ui-enhance.md) ---- */
 
 /* The signature element: a vertical rail of letter tabs down the left edge,

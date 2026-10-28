@@ -5,6 +5,11 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Consistent catalog selector dimensions (2026-10-27)
+
+- Keep Music Videos, Live & Concerts and Both selectors at the same font size, padding and height
+  in every view. Reserve the selected border's space so changing views does not shift the controls.
+
 ### Live discovery candidate rows (2026-10-27)
 
 - Present artist-scoped Live video and MusicBrainz reference discoveries as compact, expandable

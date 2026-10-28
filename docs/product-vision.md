@@ -4,6 +4,8 @@ Catalog colors identify the selected view using the primary logo colors: Music V
 charcoal/blue, Live & Concerts uses pale yellow, and Both uses magenta, including embedded Live
 panels. Live and Both share blue border accents. The text labels
 and pressed selection remain visible. Shared unfiltered utility screens retain the neutral theme.
+The three catalog selectors retain the same font, padding and border dimensions in every palette;
+Live's compact content actions do not shrink the global view controls.
 
 Live opens with useful, bounded starting points rather than an unmatched-performance backlog.
 Shared artist/VEVO channel scans save Live video candidates alongside MV observations when
