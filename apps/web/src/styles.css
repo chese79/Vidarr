@@ -2,7 +2,8 @@
   color-scheme: dark;
   --bg: #14161a;
   --bg-elevated: #1d2025;
-  --border: #FFFFC5;
+  --border: #FFFF66;
+  --border-width: 2px;
   --surface-divider: #2c3038;
   --text: #e6e8eb;
   --text-muted: #9aa0aa;
@@ -55,8 +56,8 @@ a {
 .catalog-mode-switch > span { color: var(--text-muted); font-size: .85rem; }
 .catalog-live {
   color-scheme: dark;
-  --bg: #222216;
-  --bg-elevated: #303024;
+  --bg: #000000;
+  --bg-elevated: #1d2025;
   --text: #ffffe5;
   --text-muted: #c6c6a4;
   --border: #4f8cff;
@@ -337,7 +338,7 @@ select {
   gap: 6px;
 }
 
-button.video-inline-action, .catalog-live button {
+button.video-inline-action {
   padding: 3px 7px;
   border-radius: 4px;
   font-size: 12px;
@@ -354,6 +355,9 @@ button.video-inline-action, .catalog-live button {
   border-radius: 6px;
 }
 .catalog-mode-switch > button.secondary { border-color: var(--text-muted); }
+.artist-heading { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.artist-heading > div:last-child { min-width: 0; }
+.artist-heading h2 { overflow-wrap: anywhere; }
 
 /* ---- Library page: artist-centered list (docs/requests/2026-09-19-ui-enhance.md) ---- */
 
@@ -751,8 +755,8 @@ button.video-inline-action, .catalog-live button {
   color: var(--text);
 }
 
-/* One border color across every control, panel, badge and navigation surface. */
-*, *::before, *::after { border-color: var(--border) !important; }
+/* Consistent visible borders across controls, panels, badges and navigation. */
+*, *::before, *::after { border-color: var(--border) !important; border-width: var(--border-width) !important; }
 
 button.add-new-artist { background: #2563eb; border: 1px solid var(--border); }
 /* Download status remains visible throughout the app. */

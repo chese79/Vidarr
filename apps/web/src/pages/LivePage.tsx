@@ -1,6 +1,7 @@
 import { ActionButton, ActionForm } from '../components/ButtonFeedback';
 import { LiveDiscoveryControls } from '../components/LiveControls';
 import LiveStartingView from '../components/LiveStartingView';
+import ArtistHeading from '../components/ArtistHeading';
 import { CatalogLink } from '../components/CatalogMode';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
@@ -93,8 +94,10 @@ function ArtistLivePage({ artistId, embedded }: { artistId: number; embedded: bo
   const error = recordings ? candidates.error : performances.error;
   function change(key: string, value: string) { const next = new URLSearchParams(params); if (value) next.set(key, value); else next.delete(key); next.delete('offset'); setParams(next); }
   return <>
-    <h2>{artist.data?.items[0]?.name ?? 'Artist'} · Live &amp; Concerts</h2><Link to="/">Artist index</Link>{' · '}<Link to="/live/settings">Live &amp; Concerts settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link><LiveDiscoveryControls key={artistId} artistId={artistId} />
-    {artistId && <nav aria-label="Artist catalog"><CatalogLink catalog="musicVideos" to={`/artist/${artistId}`}>Music Videos</CatalogLink> · <strong>Live &amp; Concerts</strong></nav>}
+    <div className="page-header"><ArtistHeading artistId={artistId} name={artist.data?.items[0]?.name ?? 'Artist'}>
+      <nav aria-label="Artist catalog"><CatalogLink catalog="musicVideos" to={`/artist/${artistId}`}>Music Videos</CatalogLink> · <strong>Live &amp; Concerts</strong></nav>
+    </ArtistHeading></div>
+    <Link to="/">Artist index</Link>{' · '}<Link to="/live/settings">Live &amp; Concerts settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link><LiveDiscoveryControls key={artistId} artistId={artistId} />
     <nav aria-label="Live views"><ActionButton aria-pressed={!recordings} onClick={() => change('view', '')}>Performances</ActionButton> <ActionButton aria-pressed={recordings} onClick={() => change('view', 'recordings')}>Recordings</ActionButton></nav>
     <LiveStartingView key={artistId} artistId={artistId} />
     <p>Browse performances and recording versions. Identity review, verified coverage, acquisition and playback readiness remain distinct.</p>

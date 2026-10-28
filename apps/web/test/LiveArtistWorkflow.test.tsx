@@ -23,6 +23,7 @@ beforeEach(() => {
   vi.spyOn(api.rootFolders, 'list').mockResolvedValue([]);
   vi.spyOn(api.qualityProfiles, 'list').mockResolvedValue([]);
   vi.spyOn(api.artists, 'list').mockResolvedValue([]);
+  vi.spyOn(api.artists, 'image').mockRejectedValue(new Error('No artwork'));
   vi.spyOn(api.artists, 'summary').mockResolvedValue({ items: [{ id: 42, name: 'Adele', hasImage: false, musicbrainzMatchStatus: 'confirmed', knownVideoCount: 0, availableVideoCount: 0 }], total: 1, availableLetters: ['A'] } as never);
   vi.spyOn(api.live, 'artists').mockResolvedValue({ ...page, items: [{ id: 42, name: 'Adele' }] });
   vi.spyOn(api.live, 'performances').mockResolvedValue(page);
@@ -32,13 +33,28 @@ beforeEach(() => {
   vi.spyOn(api.settings, 'get').mockResolvedValue({ liveEnabled: true, liveAvailable: true } as never);
   vi.spyOn(api.live, 'read').mockResolvedValue({ enabled: false, items: [], total: 0 } as never);
 });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); localStorage.clear(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
 async function mount(content: React.ReactNode, url = '/live?letter=A&q=Adele&missing=true&minPlayCount=10') {
   await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[url]}>{content}</MemoryRouter></QueryClientProvider>));
   await flush();
 }
 async function click(selector: string) { await act(async () => (host.querySelector(selector) as HTMLButtonElement).click()); await flush(); }
+
+it('uses the music-video artwork/name heading on the Live artist page', async () => {
+  const createObjectURL = vi.fn(() => 'blob:artist-artwork'), revokeObjectURL = vi.fn();
+  const BaseURL = URL;
+  vi.stubGlobal('URL', class extends BaseURL { static createObjectURL = createObjectURL; static revokeObjectURL = revokeObjectURL; });
+  vi.mocked(api.artists.image).mockResolvedValue(new Blob(['artwork'], { type: 'image/jpeg' }));
+  await mount(<LivePage artistId={42} />);
+  expect(api.artists.image).toHaveBeenCalledWith(42);
+  expect(host.querySelector('.page-header .artist-heading h2')?.textContent).toBe('Adele');
+  expect(host.querySelector('.artist-heading img')?.getAttribute('src')).toBe('blob:artist-artwork');
+  expect(host.querySelector('.artist-heading img')?.getAttribute('alt')).toBe('Adele artwork');
+  expect(host.querySelector('.artist-heading nav')?.textContent).toContain('Music Videos');
+  await act(async () => root.render(null));
+  expect(revokeObjectURL).toHaveBeenCalledWith('blob:artist-artwork');
+});
 
 it('retains the artist index and list in Live mode without music-video exclusions or global searches', async () => {
   await mount(<App />);

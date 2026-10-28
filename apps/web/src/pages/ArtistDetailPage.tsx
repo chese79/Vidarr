@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { CatalogLink } from '../components/CatalogMode';
 import VideoThumb from '../components/VideoThumb';
+import ArtistHeading from '../components/ArtistHeading';
 import GenreEditor from '../components/GenreEditor';
 import { NewArtistBadge, sourceCheckLabel } from '../components/ArtistProgress';
 import { downloadableSelectedIds } from './downloadSelection';
@@ -34,19 +35,6 @@ function recordingEvidenceLabel(evidence: string): string | null {
   } catch {
     return null;
   }
-}
-
-function ArtistHeaderImage({ artistId, name }: { artistId: number; name: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let objectUrl: string | null = null;
-    api.artists.image(artistId).then((blob) => {
-      objectUrl = URL.createObjectURL(blob);
-      setUrl(objectUrl);
-    }).catch(() => undefined);
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [artistId]);
-  return <div className="artist-image">{url ? <img src={url} alt={`${name} artwork`} /> : name.charAt(0)}</div>;
 }
 
 // A compact screenshot for one of a video's media-server matches — same
@@ -539,10 +527,7 @@ export default function ArtistDetailPage() {
     <div>
       {returnTo && <ActionButton className="secondary" onClick={() => returnToDiscover()}>Back to Discover</ActionButton>}
       <div className="page-header">
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <ArtistHeaderImage artistId={artistId} name={artist.data.name} />
-          <div>
-            <h2>{artist.data.name} <NewArtistBadge addedAt={artist.data.addedAt} /></h2>
+        <ArtistHeading artistId={artistId} name={artist.data.name} badge={<NewArtistBadge addedAt={artist.data.addedAt} />}>
             <nav aria-label="Artist catalog"><strong>Music Videos</strong> · <CatalogLink catalog="live" to={`/artist/${artistId}/live`}>Live &amp; Concerts</CatalogLink></nav>
             <div className="artist-meta">
               {artist.data.musicbrainzArtistId ? `MusicBrainz: ${artist.data.musicbrainzArtistId}` : `MusicBrainz: ${artist.data.musicbrainzMatchStatus}`} ·{' '}
@@ -550,8 +535,7 @@ export default function ArtistDetailPage() {
               {artist.data.summary.aggregatePlayCount != null ? `${artist.data.summary.aggregatePlayCount} server plays` : 'server plays unknown'} · {artist.data.summary.available} available / {artist.data.summary.known} known ·{' '}
               {artist.data.summary.missing} missing · {artist.data.summary.monitored} monitored
             </div>
-          </div>
-        </div>
+        </ArtistHeading>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
             <input

@@ -1,11 +1,14 @@
 # Vidarr product vision
 
 Catalog colors identify the selected view using the primary logo colors: Music Videos retains
-charcoal/blue, Live & Concerts uses pale yellow, and Both uses magenta, including embedded Live
-panels. Live and Both share blue border accents. The text labels
+charcoal/blue with vivid yellow borders, Live & Concerts uses a black background with pale-yellow
+text, and Both uses magenta, including embedded Live panels. Live and Both share blue border
+accents. Visible borders share a two-pixel width. The text labels
 and pressed selection remain visible. Shared unfiltered utility screens retain the neutral theme.
 The three catalog selectors retain the same font, padding and border dimensions in every palette;
-Live's compact content actions do not shrink the global view controls.
+Music Videos is the layout template for Live: both share the artist artwork/name heading,
+catalog navigation and standard button dimensions. Only content-specific controls and information
+change; Live does not apply a blanket compact-button override.
 
 Live opens with useful, bounded starting points rather than an unmatched-performance backlog.
 Shared artist/VEVO channel scans save Live video candidates alongside MV observations when
@@ -25,7 +28,7 @@ See [Live starting inventory](live-starting-inventory.md).
 Live browsing retains the same artist index/list as music videos. Open or expand a confirmed
 artist before browsing or searching performances/recordings; there is no global Live search.
 Music-video ownership/missing-count filters do not hide artists in Live mode. Live controls use
-the compact music-video action dimensions. Event-history discovery requires configured setlist.fm
+the same music-video action dimensions. Event-history discovery requires configured setlist.fm
 credentials entered globally under Settings → General → Library beside the IMVDb key, and
 explains missing/paused configuration before a request. Blank input retains the saved key;
 only its configured status is returned. Identity/content review,

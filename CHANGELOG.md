@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Shared music-video and Live artist heading (2026-10-27)
+
+- Use the same artist picture/name heading and catalog navigation for Music Videos and Live.
+- Match standard action-button dimensions by removing the blanket compact Live override; retain
+  compact video-row controls where explicitly requested. Preserve authenticated artwork loading.
+
+### Stronger borders and black Live background (2026-10-27)
+
+- Brighten Music Videos borders to vivid yellow (`#FFFF66`) and use consistent two-pixel borders.
+- Restore the Live & Concerts background to black with dark panels and matching border thickness.
+
 ### Consistent catalog selector dimensions (2026-10-27)
 
 - Keep Music Videos, Live & Concerts and Both selectors at the same font size, padding and height
