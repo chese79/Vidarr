@@ -102,13 +102,25 @@ in this Chromium-based browser. Other server versions, operating systems and cli
 their own checks. A client must render the selected ASS track or negotiate server burn-in, with
 transcoding permitted and supported. Plex is outside this Jellyfin plugin's scope.
 
-Production 0.1.1 remains active. The authorized rollout generated all 4,266 valid real-library
-sidecars, with activation off until indexing is verified. Its full metadata refresh queue was
-too slow, so the tested 0.1.2 DLL is staged beside retained prior versions for the next idle restart.
-After loading 0.1.2, `resume-index` registers existing generated files without that queue, then
-`activate` checks every valid track before enabling playback. Do not claim full-library activation
-until those checks pass. The user's new playlist is playing, so it must not be interrupted.
-Original video sizes/modification times and general user configuration are preserved. Two
+On 2026-10-31 production version 0.1.2 was confirmed active on Jellyfin 12.3.0 with the verified
+DLL hash above; no restart was needed and playback was idle. The guarded `resume-index` pass
+completed with activation off, processing 4,273 items: one created sidecar, five metadata updates,
+4,264 unchanged tracks and the three known unreadable files below. All 4,267 valid real-library
+videos and three synthetic controls have indexed owned tracks. Automatic selection is now enabled
+for Music Videos and MTV Overlay Test. Sampled explicit-source and omitted-source requests both
+select the owned track and offer burn-in; movie/episode controls receive no automatic overlay.
+The original rollout snapshot is retained. A separate private dated snapshot adds the one newly
+observed video, Architecture in Helsinki — Like It Or Not, after verifying that every original
+inventory identity, path, library and duration is unchanged. The dated verifier adjusts only the
+reported real-library count; all activation and preservation guards are retained. Private recovery
+files are `.artifacts/production-library-rollout-state-20261031.json` and
+`.artifacts/production-library-20261031.mjs`; use these together with the existing private library
+baseline for subsequent verification. Do not use the old snapshot for this expanded inventory.
+The exact-version Docker build again passed with zero warnings/errors and all 30 core tests.
+All 4,270 original media files match their baseline sizes/modification times, and general user
+configuration, original libraries and non-exempt playlists are preserved. No new physical Roku
+or visual Web playback check was performed on this date; prior client evidence is recorded above.
+The earlier 0.1.1 full metadata refresh queue was superseded by targeted registration. Two
 concurrent playlist deletions were explicitly confirmed by the user; a separate private rollout
 baseline excludes only those IDs while retaining the original historical baseline.
 The preflight snapshot contains 4,269 real music videos plus

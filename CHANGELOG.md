@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Production Jellyfin MTV overlay activation (2026-10-31)
+
+- Complete the previously staged 0.1.2 rollout on Jellyfin 12.3.0 without a restart; register and
+  enable owned info tracks for 4,267 valid Music Videos plus three synthetic test controls.
+- Preserve three known unreadable videos without invented timing. Retain the original inventory
+  snapshot and record one verified new video in a separate private recovery snapshot.
+- Verify sampled automatic selection/burn-in for both playback request styles, unchanged movie/TV
+  behavior, subtitle defaults, libraries/playlists and all 4,270 original media sizes/timestamps.
+- Rebuild against the installed server assemblies with zero warnings/errors and all 30 core tests
+  passing; retain prior physical Roku/Web evidence separately from this server verification.
+
 ### Live candidate evidence and Confirm and Grab (2026-10-27)
 
 - Show protected video thumbnails, independent MusicBrainz/setlist.fm match flags and vertical

@@ -66,7 +66,14 @@ real-library rollout, and generation created 4,266 sidecars while preserving thr
 without invented duration/timing. Original video sizes and modification times are preserved.
 The 0.1.1 full refresh queue indexed too slowly. Version 0.1.2 instead appends the owned subtitle
 through Jellyfin's public stream repository, preserving all existing stream identities/indexes.
-Its final isolated integration passes with a fresh control and ordinary subtitle. It is staged
-for an idle production restart; activation remains off pending registration/verification for all
-valid videos. The user-confirmed deletion of two unrelated playlists is retained as an explicit
+Its final isolated integration passes with a fresh control and ordinary subtitle. On 2026-10-31
+production 0.1.2 was already loaded and idle, so no restart was required. Registration and guarded
+activation completed for all 4,267 valid real-library videos plus three synthetic controls; the
+three known unreadable files remain skipped. An additive private snapshot records one newly added
+video after checking all original inventory identities/paths/durations. Both sampled playback
+request styles pass, movie/episode controls remain unchanged, and original media sizes/timestamps,
+user defaults, libraries and non-exempt playlists are preserved. The Docker build and all 30 core
+tests pass with the same verified DLL hash. Prior Roku/Web display evidence remains applicable;
+no new physical-client display check was performed during this rollout.
+The user-confirmed deletion of two unrelated playlists is retained as an explicit
 baseline exception; neither deletion was issued by this integration.
