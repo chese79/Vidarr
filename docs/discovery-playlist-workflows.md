@@ -152,3 +152,11 @@ device compatibility or the outcome of an ambiguous network timeout after a remo
 The separately authorized publication of Awesome playlist #5 and #6 to Jellyfin JF was verified
 against the live server: both contain all 27 video IDs in the exact saved order. Other historical
 unpublished playlists are retained; the new automatic flow applies when Generate is submitted.
+
+The local production image `vidarr-auto-publication-20261104:local` is installed and healthy.
+The served bundle is `index-Dx-qzZ0N.js`, and compiled server code includes automatic publication.
+All 12 pre-deployment playlists, exact memberships and sync records are unchanged, along with
+settings/connector fingerprints and original artist/video IDs. Four mounts and the environment
+were preserved. The previous container remains as `vidarr-before-autopublish-20261104`; retain
+shared configuration/media mounts if restoring it. Private baseline and verification reports live
+under the ignored MTV-plugin `.artifacts` directory. No extra production test playlist was created.

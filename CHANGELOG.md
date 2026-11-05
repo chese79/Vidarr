@@ -13,6 +13,9 @@ under **Unreleased** in the same commit as the change.
   Preserve generated playlists on player failure and retry failed initial smart publications.
 - Count items excluded before server lookup among publication misses instead of reporting full success.
 - Publish the user's reviewed Awesome playlist #5 and #6 to JF, verifying all 27 IDs and order in each.
+- Deploy the Node 22 build to Vidarr alone; verify healthy status, automatic-publication server code
+  and the served UI bundle, preserving all 12 existing playlists, memberships, sync records,
+  configuration fingerprints and original catalog IDs. Retain the prior container for rollback.
 
 ### Unconfirmed artists in Music Videos and Live navigation (2026-11-04)
 
