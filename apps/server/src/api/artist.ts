@@ -326,7 +326,9 @@ export async function artistRoutes(app: FastifyInstance) {
   app.get('/api/v1/artist/summary', async (req) => {
     const query = ArtistSummaryQuerySchema.parse(req.query);
 
-    const baseConditions: Prisma.Sql[] = [Prisma.sql`a."musicbrainzMatchStatus" = 'confirmed' AND a."musicbrainzArtistId" IS NOT NULL`];
+    // Observations remain visible for navigation/review without becoming confirmed identities.
+    // Linked observations are represented by their canonical owner instead of duplicate rows.
+    const baseConditions: Prisma.Sql[] = [Prisma.sql`a."musicbrainzMatchStatus" <> 'linked'`];
     if (query.search) {
       baseConditions.push(Prisma.sql`a."name" LIKE ${'%' + escapeLikeTerm(query.search) + '%'} ESCAPE '\\'`);
     }

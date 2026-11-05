@@ -96,6 +96,25 @@ it('preserves artist filters and the index when switching between Live and music
   expect(api.live.performances).not.toHaveBeenCalled();
 });
 
+it.each(['musicVideos', 'live'])('labels unconfirmed artists and enables their letter for %s without starting catalog actions', async mode => {
+  localStorage.setItem(CATALOG_MODE_KEY, mode);
+  vi.mocked(api.artists.summary).mockResolvedValue({ items: [{ id: 4521, name: 'Yo La Tengo', hasImage: false, musicbrainzMatchStatus: 'unmatched', knownVideoCount: 0, availableVideoCount: 0, unmatchedVideoCount: 12 }], total: 1, availableLetters: ['Y'] } as never);
+  vi.spyOn(api.artists, 'videos');
+  await mount(<App />, '/?letter=Y');
+  expect(host.querySelector('.artist-list')?.textContent).toContain('Unconfirmed');
+  expect(host.querySelector('.artist-list a[href="/match-review"]')?.textContent).toBe('Review artist identity');
+  const y = [...host.querySelectorAll<HTMLButtonElement>('.letter-rail button')].find(button => button.textContent === 'Y');
+  expect(y?.disabled).toBe(false);
+  if(mode === 'musicVideos'){
+    expect((host.querySelector('[aria-label="Select Yo La Tengo"]') as HTMLInputElement).disabled).toBe(true);
+    expect((host.querySelector('[aria-label="Monitored — Yo La Tengo"]') as HTMLInputElement).disabled).toBe(true);
+  }
+  await click(`[aria-label="Expand Yo La Tengo's ${mode === 'live' ? 'Live catalog' : 'videos'}"]`);
+  expect(host.querySelector('[aria-label="Artist identity review"]')?.textContent).toContain('Review and confirm the MusicBrainz identity');
+  expect(api.live.performances).not.toHaveBeenCalled();
+  expect(api.artists.videos).not.toHaveBeenCalled();
+});
+
 it('does not issue global catalog requests when a Live page has no valid artist context', async () => {
   await mount(<LivePage />, '/live?search=concert');
   expect(host.textContent).toContain('Choose an artist');

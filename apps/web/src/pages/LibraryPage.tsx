@@ -210,6 +210,7 @@ function ArtistRow({
       queryClient.invalidateQueries({ queryKey: ['artist', artist.id] });
     },
   });
+  const unconfirmed = artist.musicbrainzMatchStatus !== 'confirmed';
   return (
     <div className="artist-row" role="listitem">
       <div className="artist-row-header">
@@ -217,6 +218,7 @@ function ArtistRow({
           type="checkbox"
           aria-label={`Select ${artist.name}`}
           checked={selected}
+          disabled={unconfirmed}
           onChange={() => onToggleSelect(artist.id)}
         />}
         <ArtistImage artist={artist} />
@@ -224,8 +226,10 @@ function ArtistRow({
           <Link to={`/artist/${artist.id}`} className="artist-name">
             {artist.name}
           </Link>
+          {unconfirmed && <span className="status-chip missing">Unconfirmed</span>}
           <NewArtistBadge addedAt={artist.addedAt} />
-          {!live && <ArtistProgress id={artist.id} status={artist.videoInventoryStatus} pending={artist.pendingVideoReviewCount ?? 0} error={artist.videoInventoryError} />}
+          {!live && !unconfirmed && <ArtistProgress id={artist.id} status={artist.videoInventoryStatus} pending={artist.pendingVideoReviewCount ?? 0} error={artist.videoInventoryError} />}
+          {unconfirmed && <Link to="/match-review">Review artist identity</Link>}
           <span className="artist-meta">{artist.genre ?? 'Unknown genre'}</span>
           <span className="artist-meta">MusicBrainz: {artist.musicbrainzMatchStatus}</span>
           {artist.musicbrainzCandidateId && <span className="artist-meta">
@@ -252,6 +256,7 @@ function ArtistRow({
             <input
               type="checkbox"
               checked={artist.monitored}
+              disabled={unconfirmed}
               onChange={(e) => onMonitorChange(artist.id, e.target.checked)}
               aria-label={`Monitored — ${artist.name}`}
             />
@@ -268,7 +273,9 @@ function ArtistRow({
           </ActionButton>
         </div>
       </div>
-      {expanded && (live ? <LivePage artistId={artist.id} embedded /> : <ArtistAccordion artistId={artist.id} />)}
+      {expanded && (unconfirmed ? <div className="artist-accordion" role="region" aria-label="Artist identity review">
+        <p>Unconfirmed artist. <Link to="/match-review">Review and confirm the MusicBrainz identity</Link> before catalog discovery or Live actions. Existing server videos remain inventory for review.</p>
+      </div> : live ? <LivePage artistId={artist.id} embedded /> : <ArtistAccordion artistId={artist.id} />)}
     </div>
   );
 }
@@ -353,7 +360,8 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
   const anyFilterActive = Boolean(
     search || genre || monitored || musicbrainzStatus || letter || hasMissing || completeness || minLocalVideos || minPlayCount || hideWithoutVideos,
   );
-  const allVisibleSelected = items.length > 0 && items.every((a) => selectedIds.has(a.id));
+  const selectableItems = items.filter((artist) => artist.musicbrainzMatchStatus === 'confirmed');
+  const allVisibleSelected = selectableItems.length > 0 && selectableItems.every((a) => selectedIds.has(a.id));
 
   function toggleSelect(id: number) {
     setSelectedIds((prev) => {
@@ -368,11 +376,11 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
     setSelectedIds((prev) => {
       if (allVisibleSelected) {
         const next = new Set(prev);
-        for (const a of items) next.delete(a.id);
+        for (const a of selectableItems) next.delete(a.id);
         return next;
       }
       const next = new Set(prev);
-      for (const a of items) next.add(a.id);
+      for (const a of selectableItems) next.add(a.id);
       return next;
     });
   }
@@ -603,7 +611,7 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
           {!live && items.length > 0 && (
             <div className="form-row" style={{ alignItems: 'center' }}>
               <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} />
+                <input type="checkbox" checked={allVisibleSelected} disabled={!selectableItems.length} onChange={toggleSelectAllVisible} />
                 Select all visible
               </label>
             </div>

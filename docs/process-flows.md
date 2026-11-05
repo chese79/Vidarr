@@ -1,5 +1,17 @@
 # Process flows and consistency review
 
+## Artist navigation and unconfirmed observations (2026-11-04)
+
+Browse Music Videos or Live → apply current filters → alphabet letters include confirmed artists
+and unconfirmed observations → open an **Unconfirmed** row → Artist Review resolves and confirms
+the MusicBrainz identity → continue normal catalog/video review or Live discovery. Visibility does
+not confirm identity, establish catalog ownership or admit source videos. Linked observations are
+represented by their canonical owner. Music Videos retains its empty-artist filter; Live does not
+require music-video ownership. The list and rail use the same eligible observation set.
+Recovery from an interrupted sync verifies an existing embedded/connector MBID against its current
+source before applying the existing enrichment path; name-only observations remain Unconfirmed.
+See [navigation and recovery](library-artist-navigation.md).
+
 ## Live discovery matching and confirmation (2026-10-27)
 
 Add a Live video candidate -> queue both MusicBrainz and setlist.fm checks -> inspect thumbnail,

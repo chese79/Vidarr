@@ -104,6 +104,26 @@ describe('artist routes', () => {
     expect(next.json().items[0].name).toBe('Review Beta');
   });
 
+  it('includes unconfirmed observations in Music Video and Live letters without confirming them or duplicating linked observations', async () => {
+    const yo = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Yo La Tengo', sortName: 'Yo La Tengo' });
+    const zebra = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Zebra', sortName: 'Zebra' });
+    await prisma.artist.update({ where: { id: zebra.id }, data: { musicbrainzMatchStatus: 'failed' } });
+    await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Xenon', sortName: 'Xenon' });
+    const linked = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Linked Observation' });
+    await prisma.artist.update({ where: { id: linked.id }, data: { musicbrainzMatchStatus: 'linked' } });
+    const connector = await createLibraryConnector();
+    await createLibraryVideo(connector.id, { artistName: 'Yo La Tengo', normalizedArtistName: 'yo la tengo', musicVideoId: null });
+    await createLibraryVideo(connector.id, { externalId: 'zebra-video', artistName: 'Zebra', normalizedArtistName: 'zebra', musicVideoId: null });
+    const get = (query: string) => app.inject({ url: '/api/v1/artist/summary?' + query, headers: authHeaders() });
+    const mv = (await get('hideWithoutVideos=true&letter=Y&pageSize=1')).json();
+    expect(mv).toMatchObject({ total: 1, availableLetters: ['Y', 'Z'], items: [{ id: yo.id, musicbrainzMatchStatus: 'unmatched', knownVideoCount: 0, availableVideoCount: 0, unmatchedVideoCount: 1 }] });
+    const live = (await get('hideWithoutVideos=false')).json();
+    expect(live.availableLetters).toEqual(['X', 'Y', 'Z']);
+    expect(live.items.map((row: { name: string }) => row.name)).toEqual(['Xenon', 'Yo La Tengo', 'Zebra']);
+    expect((await get('hideWithoutVideos=false&musicbrainzStatus=failed')).json().items).toMatchObject([{ id: zebra.id }]);
+    expect(await prisma.artist.findUniqueOrThrow({ where: { id: yo.id } })).toMatchObject({ musicbrainzArtistId: null, musicbrainzMatchStatus: 'unmatched' });
+  });
+
   it('sorts by all suggested matches before paging, excluding rejected matches', async () => {
     const artists = [];
     for (const name of ['Review Alpha', 'Review Beta', 'Review Zulu']) {

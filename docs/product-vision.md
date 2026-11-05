@@ -145,10 +145,16 @@ removed or renamed library entries without deleting a manually managed artist. S
 connector must be repeatable, deduplicate equivalent names, and remove stale connector-owned
 records safely.
 
-For launch, only MusicBrainz-confirmed artists appear as top-level Library entries. An audio-track
-credit or a video uploader name is an observation, not an artist identity. Unresolved observations
-belong in a separate Match Review list until a MusicBrainz identity is confirmed. A channel such as
-`311VEVO` may suggest the artist 311, but the channel name is never promoted as an artist.
+Library navigation includes MusicBrainz-confirmed artists and unresolved observations in Music
+Videos and Live, including the alphabet rail. Unresolved rows are labeled **Unconfirmed** and link
+to Artist Review; expanding them explains identity confirmation instead of starting catalog/Live
+actions. Linked observations stay hidden behind their canonical owner. Current search/genre and
+music-video empty-artist filters still apply before letters and pagination; Live retains artists
+without music videos. See [artist navigation](library-artist-navigation.md).
+An audio-track credit or uploader name remains an observation, not a confirmed artist identity.
+MusicBrainz identity checks and review remain required before canonical catalog actions. A channel
+such as `311VEVO` may suggest the artist 311, but visibility never confirms that channel's identity
+or admits its uploads as official videos.
 
 After artist identity is resolved, IMVDb supplies the primary authoritative list of expected official
 music videos. Validated official YouTube discoveries may extend the canonical catalog as described

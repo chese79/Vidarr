@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Unconfirmed artists in Music Videos and Live navigation (2026-11-04)
+
+- Include unresolved observations in the shared Library alphabet rail and rows, labeled
+  Unconfirmed with an Artist Review link. Retain current filters and hide linked duplicates.
+- Explain identity review on expansion; preserve confirmation, source review and acquisition/
+  delivery checks rather than treating visibility as canonical acceptance.
+- Recover Yo La Tengo through its verified current Jellyfin MusicBrainz ID after an interrupted
+  sync; verify Y navigation in both modes and retain its 283 unmatched server-video observations.
+
 ### Portable Kabel MTV overlay layout (2026-11-04)
 
 - Prepare Jellyfin plugin 0.1.3 with the supplied five-line layout: artist, quoted song title,
