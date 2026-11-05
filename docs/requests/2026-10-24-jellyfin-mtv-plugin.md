@@ -7,6 +7,14 @@ dedicated-user/global-subtitle-default proposals.
 
 ## Required behavior
 
+The 2026-11-04 user revision supersedes the original text-field defaults below: use the supplied
+five-line reference with artist, quoted song title, `Album - Album Year`, record label and
+`Director/s: Names`; omit the standalone video year and MTV line. Bundle Kabel in the plugin for
+portable Windows/Linux rendering. The implementation uses the freeware Kabel Book digitization
+in bold, carrying the font in each generated ASS track; font installation is not a prerequisite.
+Album year requires a unique local album-title/credited-artist match, never the video's year.
+Missing/ambiguous data is omitted. Timing, scope, ownership/backups and playback protections remain.
+
 - Independent Jellyfin server plugin, installed separately from Vidarr and from archived clients.
 - Only Jellyfin `MusicVideo` items in administrator-selected music-video libraries qualify.
   Movies, episodes, audio, generic videos, unselected libraries and foreign subtitle tracks do not.

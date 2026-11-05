@@ -54,9 +54,42 @@ audio or foreign subtitle streams, and leaves existing owned stream records inta
 generation also registers an unchanged generated file when its stream was not previously indexed.
 Inconsistent or duplicate stream metadata is reported for review instead of being replaced.
 
-The source metadata is Jellyfin's imported artist, title, album, ProductionYear and director data.
-Only the item's video year is used; there is no album-year fallback. Missing fields disappear.
-The default block is white outlined text at the lower left, visible for six seconds at each end.
+Version 0.1.3 follows the supplied five-line reference: artist, quoted song title,
+`Album - Album Year`, record label and `Director/s: Names`. The standalone video-year and trailing
+MTV lines are removed. Text remains bold white with a dark outline at the lower left, visible
+for six seconds at each end. Missing fields disappear; an unknown album year leaves the album
+name without a dangling separator. No standalone year appears when the album is absent.
+
+Artist/title/album/directors come from existing Jellyfin music-video metadata. Record label uses
+the video's Studios metadata when available, otherwise the uniquely matched album's Studios.
+Album year comes exclusively from a unique local MusicAlbum with the same album title and an
+exact matching credited artist (case/whitespace ignored). Multiple editions, no album match or
+missing artist evidence leave album year and album-derived label unknown. Generation reads local
+album metadata in pages; it does not fetch metadata, change catalog records or treat video year
+as album year. The earlier ProductionYear-only video-year rule is superseded by this requested
+album-year presentation.
+
+Kabel is embedded in the plugin DLL and in each generated ASS track's `[Fonts]` section.
+No OS font installation, Windows font path or runtime download is required. The bundled freeware
+digitization is Kabel Book, rendered bold, rather than the commercial Kabel Black face. Its source
+and embedded attribution are retained in [the font notice](Jellyfin.Plugin.Mtv/Fonts/NOTICE.md),
+also included in the package and DLL. The font adds about 23 KiB per generated track. Windows
+Jellyfin FFmpeg and Linux FFmpeg/libass both select the embedded KabelBook in synthetic render
+checks without system Kabel fonts. This establishes rendering portability, not compatibility of
+the plugin with untested Jellyfin versions or native client subtitle renderers. Server burn-in
+uses the bundled face; native rendering depends on the client's ASS support.
+
+After upgrading, regenerate owned tracks to apply the new layout and font. Keep the existing
+ownership manifest and revision backups. Upgrading the DLL alone does not rewrite existing tracks.
+The 0.1.3 exact-version Docker build has zero warnings/errors and all 49 core checks pass.
+The isolated Jellyfin 12.3.0 integration also passes bundled-track generation/registration,
+explicit and omitted-source automatic selection, movie/episode exclusion, disabled recovery,
+administrator authorization and preservation of source bytes, stream indexes and user defaults.
+Verified DLL SHA256: `9c6736aa62586d2d49afca917799237c9c3754fc70dc2f502103a46b0eaf5c84`.
+The package is `.artifacts/MTV-Music-Video-Info-0.1.3.0.zip`. The verified DLL and manifest are
+staged under the production `plugins/MTV Music Video Info_0.1.3.0` directory, with prior versions
+retained. Production remains on 0.1.2; the requested layout is not active until an authorized idle
+restart and owned-track regeneration complete. The user's Roku playlist was active when staged.
 Short overlapping windows merge; unknown/unscanned duration is an error, not an invented outro.
 
 ## Data preservation and recovery

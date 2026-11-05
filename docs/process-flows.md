@@ -129,6 +129,11 @@ audio/video/foreign-subtitle streams → enabled playback filter selects only a 
 track before negotiation → normal Jellyfin burn-in/transcoding → client verification. Movie/episode
 and unknown/alternate-source requests pass through unchanged. User subtitle defaults are never
 modified. Disabling stops automatic selection but retains generated tracks/backups for recovery.
+The requested 0.1.3 layout uses quoted song title, album with its album year, record label and
+Director/s credits. Generation resolves album year only from a unique local album-title/artist
+match, omits unknown/ambiguous fields, and embeds the DLL's bundled Kabel font into the owned ASS
+track. Upgrade while idle, preserve the ownership manifest/backups, regenerate, then verify
+rendering and playback before considering the layout deployed. OS font installation is unnecessary.
 See [plugin scope and verification](requests/2026-10-24-jellyfin-mtv-plugin.md).
 For real-library rollout: snapshot exact inventory/configuration and media size/timestamps →
 check idle playback before plugin restart → verify standard Web/Roku playback → generate with

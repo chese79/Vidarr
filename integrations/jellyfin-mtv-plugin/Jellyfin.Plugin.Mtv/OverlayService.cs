@@ -1,5 +1,6 @@
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Entities;
@@ -45,6 +46,15 @@ public sealed class OverlayService(ILibraryManager library,IMediaStreamRepositor
    if(roots.Length==0||roots.Any(x=>!allowed.Contains(x)))throw new InvalidOperationException("Choose only music-video libraries before generation");
    var style=new OverlayStyle(Configuration.IntroSeconds,Configuration.OutroSeconds,Configuration.FontSize);
    var seen=new HashSet<Guid>();
+   // Resolve album-specific facts from existing local album metadata, never the video's year.
+   var albums=new List<AlbumMetadata>();
+   for(var offset=0;;offset+=100){
+    token.ThrowIfCancellationRequested();
+    var batch=library.GetItemList(new InternalItemsQuery{Recursive=true,IncludeItemTypes=[BaseItemKind.MusicAlbum],IsVirtualItem=false,StartIndex=offset,Limit=100});
+    albums.AddRange(batch.OfType<MusicAlbum>().Select(x=>new AlbumMetadata(x.Name,x.AlbumArtists.Concat(x.Artists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),x.ProductionYear,string.Join(", ",x.Studios))));
+    if(batch.Count<100)break;
+   }
+   var albumsByName=albums.ToLookup(x=>OverlayCore.Literal(x.Name),StringComparer.OrdinalIgnoreCase);
    foreach(var root in roots)for(var offset=0;;offset+=100){
     token.ThrowIfCancellationRequested();
     var batch=library.GetItemList(new InternalItemsQuery{ParentId=root,Recursive=true,IncludeItemTypes=[BaseItemKind.MusicVideo],IsVirtualItem=false,StartIndex=offset,Limit=100});
@@ -54,7 +64,9 @@ public sealed class OverlayService(ILibraryManager library,IMediaStreamRepositor
      try {
       if(video.RunTimeTicks is null or <=0)throw new InvalidOperationException("Media duration is not scanned yet");
       var directors=string.Join(", ",library.GetPeople(video).Where(x=>x.Type==PersonKind.Director).Select(x=>x.Name));
-      var text=OverlayCore.Render(new(string.Join(", ",video.Artists),video.Name,video.Album??"",video.ProductionYear,directors),video.RunTimeTicks.Value/10000000d,style);
+      var album=OverlayCore.MatchAlbum(video.Album??"",video.Artists,albumsByName[OverlayCore.Literal(video.Album)]);
+      var label=video.Studios.Length>0?string.Join(", ",video.Studios):album?.RecordLabel??"";
+      var text=OverlayCore.Render(new(string.Join(", ",video.Artists),video.Name,video.Album??"",album?.Year,directors,label),video.RunTimeTicks.Value/10000000d,style);
       var result=await Store.Write(video.Id,video.Path,text,token);
       // Register only the owned subtitle through Jellyfin's public stream repository. A full
       // metadata refresh reprobes every video and can contact remote providers for hours.

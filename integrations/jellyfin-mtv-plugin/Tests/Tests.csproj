@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
  <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
  <ItemGroup><Compile Include="../Jellyfin.Plugin.Mtv/OverlayCore.cs" Link="OverlayCore.cs" /><Compile Include="../Jellyfin.Plugin.Mtv/OwnedOverlayStore.cs" Link="OwnedOverlayStore.cs" /></ItemGroup>
+ <ItemGroup><Compile Include="../Jellyfin.Plugin.Mtv/EmbeddedFont.cs" Link="EmbeddedFont.cs" /><EmbeddedResource Include="../Jellyfin.Plugin.Mtv/Fonts/kabel.ttf" LogicalName="Jellyfin.Plugin.Mtv.Fonts.kabel.ttf" /></ItemGroup>
 </Project>

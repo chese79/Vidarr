@@ -1,13 +1,13 @@
 {
  "category":"General",
- "changelog":"Register owned subtitle tracks directly through Jellyfin's stream repository without full metadata refresh; preserve existing stream indices.",
+ "changelog":"Use the Kabel reference layout with quoted song title, album and album year, record label and Director/s credits; preserve owned-track backups.",
  "description":"Owned ASS info tracks for selected MusicVideo libraries; no movie/TV or user subtitle-default changes.",
  "guid":"c9298ca5-50d5-4be6-8771-eae3b2bb8b86",
  "name":"MTV Music Video Info",
  "overview":"Separate Jellyfin server plugin for music-video metadata overlays.",
  "owner":"Vidarr",
  "targetAbi":"12.3.0.0",
- "version":"0.1.2.0",
+ "version":"0.1.3.0",
  "status":"Active",
  "autoUpdate":false,
  "assemblies":[]

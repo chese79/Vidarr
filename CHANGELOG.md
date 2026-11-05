@@ -5,6 +5,20 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Portable Kabel MTV overlay layout (2026-11-04)
+
+- Prepare Jellyfin plugin 0.1.3 with the supplied five-line layout: artist, quoted song title,
+  album and album year, record label and Director/s credits; remove standalone video year/MTV.
+- Embed Kabel Book in the DLL and generated ASS tracks for Windows/Linux burn-in without system
+  font installation. Retain font provenance/attribution and owned-sidecar revision backups.
+- Use existing video metadata and a unique local album-title/artist match for album year and
+  fallback label; omit unknown or ambiguous facts rather than substituting the video's year.
+- Verify the Windows/Linux renderers select embedded KabelBook and all 49 core checks pass.
+  The isolated Jellyfin 12.3.0 integration also passes generation, both playback request styles,
+  movie/episode exclusion, disabling and preservation of source bytes/streams/preferences.
+  Stage the verified DLL/manifest beside retained prior versions. Production 0.1.2 remains active
+  until an authorized idle restart and owned-track regeneration complete.
+
 ### Production Jellyfin MTV overlay activation (2026-10-31)
 
 - Complete the previously staged 0.1.2 rollout on Jellyfin 12.3.0 without a restart; register and

@@ -1,5 +1,6 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {createHash,randomUUID} from 'node:crypto';
+import path from 'node:path';
 const base='http://host.docker.internal:18096',id='c9298ca5-50d5-4be6-8771-eae3b2bb8b86';
 const credentials=JSON.parse(await readFile('/poc/.lab/credentials.json','utf8'));
 const native=String.raw`C:\Users\Wigwam\Documents\Codex\Vidarr\integrations\jellyfin-mtv-poc\.lab`;
@@ -46,6 +47,7 @@ try{
  let prepared;
  for(let i=0;i<120;i++){prepared=await items(music.ItemId,'MusicVideo');if(prepared.every(x=>x.MediaSources[0].MediaStreams.some(s=>s.IsExternal&&s.Path?.endsWith('.mtv-info.eng.ass'))))break;await new Promise(r=>setTimeout(r,1000));}
  check(prepared.every(x=>x.MediaSources[0].MediaStreams.some(s=>s.IsExternal&&s.Path?.endsWith('.mtv-info.eng.ass'))),'owned tracks are indexed');
+ for(const video of prepared){const owned=video.MediaSources[0].MediaStreams.find(s=>s.Path?.endsWith('.mtv-info.eng.ass'));const content=await readFile('/poc/.lab/media/'+path.win32.basename(owned.Path),'utf8');check(content.includes('Style: MTV,Kabel,')&&content.includes('[Fonts]\nfontname: kabel.ttf\n'),'generated track carries bundled Kabel font');check(!content.includes('\\NMTV\n')&&!content.includes('\\NMTV\r\n'),'reference layout omits trailing MTV line');}
  for(const originalVideo of videos){const now=prepared.find(x=>x.Id===originalVideo.Id).MediaSources[0].MediaStreams;for(const old of originalVideo.MediaSources[0].MediaStreams)check(now.some(x=>x.Index===old.Index&&x.Type===old.Type&&x.Codec===old.Codec&&x.Path===old.Path),'existing media stream identity and index preserved');}
  await api(`/Plugins/${id}/Configuration`,{...configuration,Enabled:true});
  for(const video of prepared){const owned=video.MediaSources[0].MediaStreams.find(s=>s.Path?.endsWith('.mtv-info.eng.ass'));const p=(await playback(video)).MediaSources[0];check(p.DefaultSubtitleStreamIndex===owned.Index,'music video automatically selects the owned info track');check(!p.SupportsDirectPlay&&p.TranscodingUrl?.includes('SubtitleMethod=Encode'),'music-video playback offers burn-in despite user subtitle mode None');}
