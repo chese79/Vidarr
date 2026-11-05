@@ -35,3 +35,23 @@ The navigation revision exposes other unconfirmed observations, so interrupted i
 no longer makes observed artists disappear. Regression checks cover letters backed by unmatched
 inventory, empty-row filtering, failed identities, linked-row exclusion, pagination and review-only
 expansion in both media views.
+
+## Verification and local deployment
+
+The Node 22 Docker production build succeeds. Ten focused UI checks pass; eight checks were
+repeated successfully after the final monitoring/selection safeguards. The API suite passed 49 of
+50 initially; one existing count test exceeded its five-second limit under load. That test and
+the new unconfirmed-navigation regression passed on targeted rerun with a longer timeout.
+
+The rebuilt local image is `vidarr-unconfirmed-artists-20261104:local`; only Vidarr was replaced.
+Its exact four mounts, environment, port binding and startup command were retained, and the prior
+container is retained as `vidarr-before-unconfirmed-20261104` for rollback. No configuration volume
+or media was removed. Production checks confirm healthy status, served bundle `index-EqPTBk_l.js`,
+Y navigation/Yo La Tengo in both modes, one unconfirmed Y row in Music Videos and five in Live.
+Configuration fingerprints and all original artist/video/playlist IDs are preserved. The first
+cold-start API verification timed out; subsequent actual endpoint checks passed. Independent
+summary-query timings were under one second each once startup/build work settled.
+
+Private fingerprints, container state and reports are retained under the ignored MTV-plugin
+`.artifacts` directory. To roll back, stop the replacement, rename it aside, restore the retained
+container's `vidarr` name and start it; retain the shared configuration/media mounts throughout.

@@ -13,6 +13,9 @@ under **Unreleased** in the same commit as the change.
   delivery checks rather than treating visibility as canonical acceptance.
 - Recover Yo La Tengo through its verified current Jellyfin MusicBrainz ID after an interrupted
   sync; verify Y navigation in both modes and retain its 283 unmatched server-video observations.
+- Deploy only the rebuilt Vidarr service with original mounts/environment and a retained rollback
+  container. Verify production Y rows, unconfirmed observations and the served review-label bundle
+  in both modes, with settings, connectors and original catalog IDs preserved.
 
 ### Portable Kabel MTV overlay layout (2026-11-04)
 
@@ -25,8 +28,9 @@ under **Unreleased** in the same commit as the change.
 - Verify the Windows/Linux renderers select embedded KabelBook and all 49 core checks pass.
   The isolated Jellyfin 12.3.0 integration also passes generation, both playback request styles,
   movie/episode exclusion, disabling and preservation of source bytes/streams/preferences.
-  Stage the verified DLL/manifest beside retained prior versions. Production 0.1.2 remains active
-  until an authorized idle restart and owned-track regeneration complete.
+  Install 0.1.3 after the authorized restart and user-stopped playback, regenerate 4,271 valid
+  tracks (4,268 real videos and three controls), and verify indexing, both request styles and
+  activation. Skip three known unreadable videos; preserve original media/defaults/libraries/playlists.
 
 ### Production Jellyfin MTV overlay activation (2026-10-31)
 

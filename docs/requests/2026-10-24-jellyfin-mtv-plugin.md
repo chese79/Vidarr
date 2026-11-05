@@ -15,6 +15,13 @@ in bold, carrying the font in each generated ASS track; font installation is not
 Album year requires a unique local album-title/credited-artist match, never the video's year.
 Missing/ambiguous data is omitted. Timing, scope, ownership/backups and playback protections remain.
 
+The 0.1.3 build and 49 core checks pass, as do isolated Jellyfin integration and Windows/Linux
+embedded-font render checks. Production installation and regeneration completed on 2026-11-04:
+4,268 valid real videos plus three controls indexed/active; three unreadable originals retained
+and skipped. Both sampled request styles, movie/episode controls and preservation checks pass.
+Current recovery artifacts and the distinction from physical-client verification are recorded in
+the plugin README.
+
 - Independent Jellyfin server plugin, installed separately from Vidarr and from archived clients.
 - Only Jellyfin `MusicVideo` items in administrator-selected music-video libraries qualify.
   Movies, episodes, audio, generic videos, unselected libraries and foreign subtitle tracks do not.

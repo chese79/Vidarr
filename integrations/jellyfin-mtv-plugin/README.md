@@ -86,10 +86,21 @@ The isolated Jellyfin 12.3.0 integration also passes bundled-track generation/re
 explicit and omitted-source automatic selection, movie/episode exclusion, disabled recovery,
 administrator authorization and preservation of source bytes, stream indexes and user defaults.
 Verified DLL SHA256: `9c6736aa62586d2d49afca917799237c9c3754fc70dc2f502103a46b0eaf5c84`.
-The package is `.artifacts/MTV-Music-Video-Info-0.1.3.0.zip`. The verified DLL and manifest are
-staged under the production `plugins/MTV Music Video Info_0.1.3.0` directory, with prior versions
-retained. Production remains on 0.1.2; the requested layout is not active until an authorized idle
-restart and owned-track regeneration complete. The user's Roku playlist was active when staged.
+The package is `.artifacts/MTV-Music-Video-Info-0.1.3.0.zip`. On 2026-11-04 the verified DLL and
+manifest were installed under production `plugins/MTV Music Video Info_0.1.3.0`, retaining prior
+versions. The user authorized interruption for restart, then stopped the automatically resumed Roku
+playlist because that client does not support remote Stop. With playback idle, generation processed
+4,274 items: one created track, 4,270 revisions backed up and three known unreadable files skipped.
+All 4,268 valid real-library videos and three synthetic controls have indexed tracks; automatic
+selection is enabled. Sampled explicit/omitted-source requests pass, movie/episode controls receive
+no overlay, and user configuration, libraries/playlists and original media attributes are preserved.
+The 4,270 original media-file size/timestamp checks all pass. No new physical Roku display check
+was performed; Windows/Linux synthetic render evidence and earlier client evidence remain distinct.
+
+Current private recovery files are `.artifacts/production-baseline-20261104.json`,
+`production-rollout-state-20261104.json`, `production-rollout-20261104.mjs` and
+`production-activation-verification-20261104.json`. Use this dated verifier and snapshot together;
+the repository's original operator script and October snapshots target the historical 0.1.2 rollout.
 Short overlapping windows merge; unknown/unscanned duration is an error, not an invented outro.
 
 ## Data preservation and recovery
