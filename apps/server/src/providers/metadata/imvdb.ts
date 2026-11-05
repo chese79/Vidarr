@@ -79,6 +79,14 @@ function sourceUrl(provider: string, value: string): string {
 // YouTube source on file). Best-effort: a failure here (IMVDb's backend is
 // flaky, see imvdbGet above) just leaves both fields unknown rather than
 // failing the whole video-list fetch.
+export async function enrichmentVideoDirectors(apiKey: string, videoId: string): Promise<{ directors: string[]; url: string }> {
+  if (!/^\d+$/.test(videoId)) throw new Error('Invalid IMVDb video ID');
+  const body = await imvdbGet(apiKey, `/video/${videoId}?include=credits,sources`);
+  if (String(body.id) !== videoId) throw new Error('IMVDb returned a different video');
+  const directors = [...new Set<string>((body.directors ?? []).map((row: any) => row.entity_name).filter((name: unknown) => typeof name === 'string' && name.length > 0))];
+  return { directors, url: typeof body.url === 'string' && /^https:\/\/(?:www\.)?imvdb\.com\/video\//i.test(body.url) ? body.url : `${API_BASE}/video/${videoId}?include=credits,sources` };
+}
+
 export async function getVideoDetails(apiKey: string, imvdbVideoId: string): Promise<VideoDetails> {
   try {
     const body = await imvdbGet(apiKey, `/video/${imvdbVideoId}?include=credits,sources`);

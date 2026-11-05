@@ -373,6 +373,7 @@ model DeletedVideoRecord {
 }
 
 model LibraryConnector {
+  metadataEnrichmentRuns MetadataEnrichmentRun[]
   recordingCopies RecordingServerCopy[]
   id             Int       @id @default(autoincrement())
   name           String
@@ -398,6 +399,54 @@ model LibraryConnector {
   libraryVideos     LibraryVideo[]
   playlistSyncs  PlaylistSync[]
   rootFolders    RootFolder[]
+}
+
+// Independent display/library metadata work; never creates or accepts catalog identities.
+model MetadataEnrichmentRun {
+  id Int @id @default(autoincrement())
+  connectorId Int
+  connector LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  serverId String
+  libraryId String
+  status String @default("running")
+  cursor Int @default(0)
+  highWaterId Int
+  processed Int @default(0)
+  updated Int @default(0)
+  completeCount Int @default(0)
+  reviewCount Int @default(0)
+  unknownCount Int @default(0)
+  failedCount Int @default(0)
+  leaseAt DateTime?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items MetadataEnrichmentItem[]
+  @@index([status, id])
+  @@index([connectorId, status])
+}
+
+model MetadataEnrichmentItem {
+  id Int @id @default(autoincrement())
+  runId Int
+  run MetadataEnrichmentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  libraryVideoId Int
+  externalId String
+  title String
+  artistName String
+  status String @default("pending")
+  beforeJson String
+  proposalJson String
+  resultJson String?
+  changed Boolean @default(false)
+  error String?
+  attempts Int @default(0)
+  retryAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([runId, externalId])
+  @@index([runId, status, id])
+  @@index([libraryVideoId])
 }
 
 model LibraryRecording {

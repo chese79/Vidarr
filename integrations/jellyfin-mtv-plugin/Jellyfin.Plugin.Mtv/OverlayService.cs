@@ -17,7 +17,7 @@ public sealed class GenerationStatus
  public int Unchanged {get;set;}
  public List<string> Errors {get;set;}=[];
 }
-public sealed class OverlayService(ILibraryManager library,IMediaStreamRepository streams,IHostApplicationLifetime lifetime,ILogger<OverlayService> logger)
+public sealed partial class OverlayService(ILibraryManager library,IMediaStreamRepository streams,IHostApplicationLifetime lifetime,ILogger<OverlayService> logger)
 {
  private OwnedOverlayStore? store;
  private readonly object gate=new();
@@ -62,11 +62,26 @@ public sealed class OverlayService(ILibraryManager library,IMediaStreamRepositor
     foreach(var item in batch){
      if(item is not MusicVideo video||!seen.Add(item.Id))continue;
      try {
+      var result=await Refresh(video,albumsByName[OverlayCore.Literal(video.Album)],token);
+      lock(gate){if(result=="created")Status.Created++;else if(result=="updated")Status.Updated++;else Status.Unchanged++;}
+     }catch(OperationCanceledException){throw;}
+     catch(Exception error){logger.LogWarning(error,"MTV overlay generation failed for {ItemId}",video.Id);lock(gate)if(Status.Errors.Count<50)Status.Errors.Add(video.Name+": "+error.Message);}
+     finally{lock(gate)Status.Processed++;}
+    }
+    if(batch.Count<100)break;
+   }
+  }catch(Exception error){logger.LogWarning(error,"MTV overlay generation stopped");lock(gate)if(Status.Errors.Count<50)Status.Errors.Add(error.Message);}
+  finally{lock(gate)Status.Running=false;}
+ }
+
+ public async Task<string> Refresh(MusicVideo video,IEnumerable<AlbumMetadata> albums,CancellationToken token)
+ {
+  var style=new OverlayStyle(Configuration.IntroSeconds,Configuration.OutroSeconds,Configuration.FontSize);
       if(video.RunTimeTicks is null or <=0)throw new InvalidOperationException("Media duration is not scanned yet");
       var directors=string.Join(", ",library.GetPeople(video).Where(x=>x.Type==PersonKind.Director).Select(x=>x.Name));
-      var album=OverlayCore.MatchAlbum(video.Album??"",video.Artists,albumsByName[OverlayCore.Literal(video.Album)]);
+      var album=OverlayCore.MatchAlbum(video.Album??"",video.Artists,albums);
       var label=video.Studios.Length>0?string.Join(", ",video.Studios):album?.RecordLabel??"";
-      var text=OverlayCore.Render(new(string.Join(", ",video.Artists),video.Name,video.Album??"",album?.Year,directors,label),video.RunTimeTicks.Value/10000000d,style);
+      var text=OverlayCore.Render(new(string.Join(", ",video.Artists),video.Name,video.Album??"",EnrichedNfo.AlbumYear(video.Path,video.Album)??album?.Year,directors,label),video.RunTimeTicks.Value/10000000d,style);
       var result=await Store.Write(video.Id,video.Path,text,token);
       // Register only the owned subtitle through Jellyfin's public stream repository. A full
       // metadata refresh reprobes every video and can contact remote providers for hours.
@@ -79,14 +94,6 @@ public sealed class OverlayService(ILibraryManager library,IMediaStreamRepositor
        current.Add(new(){Index=OverlayCore.NextStreamIndex(current.Select(x=>x.Index)),Type=MediaStreamType.Subtitle,Codec="ass",Language="eng",Title="MTV Music Video Info",IsExternal=true,Path=owned.Path});
        streams.SaveMediaStreams(video.Id,current,token);
       }
-      lock(gate){if(result=="created")Status.Created++;else if(result=="updated")Status.Updated++;else Status.Unchanged++;}
-     }catch(OperationCanceledException){throw;}
-     catch(Exception error){logger.LogWarning(error,"MTV overlay generation failed for {ItemId}",video.Id);lock(gate)if(Status.Errors.Count<50)Status.Errors.Add(video.Name+": "+error.Message);}
-     finally{lock(gate)Status.Processed++;}
-    }
-    if(batch.Count<100)break;
-   }
-  }catch(Exception error){logger.LogWarning(error,"MTV overlay generation stopped");lock(gate)if(Status.Errors.Count<50)Status.Errors.Add(error.Message);}
-  finally{lock(gate)Status.Running=false;}
+  return result;
  }
 }

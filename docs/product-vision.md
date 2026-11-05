@@ -506,3 +506,13 @@ original UTC start timestamp.
 4. Map imports to connector libraries and trigger/reconcile media-server refreshes.
 5. Expand static playlist filters and add persisted smart-playlist rules.
 6. Validate the Plex connector end to end against a real Plex server.
+
+
+## Shared Jellyfin metadata enrichment
+
+Successful nonempty Vidarr Jellyfin video scans automatically queue enrichment of the selected
+music-video library. Verified missing unlocked facts persist to Jellyfin/NFO metadata and the
+MTV track; populated corrections and uncertain identity/version/edition facts retain explicit
+review. Album year is separate from video year. Batches retain provenance and restart/retry state.
+No acquisition, catalog acceptance or original-video modification is implied. See
+[metadata enrichment](metadata-enrichment.md).

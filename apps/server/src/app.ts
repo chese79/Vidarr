@@ -1,3 +1,4 @@
+import { metadataEnrichmentRoutes } from './api/metadataEnrichment.js';
 import { existsSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
@@ -170,6 +171,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rootFolderRoutes);
   await app.register(settingsRoutes);
   await app.register(libraryConnectorRoutes);
+  await app.register(metadataEnrichmentRoutes);
   await app.register(recommendationRoutes);
   await app.register(recommendationProviderRoutes);
   await app.register(lastFmRoutes);

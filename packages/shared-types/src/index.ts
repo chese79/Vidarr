@@ -1113,3 +1113,5 @@ export type GenreStats = z.infer<typeof GenreStatsSchema>;
 
 export * from './live.js';
 export * from './liveDiscovery.js';
+
+export * from './enrichment.js';

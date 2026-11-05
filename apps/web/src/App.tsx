@@ -1,3 +1,4 @@
+import MetadataEnrichmentPage from './pages/MetadataEnrichmentPage';
 import LiveClassificationPage from './pages/LiveClassificationPage';
 import LiveRecordingPage from './pages/LiveRecordingPage';
 import { LiveSettings } from './components/LiveControls';
@@ -45,6 +46,7 @@ const NAV_ITEMS = [
 ];
 
 const SETTINGS_NAV_ITEMS = [
+  { to: '/metadata-enrichment', label: 'MTV Metadata' },
   { to: '/settings', label: 'General' },
   { to: '/validation-quality', label: 'Validation/Quality' },
   { to: '/root-folders', label: 'Root Folders' },
@@ -97,6 +99,7 @@ export default function App() {
       <main className="content" id="main-content">
         <div className="global-catalog-bar"><CatalogModeSwitch /><HideEmptyArtists /></div>
         <Routes>
+          <Route path="/metadata-enrichment" element={<MetadataEnrichmentPage />} />
           <Route path="/" element={<CatalogLibrary />} />
           <Route path="/artist/:id" element={<ArtistCatalog />} />
           <Route path="/live" element={<CatalogLibrary />} />

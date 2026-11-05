@@ -252,3 +252,6 @@ For ownership labels, monitoring rules, metadata transfers and server scan confi
   `X-Forwarded-*` headers vidarr doesn't itself trust — it only checks the API key header, not
   client IP or forwarded-host headers, so there's nothing proxy-related to misconfigure into an
   auth bypass (the class of issue Sonarr's own [CVE-2026-30975](https://github.com/Sonarr/Sonarr/security/advisories/GHSA-h5qx-5hjf-7c9r) was).
+
+
+Jellyfin scans support [verified metadata and MTV enrichment](docs/metadata-enrichment.md), including source review and restart-safe recovery.

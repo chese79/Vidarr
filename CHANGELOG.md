@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Jellyfin metadata enrichment (2026-11-04)
+
+- Standard nonempty Jellyfin video scans queue restart-safe MTV metadata enrichment, retaining a
+  follow-up batch when scans arrive during active/paused work.
+- Settings / MTV Metadata exposes progress, evidence, populated-field review, pause/resume/retry
+  and retained audit. Verified missing unlocked facts update Jellyfin and NFOs.
+- MTV plugin 0.1.4 adds elevated scoped conditional write-back, NFO backups, explicit album year
+  and targeted owned-track refresh with resumable request journals.
+- Preserve identity/version review, original media and populated/locked data. The additive Prisma
+  migration retains existing catalog and playlist identities.
+
 ### Generate and publish playlists together (2026-11-04)
 
 - Make Generate publish to the selected player after saving ordered, confirmed-available membership.

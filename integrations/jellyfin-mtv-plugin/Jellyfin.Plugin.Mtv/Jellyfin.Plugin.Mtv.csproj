@@ -2,7 +2,7 @@
  <PropertyGroup>
   <TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
   <AssemblyName>Jellyfin.Plugin.Mtv</AssemblyName><RootNamespace>Jellyfin.Plugin.Mtv</RootNamespace>
-  <Version>0.1.3</Version><GenerateDocumentationFile>false</GenerateDocumentationFile>
+  <Version>0.1.4</Version><GenerateDocumentationFile>false</GenerateDocumentationFile>
   <JellyfinRuntimePath Condition="'$(JellyfinRuntimePath)'==''">C:/Program Files/Jellyfin/Server</JellyfinRuntimePath>
  </PropertyGroup>
  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>

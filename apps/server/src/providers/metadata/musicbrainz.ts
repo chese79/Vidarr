@@ -130,6 +130,33 @@ function escapeLucene(value: string): string {
   return value.replace(/([+\-&|!(){}[\]^"~*?:\\/])/g, '\\$1');
 }
 
+// Bounded album evidence, separate from video discovery and catalog admission.
+export async function enrichmentAlbumEvidence(artistId: string, title: string, recordingId?: string, releaseId?: string) {
+  const valid = (value?: string) => !!value && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
+  if (!valid(artistId)) return [];
+  const recordings = valid(recordingId)
+    ? [await rateLimitedGet(`/recording/${recordingId}?inc=artist-credits+releases&fmt=json`)]
+    : (await rateLimitedGet(`/recording?query=${encodeURIComponent(`arid:${artistId} AND recording:"${escapeLucene(title)}"`)}&limit=5&fmt=json`)).recordings ?? [];
+  const exact = recordings.filter((row: any) => (!valid(recordingId) || row.id === recordingId) && (row['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === artistId)
+    && (valid(recordingId) || String(row.title).trim().toLocaleLowerCase() === title.trim().toLocaleLowerCase()));
+  const result: Array<{ album: string; albumYear?: number; recordLabel?: string; recordingId: string; releaseId: string; verified: boolean; reason: string }> = [];
+  for (const recording of exact.slice(0, 2)) {
+    const releases = valid(releaseId) ? [{ id: releaseId }] : (recording.releases ?? []).slice(0, 3);
+    for (const ref of releases) {
+      const release = await rateLimitedGet(`/release/${encodeURIComponent(ref.id)}?inc=artist-credits+labels+recordings+release-groups&fmt=json`);
+      if (release.id !== ref.id) throw new Error('MusicBrainz returned a different release identity');
+      if (!(release['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === artistId)) continue;
+      if (!(release.media ?? []).some((medium: any) => (medium.tracks ?? []).some((track: any) => track.recording?.id === recording.id))) continue;
+      const date = release.date; const year = typeof date === 'string' && /^\d{4}(?:-|$)/.test(date) ? Number(date.slice(0, 4)) : undefined;
+      const labels: string[] = [...new Set<string>((release['label-info'] ?? []).map((entry: any) => entry.label?.name).filter(Boolean))];
+      result.push({ album: String(release.title), albumYear: year, recordLabel: labels.length === 1 ? labels[0] : undefined,
+        recordingId: recording.id, releaseId: release.id, verified: valid(recordingId) && valid(releaseId),
+        reason: valid(recordingId) && valid(releaseId) ? 'Embedded recording and release IDs with matching artist credit and track.' : 'Recording/release edition needs review; title matching alone cannot establish this video version.' });
+    }
+  }
+  return result;
+}
+
 export async function searchMusicBrainzArtists(name: string, limit = 5): Promise<MusicBrainzArtist[]> {
   const query = encodeURIComponent(`artist:"${escapeLucene(name)}"`);
   const body = await rateLimitedGet(`/artist?query=${query}&limit=${limit}&fmt=json`);

@@ -1,3 +1,4 @@
+import { runMetadataEnrichment } from '../pipeline/metadataEnrichment.js';
 import { runLiveMetadataMonitoring } from '../live/metadataMonitoring.js';
 import { runLiveCandidateMatching } from '../live/discoveryEvidence.js';
 import { runExistingArtistDiscovery, existingArtistDiscoveryPending } from '../pipeline/existingArtistDiscovery.js';
@@ -64,6 +65,7 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  { name: 'Music Video Metadata Enrichment', defaultIntervalMs: 15000, run: runMetadataEnrichment },
   { name: 'Existing Artist Source Discovery', defaultIntervalMs: 60000, run: runExistingArtistDiscovery, rerun: existingArtistDiscoveryPending },
   { name: 'Live Starting Inventory', defaultIntervalMs: 60000, run: backfillLiveStartingInventories },
   { name: 'Live Candidate Matching', defaultIntervalMs: 60000, run: runLiveCandidateMatching },

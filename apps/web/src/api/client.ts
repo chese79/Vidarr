@@ -1,3 +1,4 @@
+import type { EnrichmentRun, EnrichmentItem, EnrichmentField } from '@vidarr/shared-types';
 import type { LiveRecordingDetail, LiveConfigurationView } from '@vidarr/shared-types';
 import { trackButtonRequest } from '../buttonFeedback';
 import type { UpdateLivePerformance, CreateLivePerformance, CreateRecordingCandidate, LiveArtist, LivePerformanceSummary, LivePerformanceDetail, LivePage, RecordingCandidate } from '@vidarr/shared-types';
@@ -165,6 +166,13 @@ async function requestBlobData(path: string): Promise<Blob> {
 }
 
 export const api = {
+  metadataEnrichment: {
+    list: () => request<EnrichmentRun[]>('/metadata-enrichment'),
+    start: (connectorId: number) => request<EnrichmentRun>('/metadata-enrichment', { method: 'POST', body: JSON.stringify({ connectorId }) }),
+    items: (id: number, page: number, search: string, status: string) => request<{ total: number; items: EnrichmentItem[] }>(`/metadata-enrichment/${id}/items?${new URLSearchParams({ page: String(page), search, ...(status ? { status } : {}) })}`),
+    control: (id: number, action: 'pause' | 'resume' | 'retry' | 'cancel') => request<EnrichmentRun>(`/metadata-enrichment/${id}/control`, { method: 'POST', body: JSON.stringify({ action }) }),
+    apply: (id: number, body: { evidenceIndex: number; fields: EnrichmentField[]; corrections: boolean }) => request(`/metadata-enrichment/items/${id}/apply`, { method: 'POST', body: JSON.stringify(body) }),
+  },
   live: {
     thumbnail: (artistId: number, itemId: number) => requestBlob(`/live/artists/${artistId}/start/${itemId}/thumbnail`),
     read: <T>(path: string) => request<T>(`/live/${path}`),

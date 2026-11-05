@@ -20,6 +20,7 @@ public sealed class OwnedOverlayStore(string root)
  }
  public async Task<string> Write(Guid id,string mediaPath,string text,CancellationToken ct)
  {
+  AssertWritable(id,mediaPath);
   if(!System.IO.Path.IsPathFullyQualified(mediaPath)||!File.Exists(mediaPath))throw new InvalidOperationException("A local existing music-video file is required");
   var target=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(mediaPath)!,System.IO.Path.GetFileNameWithoutExtension(mediaPath)+".mtv-info.eng.ass");
   var old=Find(id);var hash=Hash(text);var exists=File.Exists(target);
@@ -28,12 +29,17 @@ public sealed class OwnedOverlayStore(string root)
   Directory.CreateDirectory(root);
   if(exists){var backup=System.IO.Path.Combine(root,"backups",id.ToString("N")+"-"+old!.Hash+".ass");Directory.CreateDirectory(System.IO.Path.GetDirectoryName(backup)!);if(!File.Exists(backup))await File.WriteAllTextAsync(backup,await File.ReadAllTextAsync(target,ct),ct);}
   var temporary=target+".tmp-"+Guid.NewGuid().ToString("N");
-  try{await File.WriteAllTextAsync(temporary,text,new UTF8Encoding(false),ct);File.Move(temporary,target,exists);}
+  try{await File.WriteAllTextAsync(temporary,text,new UTF8Encoding(false),ct);if(exists&&(!File.Exists(target)||Hash(await File.ReadAllTextAsync(target,ct))!=old!.Hash))throw new InvalidOperationException("Subtitle changed during generation; preserved for review");File.Move(temporary,target,exists);}
   finally{if(File.Exists(temporary))File.Delete(temporary);}
   lock(entries)entries[id]=new(target,hash);
   var manifest=System.IO.Path.Combine(root,"owned-overlays.json");var next=manifest+".tmp";
   Dictionary<Guid,OwnedOverlay> snapshot;lock(entries)snapshot=new(entries);
   await File.WriteAllTextAsync(next,JsonSerializer.Serialize(snapshot),ct);File.Move(next,manifest,true);
   return exists?"updated":"created";
+ }
+ public void AssertWritable(Guid id,string mediaPath)
+ {
+  var target=System.IO.Path.ChangeExtension(mediaPath,".mtv-info.eng.ass");var old=Find(id);
+  if(File.Exists(target)&&(old is null||!string.Equals(old.Path,target,StringComparison.OrdinalIgnoreCase)||Hash(File.ReadAllText(target))!=old.Hash))throw new InvalidOperationException("Existing or edited subtitle was preserved; ownership check failed");
  }
 }

@@ -1,3 +1,4 @@
+import { enrichAfterScan } from './metadataEnrichment.js';
 import type { LibraryConnector, QualityProfile, RootFolder } from '@prisma/client';
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
@@ -276,5 +277,6 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       });
     }
   }
+  if (videos.length > 0) await enrichAfterScan(connector.id);
   return { videoCount: videos.length, matched };
 }

@@ -1,0 +1,42 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { enrichmentAlbumEvidence } from '../src/providers/metadata/musicbrainz.js';
+import { enrichmentVideoDirectors } from '../src/providers/metadata/imvdb.js';
+const artist = '11111111-1111-4111-8111-111111111111';
+const recording = '22222222-2222-4222-8222-222222222222';
+const release = '33333333-3333-4333-8333-333333333333';
+describe('enrichment MusicBrainz HTTP evidence', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  function simulate(options: { wrongArtist?: boolean; missingTrack?: boolean; fail?: boolean } = {}) {
+    return vi.fn(async (url: string) => {
+      if (options.fail) return new Response('', { status: 503 });
+      const credit = [{ artist: { id: options.wrongArtist ? 'other' : artist } }];
+      const row = { id: recording, title: 'Tomorrow (US remix)', 'artist-credit': credit, releases: [{ id: release }] };
+      const body = url.includes('/release/') ? { id: release, title: 'Your Arsenal', date: '1992-07-27', 'artist-credit': credit, 'label-info': [{ label: { name: 'Label' } }], media: [{ tracks: options.missingTrack ? [] : [{ recording: { id: recording } }] }] } : url.includes('/recording?') ? { recordings: [row] } : row;
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+  }
+  it('verifies explicit recording/release IDs against artist credit and track membership', async () => {
+    const fetch = simulate(); vi.stubGlobal('fetch', fetch);
+    const rows = await enrichmentAlbumEvidence(artist, 'Tomorrow', recording, release);
+    expect(rows).toEqual([expect.objectContaining({ album: 'Your Arsenal', albumYear: 1992, recordLabel: 'Label', verified: true })]);
+    expect(fetch.mock.calls[1][0]).toContain('labels+recordings+release-groups');
+  });
+  it('never substitutes a title-only match for a recording/version identity', async () => {
+    vi.stubGlobal('fetch', simulate());
+    expect(await enrichmentAlbumEvidence(artist, 'Tomorrow')).toEqual([]);
+    expect((await enrichmentAlbumEvidence(artist, 'Tomorrow (US remix)'))[0].verified).toBe(false);
+  });
+  it('rejects a release that does not contain the recording', async () => {
+    vi.stubGlobal('fetch', simulate({ missingTrack: true }));
+    expect(await enrichmentAlbumEvidence(artist, 'Tomorrow', recording, release)).toEqual([]);
+  });
+  it('keeps provider outages distinct from missing facts', async () => {
+    vi.stubGlobal('fetch', simulate({ fail: true }));
+    await expect(enrichmentAlbumEvidence(artist, 'Tomorrow', recording, release)).rejects.toThrow('503');
+  });
+  it('retains all IMVDb directors and the canonical source URL, checking exact video identity', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ id: 1234, url: 'https://imvdb.com/video/artist/song', directors: [{ entity_name: 'First Director' }, { entity_name: 'Second Director' }] }), { status: 200 })));
+    expect(await enrichmentVideoDirectors('fixture-key', '1234')).toEqual({ directors: ['First Director', 'Second Director'], url: 'https://imvdb.com/video/artist/song' });
+    await expect(enrichmentVideoDirectors('fixture-key', '9999')).rejects.toThrow('different video');
+  });
+});

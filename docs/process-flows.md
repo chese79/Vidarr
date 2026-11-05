@@ -604,3 +604,16 @@ ownership proof and preservation of settings/library identity. The production se
 build passes. A disposable runtime verifies CLI refusal without `--yes`, replacement password
 login and rejection of the previous password; browser checks verify the reset form and return
 to sign-in. Production deployment preserves the existing configuration volume and credentials.
+
+
+## Jellyfin metadata and MTV enrichment (2026-11-04)
+
+Successful nonempty selected Jellyfin video scan -> durable batch (or retained follow-up) ->
+inspect typed selected-library items, locks and NFO fingerprints -> collect bounded evidence ->
+fill unique verified missing fields or retain uncertainty for identity/video/field review ->
+guarded native metadata/NFO write with backups -> targeted owned ASS generation/registration ->
+verify read-back and track -> record updated/complete/review/unknown/failed outcome. Settings / MTV
+Metadata provides progress, evidence and pause/resume/retry. Pause/cancel takes effect after the
+current item; applied facts remain. Native checkpoint conflicts require inspection and a fresh
+batch. Scope changes pause rather than redirect old work. Provider failures retain saved proposals
+and request UUIDs for retry. See [metadata enrichment](metadata-enrichment.md).

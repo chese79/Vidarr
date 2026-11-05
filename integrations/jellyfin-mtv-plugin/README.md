@@ -202,3 +202,13 @@ changing fixtures/preferences and restores lab user configuration/disabled plugi
 Admin routes are `/MtvOverlay/Libraries`, `/MtvOverlay/Status`, and POST `/MtvOverlay/Generate`.
 They require Jellyfin's elevated authorization policy. The embedded settings page uses these
 routes and the standard plugin configuration API; provider/library labels use text content.
+
+
+## 0.1.4 metadata enrichment
+
+Vidarr standard scans can fill verified missing Jellyfin/NFO metadata and refresh individual owned
+tracks through the elevated `/MtvOverlay/Metadata` API. Item/library/path, locks, fingerprints and
+ownership are checked before write-back. Request journals and original NFO backups live under the
+plugin data directory. Explicit `<albumyear>` stays separate from `<year>`. Windows and Linux use
+the same server-local writer and bundled Kabel. See [the workflow](../../docs/metadata-enrichment.md).
+Production activation is a separate verified deployment, not implied by building this release.

@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace Jellyfin.Plugin.Mtv;
 
 public sealed record OverlayMetadata(string Artist,string Title,string Album,int? AlbumYear,string Director,string RecordLabel="");
-public sealed record AlbumMetadata(string Name,string[] Artists,int? Year,string RecordLabel);
+public sealed record AlbumMetadata(string Name,string[] Artists,int? Year,string RecordLabel,string? ItemId=null);
 public sealed record OverlayStyle(double IntroSeconds=6,double OutroSeconds=6,int FontSize=28);
 public static class OverlayCore
 {
