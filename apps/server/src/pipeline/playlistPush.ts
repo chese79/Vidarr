@@ -35,7 +35,7 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
     if (playable.length === 0) {
       throw new Error('This playlist has no videos available in that playback library to push');
     }
-    const result = await provider.pushPlaylist(connector, {
+    const providerResult = await provider.pushPlaylist(connector, {
       name: playlist.name,
       items: playable.map(item => item.musicVideo ? ({
         artistName: item.musicVideo.artist.name, title: item.musicVideo.title,
@@ -44,6 +44,12 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
         externalId: item.recordingPart!.serverCopies.find(copy => copy.connectorId === connectorId && copy.libraryId === connector.videoLibraryId && copy.available)!.externalId })),
       existingRemoteId: existingSync?.remotePlaylistId ?? null,
     });
+    // Report items excluded before provider lookup as well as provider-side misses.
+    const result = { ...providerResult, unmatchedTitles: [
+      ...playlist.items.filter(item => !playable.includes(item))
+        .map(item => item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Unavailable recording'),
+      ...providerResult.unmatchedTitles,
+    ] };
     await prisma.playlistSync.upsert({
       where: { playlistId_connectorId: { playlistId, connectorId } },
       update: { remotePlaylistId: result.remotePlaylistId, lastPushedAt: new Date(), lastPushStatus: result.unmatchedTitles.length ? 'partial' : 'success', lastPushError: null, unmatchedCount: result.unmatchedTitles.length },
@@ -104,10 +110,10 @@ export async function removeRemoteCopies(playlistId: number): Promise<{
   return { removedRemote, failedRemote };
 }
 
-// Only previously published smart playlists are republished automatically.
+// Retry initial failed publications as well as previously published smart playlists.
 export async function republishChangedSmartPlaylist(playlistId: number, changed: boolean): Promise<number> {
   const syncs = await prisma.playlistSync.findMany({
-    where: { playlistId, remotePlaylistId: { not: null }, ...(changed ? {} : { lastPushStatus: { in: ['failed', 'partial'] } }) },
+    where: { playlistId, ...(changed ? {} : { lastPushStatus: { in: ['failed', 'partial'] } }) },
     select: { connectorId: true },
   });
   let pushed = 0;

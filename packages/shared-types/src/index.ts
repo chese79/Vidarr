@@ -966,10 +966,21 @@ export const ConnectorSyncReportSchema = z.object({
 });
 export type ConnectorSyncReport = z.infer<typeof ConnectorSyncReportSchema>;
 
+export const PlaylistPublicationSchema = z.object({
+  connectorId: z.number().int().nullable(),
+  status: z.enum(['success', 'partial', 'failed']),
+  remotePlaylistId: z.string().nullable(),
+  matchedCount: z.number().int(),
+  unmatchedTitles: z.array(z.string()),
+  error: z.string().optional(),
+});
+export type PlaylistPublication = z.infer<typeof PlaylistPublicationSchema>;
+
 export const GeneratePlaylistResultSchema = z.object({
   playlistId: z.number().int(),
   matchedCount: z.number().int(),
   sync: z.array(ConnectorSyncReportSchema).optional(),
+  publication: PlaylistPublicationSchema.optional(),
 });
 export type GeneratePlaylistResult = z.infer<typeof GeneratePlaylistResultSchema>;
 

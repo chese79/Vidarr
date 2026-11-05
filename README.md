@@ -78,15 +78,16 @@ and "write to" a media server are different jobs with different data:
    in Library as screenshot cards with title and basic metadata, while remaining distinct from
    locally owned Vidarr files.
 2. **Push playlists back out** — build a playlist in Vidarr from local files or confirmed videos
-   already in a media server, then push
-   it to Plex or Jellyfin as a real playlist in their apps. This uses a *second*, separately-chosen
+   already in a media server. Generate saves and automatically publishes to the selected player;
+   manual curated playlists and publication retries use Push. Playlists appear as real playlists
+   in Plex or Jellyfin apps. This uses a *second*, separately-chosen
    library on the same connector (the "video library" picker on the Library Connectors page) —
    whichever Plex/Jellyfin section actually holds vidarr's organized video files — matched to each
    playlist item by artist + title. A push fully replaces the remote playlist rather than diffing
    it, to avoid drift.
    New static and smart playlists can be bound to one playback library, so their picker, generated
    membership, and push destination stay within that library. Smart playlists save filter rules,
-   regenerate manually or daily/weekly, and republish changed membership after an initial push.
+   regenerate manually or daily/weekly, and republish changed membership or retry failed publication.
    Generated playlists can use artist/title order or a repeatable shuffle.
    - Jellyfin's playlist API is well-documented and used as-is.
    - **Plex's playlist push is best-effort and not yet verified against a real Plex server** (none

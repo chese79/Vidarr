@@ -1,4 +1,11 @@
-import type { ConnectorSyncReport } from '@vidarr/shared-types';
+import type { ConnectorSyncReport, PlaylistPublication } from '@vidarr/shared-types';
+
+export function describePublication(publication: PlaylistPublication | undefined): string {
+  if (!publication) return 'Publication was not confirmed. Use Push to retry this saved playlist.';
+  if (publication.status === 'failed') return `Saved in Vidarr, but publication failed: ${publication.error ?? 'unknown error'}. Use Push to retry this saved playlist.`;
+  if (publication.status === 'partial') return `Published ${publication.matchedCount} video(s); ${publication.unmatchedTitles.length} could not be found in the playback library. Review the saved playlist and use Push to retry.`;
+  return `Published ${publication.matchedCount} video(s) to the playback library.`;
+}
 
 // One sentence about the library re-read that happens just before a playlist is
 // built, or '' when no connector took part. A failure is spelled out because the

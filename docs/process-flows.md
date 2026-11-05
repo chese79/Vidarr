@@ -1,5 +1,21 @@
 # Process flows and consistency review
 
+## Automatic publication of generated playlists (2026-11-04)
+
+The user's Generate-always-publishes revision supersedes the separate post-generation membership
+review and Push steps for generated music-video playlists. Review the player library, count,
+order and active rules → Generate authorizes creation and publication → refresh selected server
+inventory → evaluate rules and confirm availability → save ordered membership → publish through
+the normal server connector → report complete, partial or failed publication. A local save alone
+is never described as published. Destination selection, identity/availability checks and final
+publication outcome remain required; Generate does not start playback or acquire missing media.
+
+Publication failure preserves the generated playlist, records the failed Push and exposes retry
+with Push. Retry does not regenerate or create another local playlist. Smart regeneration also
+retries an initially failed publication without a remote ID. API callers omitting a destination
+can use a valid saved default or a sole enabled player; ambiguous/no destinations are rejected
+before creation. Manual curated/Live playlist review and Push are unchanged.
+
 ## Artist navigation and unconfirmed observations (2026-11-04)
 
 Browse Music Videos or Live → apply current filters → alphabet letters include confirmed artists
@@ -39,8 +55,8 @@ subgenres) or a normalized specific label → Library applies the same hierarchy
 letters and pagination (genre-page links explicitly include artists without videos so their totals
 match the group) → optionally open Create playlist with that genre prefilled → choose the
 playback library/count/order and active rules → Generate acknowledges the request and refreshes
-inventory/matches available videos → review the saved membership → explicitly Push → confirm the
-target server publication. Retained video tags use the same matcher; available-video membership
+inventory/matches available videos → save membership and automatically publish to the selected
+server → report publication outcome. Retained video tags use the same matcher; available-video membership
 and artist-based genre counts remain different measures. Existing static membership is retained;
 smart rules use the matcher only on regeneration. Failures remain visible and retryable.
 
@@ -451,7 +467,7 @@ Stages describe outcomes; they do not imply an equal number of manual clicks.
 | Review an observed artist | Preserve the original observation → search/rank MusicBrainz identities → confirm or link to an existing canonical artist → collect sources and expose video-review work | The identity and provenance are retained without creating duplicate canonical artists. |
 | Acquire a video | Review/accept the video and source → check ownership, ignored state and acquisition eligibility → enqueue and download within the shared concurrency limit → validate and import the video/sidecar bundle | The import succeeds. Server delivery still requires its own confirmation. |
 | Deliver to a media server | Resolve the root's playback-library mapping → place video and metadata in the standard structure → notify/refresh the target server → reconcile the exact delivered file with target-server inventory | The intended server confirms the delivered copy. A local file or refresh acknowledgment alone is insufficient. |
-| Create a playlist | Choose the playback library and refresh its inventory → choose active rules, count and order → generate/review membership → push to the chosen server and confirm publication | The selected server has the playlist. A saved Vidarr playlist is an intermediate result. |
+| Generate a playlist | Choose the playback library, active rules, count and order → Generate refreshes inventory, saves membership and publishes to the chosen server → report publication outcome | The selected server has the playlist, or the saved playlist exposes a publication failure and retry. Local creation alone is insufficient. |
 | Connect a media library | Configure/test credentials → select libraries and map roots → synchronize observations and inventory → review uncertain identities and ownership | Selected inventory is synchronized and unresolved review work is visible. Passing a connection test alone is insufficient. |
 | Enable Last.fm reporting | Configure application credentials → authorize/link the account → explicitly enable scrobbling → observe eligible music-video playback and submit | Qualifying observed playback is reported to the linked account. Historical play counts are not backfilled. |
 | Use YouTube account cookies | Obtain a session for an account with access → upload the Netscape cookie file → request an eligible video → inspect success or replace expired/unauthorized cookies | The account can access the video and the request succeeds. A saved-cookie indicator does not prove access. |

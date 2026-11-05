@@ -86,11 +86,21 @@ also returns without discarding the original Discover context.
 
 Generate playlist and Push to the selected media server sit together at the top, before the
 filter editor. Hiding filters leaves these actions available. Push is disabled until a saved
-playlist and usable server exist. A selector chooses an existing playlist; successful generation
-selects its new playlist after refetch, without automatically publishing it. Review and explicit
-Push remain separate stages. Bound playlists use their saved destination. Push reports unmatched
+playlist and usable server exist. A selector chooses an existing playlist; Generate now saves and
+automatically publishes its new playlist to the selected server, then selects it after refetch.
+The user reviews destination/rules/count/order before submitting Generate. The result distinguishes
+complete/partial publication from a saved playlist whose publication failed; retry uses the saved
+playlist's Push action rather than regenerating it. Bound playlists use their saved destination.
+Push reports unmatched
 server items and failures without claiming complete publication. Live & Concerts can push static
 playlists; automatic music-video rule generation remains specific to music videos.
+
+Generate requires a usable playback destination. API callers that omit it can use the validated
+saved default or the sole enabled Plex/Jellyfin video connector; no/ambiguous destinations are
+rejected before a playlist is created. Optional publication response fields preserve compatibility
+for clients that only read generated IDs/counts. Manual empty playlist creation and curated Live
+playlist review/Push remain available. Smart regeneration retries failed first publication even
+when its membership is unchanged and no remote playlist ID was received.
 
 The default name is Awesome playlist #1. Check existing names case-insensitively, incrementing
 until an unused number is found. Automatic generation rechecks the list immediately before
@@ -127,3 +137,18 @@ Migration `20261009040000_playlist_defaults` adds nullable `Playlist.maxVideos` 
 `Settings.defaultPlaybackConnectorId`. Existing limits remain null. Legacy empty smart rules, which
 previously matched nothing, become an explicit impossible video-ID filter to preserve that result.
 Removing that filter deliberately adopts the new all-eligible behavior.
+
+## Automatic-publication verification (2026-11-04)
+
+The Generate-to-publication change passes the Node 22 Docker production build, 11 pipeline checks,
+20 focused UI checks and the 19 playlist API checks. Two API checks initially exceeded test/hook
+time limits under concurrent build load; both pass on targeted rerun with longer limits. Existing
+provider HTTP stand-ins cover successful generation/publication, HTTP 503 failure with saved
+membership, partial publication, initial smart-publication retry, and a player disabled during
+inventory refresh. No production playlists are created by those tests, and no schema migration
+is required. This verifies orchestration against the existing provider contract, not new Plex
+device compatibility or the outcome of an ambiguous network timeout after a remote write.
+
+The separately authorized publication of Awesome playlist #5 and #6 to Jellyfin JF was verified
+against the live server: both contain all 27 video IDs in the exact saved order. Other historical
+unpublished playlists are retained; the new automatic flow applies when Generate is submitted.

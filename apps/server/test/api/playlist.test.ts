@@ -40,6 +40,19 @@ describe('playlist routes', () => {
     artistId = (await createArtist(rootFolder.id, qualityProfile.id)).id;
   });
 
+  async function playerWithVideo(videoId: number, title: string) {
+    const connector = await createLibraryConnector({ name: 'JF' });
+    await prisma.libraryConnector.update({ where: { id: connector.id }, data: { userId: 'user-1', videoLibraryId: 'videos-1' } });
+    await createLibraryVideo(connector.id, { musicVideoId: videoId, externalId: 'video-1', title });
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string }) => {
+      if (url.endsWith('/Items/video-1')) return { ok: true, json: async () => ({ Id: 'video-1' }) };
+      if (url.includes('/Items?')) return { ok: true, json: async () => ({ Items: [{ Id: 'video-1', Name: title, Artists: ['Test Artist'] }] }) };
+      if (url.endsWith('/Playlists') && options.method === 'POST') return { ok: true, status: 200, text: async () => JSON.stringify({ Id: 'published-1' }) };
+      throw new Error(`Unexpected simulated player request: ${url}`);
+    }));
+    return connector;
+  }
+
   it('POST /api/v1/playlist creates an empty playlist', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -65,6 +78,8 @@ describe('playlist routes', () => {
     const video = await createMusicVideo(artistId, { title: 'Matched', hasFile: true, releaseYear: 2000 });
     await createMusicVideoFile(video.id);
 
+    await playerWithVideo(video.id, 'Matched');
+
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/playlist/generate',
@@ -73,11 +88,13 @@ describe('playlist routes', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ matchedCount: 1 });
+    expect(res.json().publication).toMatchObject({ status: 'success', matchedCount: 1, remotePlaylistId: 'published-1' });
   });
 
   it('creates a smart playlist and prevents manual edits to rule-owned items', async () => {
     const video = await createMusicVideo(artistId, { title: 'Rule Match', hasFile: true, releaseYear: 2000 });
     await createMusicVideoFile(video.id);
+    await playerWithVideo(video.id, 'Rule Match');
     const created = await app.inject({
       method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
       payload: { name: 'Smart', filters: { yearMin: 1990 }, matchMode: 'all', smart: true, regenerateIntervalMinutes: 1440 },
@@ -118,7 +135,7 @@ describe('playlist routes', () => {
     const created = await app.inject({ method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
       payload: { name: 'Smart publish', filters: { yearMin: 1990 }, matchMode: 'all', smart: true, targetConnectorId: connector.id } });
     const playlistId = created.json().playlistId;
-    const firstPush = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/push/${connector.id}`, headers: authHeaders() });
+    expect(created.json().publication).toMatchObject({ status: 'success', matchedCount: 1 });
     const unchanged = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
     const second = await createMusicVideo(artistId, { title: 'Second', hasFile: false, releaseYear: 2001 });
     serverItems.push({ Id: 'video-2', Name: 'Second', Artists: ['Test Artist'] });
@@ -128,7 +145,6 @@ describe('playlist routes', () => {
     await prisma.playlistSync.update({ where: { id: sync.id }, data: { lastPushStatus: 'failed' } });
     const retry = await app.inject({ method: 'POST', url: `/api/v1/playlist/${playlistId}/regenerate`, headers: authHeaders() });
     const retriedSync = await prisma.playlistSync.findUniqueOrThrow({ where: { id: sync.id } });
-    expect(firstPush.statusCode).toBe(200);
     expect(unchanged.json().changed).toBe(false);
     expect(changed.json().changed).toBe(true);
     expect(publishesAfterChange).toBe(2);
@@ -153,6 +169,27 @@ describe('playlist routes', () => {
       payload: { name: 'Bad', filters: {}, matchMode: 'xor' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('requires a usable player destination before creating a generated playlist', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
+      payload: { name: 'No destination', filters: {}, matchMode: 'all' } });
+    expect(res.statusCode).toBe(400);
+    expect(await prisma.playlist.count()).toBe(0);
+  });
+
+  it('keeps a generated playlist when the player returns an HTTP failure', async () => {
+    const video = await createMusicVideo(artistId, { title: 'Publish Failure' });
+    const connector = await playerWithVideo(video.id, 'Publish Failure');
+    const original = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string, options: { method?: string }) =>
+      url.endsWith('/Playlists') ? Promise.resolve({ ok: false, status: 503, text: async () => 'Unavailable' }) : original(url, options as never)));
+    const res = await app.inject({ method: 'POST', url: '/api/v1/playlist/generate', headers: authHeaders(),
+      payload: { name: 'Saved retry', targetConnectorId: connector.id, filters: {}, matchMode: 'all' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ matchedCount: 1, publication: { status: 'failed' } });
+    expect(await prisma.playlistItem.count({ where: { playlistId: res.json().playlistId } })).toBe(1);
+    expect(await prisma.playlistSync.findFirstOrThrow()).toMatchObject({ lastPushStatus: 'failed', remotePlaylistId: null });
   });
 
   it('lists a confirmed server-only video as playable', async () => {

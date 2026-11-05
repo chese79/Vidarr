@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { describeSync, syncNeedsAttention } from '../src/pages/playlistSyncText';
+import { describeSync, syncNeedsAttention, describePublication } from '../src/pages/playlistSyncText';
+
+it('distinguishes confirmed publication, partial publication and saved failures', () => {
+  const base = { connectorId: 4, remotePlaylistId: 'remote', matchedCount: 3, unmatchedTitles: [] };
+  expect(describePublication({ ...base, status: 'success' })).toContain('Published 3 video(s)');
+  expect(describePublication({ ...base, status: 'partial', unmatchedTitles: ['Missing'] })).toContain('1 could not be found');
+  expect(describePublication({ ...base, status: 'failed', error: 'Offline' })).toContain('Saved in Vidarr, but publication failed: Offline');
+  expect(describePublication(undefined)).toContain('Publication was not confirmed');
+});
 
 describe('describeSync', () => {
   it('says nothing when no connector took part', () => {

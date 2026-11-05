@@ -14,7 +14,7 @@ import {
   parseStoredRules,
   type RuleDraft,
 } from './playlistRules';
-import { describeSync } from './playlistSyncText';
+import { describeSync, describePublication } from './playlistSyncText';
 import { nextPlaylistName } from './playlistNames';
 
 interface Notice {
@@ -72,7 +72,7 @@ function GeneratePlaylistPanel() {
   const [searchParams] = useSearchParams();
   const [draft, setDraft] = useState<RuleDraft>(() => ({ ...emptyRuleDraft(),
     enableGenre: Boolean(searchParams.get('genre')?.trim()), genre: searchParams.get('genre')?.trim() ?? '' }));
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<Notice | null>(null);
   const [maxVideos, setMaxVideos] = useState<number | ''>(20);
   const defaults = useDefaultPlaybackLibrary();
   const [libraryChosen, setLibraryChosen] = useState(false);
@@ -96,25 +96,26 @@ function GeneratePlaylistPanel() {
       return { ...result, name: resolvedName };
     },
     onSuccess: (r) => {
-      setResult([`Created "${r.name}" with ${r.matchedCount} video(s). Review it below, then Push to your playback library to publish it.`, describeSync(r.sync)].filter(Boolean).join(' '));
+      setResult({ kind: r.publication?.status === 'success' ? 'status' : 'alert',
+        text: [`Created "${r.name}" with ${r.matchedCount} video(s).`, describePublication(r.publication), describeSync(r.sync)].filter(Boolean).join(' ') });
       queryClient.invalidateQueries({ queryKey: ['playlists'] });
       setName(null);
     },
-    onError: (err) => setResult(`Failed: ${(err as Error).message}`),
+    onError: (err) => setResult({ kind: 'alert', text: `Failed: ${(err as Error).message}` }),
   });
 
 
   function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !maxVideos) return;
+    if (!name.trim() || !maxVideos || !targetConnectorId) return;
     generate.mutate();
   }
 
   return (
     <>
     <div className="form-row playlist-top-actions">
-      <ActionButton type="submit" form="playlist-generator" disabled={!name.trim() || !maxVideos || generate.isPending || playlists.isPending || playlists.isError}>
-        {generate.isPending ? 'Generating…' : 'Generate playlist'}
+      <ActionButton type="submit" form="playlist-generator" disabled={!name.trim() || !maxVideos || !targetConnectorId || generate.isPending || playlists.isPending || playlists.isError}>
+        {generate.isPending ? 'Generating and publishing…' : 'Generate playlist'}
       </ActionButton>
       <PlaylistPushAction generatedId={generate.data?.playlistId} busy={generate.isPending} />
     </div>
@@ -138,8 +139,8 @@ function GeneratePlaylistPanel() {
         />
         <label>Videos to add <input type="number" min={1} max={10000} required aria-label="Videos to add" value={maxVideos} onChange={(e) => setMaxVideos(e.target.value ? Number(e.target.value) : '')} style={{ width: 90 }} /></label>
         <label><input type="checkbox" checked={draft.onlyUnwatched} onChange={(e) => setDraft({ ...draft, onlyUnwatched: e.target.checked })} /> Only add unwatched videos</label>
-        <select aria-label="Playback library" value={targetConnectorId} onChange={(e) => { setLibraryChosen(true); setTargetConnectorId(e.target.value ? Number(e.target.value) : ''); }}>
-          <option value="">Any playback library</option>
+        <select required aria-label="Playback library" value={targetConnectorId} onChange={(e) => { setLibraryChosen(true); setTargetConnectorId(e.target.value ? Number(e.target.value) : ''); }}>
+          <option value="">Choose playback library</option>
           {playbackConnectors(connectors.data).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
@@ -157,15 +158,15 @@ function GeneratePlaylistPanel() {
         <label><input type="checkbox" checked={smart} onChange={(e) => setSmart(e.target.checked)} /> Save as smart playlist</label>
         {smart && <ScheduleSelect value={regenerateIntervalMinutes} onChange={setRegenerateIntervalMinutes} />}
       </div>
-      <p className="empty-state">Generate saves the playlist in Vidarr. Open it and Push to your playback library to publish it.{smart && ' Later membership changes republish to that library automatically.'}</p>
-      {generate.isPending && <p role="status">Refreshing the playback library and finding matching videos…</p>}
+      <p className="empty-state">Generate saves and publishes the playlist to your selected playback library. If publication fails, the saved playlist remains available for retry with Push.{smart && ' Later membership changes republish to that library automatically.'}</p>
+      {generate.isPending && <p role="status">Refreshing the playback library, finding matching videos and publishing the playlist…</p>}
 
       <PlaylistRuleFields draft={draft} onChange={setDraft} targetConnectorId={targetConnectorId || null} idPrefix="generate" />
 
       </div>
       {result && (
-        <p className="empty-state" role={generate.isError ? 'alert' : 'status'}>
-          {result}
+        <p className="empty-state" role={result.kind}>
+          {result.text}
         </p>
       )}
     </ActionForm>

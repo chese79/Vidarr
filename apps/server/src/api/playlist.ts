@@ -80,12 +80,19 @@ export async function playlistRoutes(app: FastifyInstance) {
 
   app.post('/api/v1/playlist/generate', async (req, reply) => {
     const body = GeneratePlaylistBodySchema.parse(req.body);
-    if (!await validPlaybackConnector(body.targetConnectorId)) return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin video library' });
+    let targetConnectorId = body.targetConnectorId;
+    if (targetConnectorId == null) {
+      const settings = await prisma.settings.findUnique({ where: { id: 1 }, select: { defaultPlaybackConnectorId: true } });
+      const connectors = await prisma.libraryConnector.findMany({ where: { enabled: true, videoLibraryId: { not: null }, type: { in: ['plex', 'jellyfin'] } } });
+      targetConnectorId = connectors.find(c => c.id === settings?.defaultPlaybackConnectorId)?.id
+        ?? (connectors.length === 1 ? connectors[0].id : null);
+    }
+    if (!targetConnectorId || !await validPlaybackConnector(targetConnectorId)) return reply.code(400).send({ error: 'Select an enabled Plex or Jellyfin playback library before generating a playlist' });
     try {
       return await generatePlaylistWithSync(body.name, body.filters, body.matchMode, {
         smart: body.smart,
         regenerateIntervalMinutes: body.regenerateIntervalMinutes,
-        targetConnectorId: body.targetConnectorId,
+        targetConnectorId,
         sortMode: body.sortMode,
         maxVideos: body.maxVideos,
       });

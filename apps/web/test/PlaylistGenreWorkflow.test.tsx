@@ -53,7 +53,7 @@ it('explains playlists hidden by the media filter and offers to show them',async
   expect(host.textContent).not.toContain('hidden by the current media filter');
 });
 
-it('prefills a genre link, acknowledges native form submission and keeps Push separate',async()=>{
+it('prefills a genre link and reports server-side automatic publication from Generate',async()=>{
   let resolve!: (value:never)=>void;
   const generate=vi.spyOn(api.playlists,'generate').mockImplementation(()=>new Promise(r=>{resolve=r;}));
   await mount('musicVideos','/playlists?genre=electronic');
@@ -63,9 +63,17 @@ it('prefills a genre link, acknowledges native form submission and keeps Push se
   expect(host.querySelector('option[value="trip hop"]')).not.toBeNull();
   await act(async()=>button('Generate playlist').click());await flush();
   expect(generate).toHaveBeenCalledWith(expect.objectContaining({filters:{genre:'electronic'},targetConnectorId:4,maxVideos:20}));
-  expect(host.textContent).toContain('Refreshing the playback library and finding matching videos');
-  await act(async()=>resolve({playlistId:7,matchedCount:3} as never));await flush();
-  expect(host.textContent).toContain('with 3 video(s). Review it below, then Push');
+  expect(host.textContent).toContain('finding matching videos and publishing');
+  await act(async()=>resolve({playlistId:7,matchedCount:3,publication:{connectorId:4,status:'success',remotePlaylistId:'remote',matchedCount:3,unmatchedTitles:[]}} as never));await flush();
+  expect(host.textContent).toContain('Published 3 video(s) to the playback library.');
+  expect(api.playlists.push).not.toHaveBeenCalled();
+});
+
+it('reports saved membership and publication failure without claiming the player was updated',async()=>{
+  vi.spyOn(api.playlists,'generate').mockResolvedValue({playlistId:7,matchedCount:3,publication:{connectorId:4,status:'failed',remotePlaylistId:null,matchedCount:0,unmatchedTitles:[],error:'Player offline'}} as never);
+  await mount();await act(async()=>button('Generate playlist').click());await flush();
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('Saved in Vidarr, but publication failed: Player offline');
+  expect(host.textContent).toContain('Use Push to retry this saved playlist');
   expect(api.playlists.push).not.toHaveBeenCalled();
 });
 

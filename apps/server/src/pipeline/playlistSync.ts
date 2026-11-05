@@ -1,6 +1,8 @@
 import { prisma, logActivity } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 import { syncConnectorVideos } from './libraryVideoSync.js';
+import { pushPlaylist } from './playlistPush.js';
+import type { PlaylistPublication } from '@vidarr/shared-types';
 import {
   generatePlaylistFromFilters,
   regenerateSmartPlaylist,
@@ -72,9 +74,26 @@ export async function generatePlaylistWithSync(
   filters: PlaylistFilters,
   matchMode: 'all' | 'any',
   options: Parameters<typeof generatePlaylistFromFilters>[3] = {},
-): Promise<GeneratePlaylistResult & { sync: ConnectorSyncReport[] }> {
+): Promise<GeneratePlaylistResult & { sync: ConnectorSyncReport[]; publication: PlaylistPublication }> {
   const sync = await syncVideoConnectors(options.targetConnectorId);
-  return { ...await generatePlaylistFromFilters(name, filters, matchMode, options), sync };
+  const generated = await generatePlaylistFromFilters(name, filters, matchMode, options);
+  let publication: PlaylistPublication;
+  const connectorId = options.targetConnectorId ?? null;
+  try {
+    if (!connectorId) throw new Error('Select a playback library to publish this saved playlist');
+    const result = await pushPlaylist(generated.playlistId, connectorId);
+    publication = { connectorId, status: result.unmatchedTitles.length ? 'partial' : 'success',
+      remotePlaylistId: result.remotePlaylistId, matchedCount: result.matchedCount, unmatchedTitles: result.unmatchedTitles };
+  } catch (error) {
+    publication = { connectorId, status: 'failed', remotePlaylistId: null, matchedCount: 0, unmatchedTitles: [], error: (error as Error).message };
+    // Keep failures visible after reload even when validation failed before Push's own catch.
+    if (connectorId) await prisma.playlistSync.upsert({
+      where: { playlistId_connectorId: { playlistId: generated.playlistId, connectorId } },
+      update: { lastPushStatus: 'failed', lastPushError: publication.error, lastPushedAt: new Date() },
+      create: { playlistId: generated.playlistId, connectorId, lastPushStatus: 'failed', lastPushError: publication.error, lastPushedAt: new Date() },
+    }).catch(recordError => logActivity('warn', 'playlist:publication', recordError).catch(() => {}));
+  }
+  return { ...generated, sync, publication };
 }
 
 export async function regenerateSmartPlaylistWithSync(

@@ -25,8 +25,8 @@ describe('Discover and playlist controls', () => {
     const connector = render(<LibraryConnectorsPage />, '/library-connectors');
     expect(connector).toContain('A successful connection test does not load the library.');
     const playlists = render(<PlaylistsPage />, '/playlists');
-    expect(playlists).toContain('Generate saves the playlist in Vidarr.');
-    expect(playlists).toContain('Push to your playback library to publish it.');
+    expect(playlists).toContain('Generate saves and publishes the playlist to your selected playback library.');
+    expect(playlists).toContain('saved playlist remains available for retry with Push');
   });
   it('distinguishes available, known, supplementary and inventory counts in Library', () => {
     const client = new QueryClient();

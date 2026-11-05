@@ -205,8 +205,11 @@ Genre pages link the complete group into Library and prefilled music-video playl
 
 In Live playlist view, Generate music-video playlist explicitly switches to the supported generator;
 it does not create a playlist until the user submits it. Hidden saved playlists are explained with
-a Show all playlists action. Generation reports library refresh/matching progress and failures,
-then membership review and Push remain required before a playlist appears on a playback server.
+a Show all playlists action. Generate is authorization to save and publish to the selected player
+library in one operation, after inventory refresh, rule evaluation and confirmed-availability
+checks. It reports complete, partial or failed publication separately from local creation; a
+failure retains the saved playlist for retry with Push. A valid selected/default/sole playback
+connector is required. Manual curated playlists retain their explicit review and Push flow.
 
 ## Discovery and acquisition
 

@@ -5,13 +5,14 @@ import {
   createMusicVideo, createMusicVideoFile, createLibraryConnector,
 } from './support/db.js';
 
-const provider = vi.hoisted(() => ({ fetchVideos: vi.fn() }));
+const provider = vi.hoisted(() => ({ fetchVideos: vi.fn(), pushPlaylist: vi.fn() }));
 vi.mock('../src/providers/library/index.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/providers/library/index.js')>()),
-  getLibraryConnectorProvider: () => ({ testConnection: vi.fn(), fetchArtists: vi.fn(), fetchVideos: provider.fetchVideos }),
+  getLibraryConnectorProvider: () => ({ testConnection: vi.fn(), fetchArtists: vi.fn(), fetchVideos: provider.fetchVideos, pushPlaylist: provider.pushPlaylist }),
 }));
 
 import { generatePlaylistWithSync, regenerateSmartPlaylistWithSync, syncVideoConnectors } from '../src/pipeline/playlistSync.js';
+import { republishChangedSmartPlaylist } from '../src/pipeline/playlistPush.js';
 
 const serverVideo = (title = 'Server Only', artistName = 'Test Artist') => ({
   externalId: `jf-${title}`, title, artistName, releaseYear: null, durationSeconds: null,
@@ -36,6 +37,7 @@ describe('on-demand video sync before playlist creation', () => {
   beforeEach(async () => {
     await resetDb();
     provider.fetchVideos.mockReset().mockResolvedValue([]);
+    provider.pushPlaylist.mockReset().mockImplementation(async (_connector, request) => ({ remotePlaylistId: 'remote-new', matchedCount: request.items.length, unmatchedTitles: [] }));
     rootFolderId = (await createRootFolder()).id;
     qualityProfileId = (await createQualityProfile((await createQuality()).id)).id;
   });
@@ -52,6 +54,8 @@ describe('on-demand video sync before playlist creation', () => {
     expect(result.sync).toEqual([{ connectorId: jf.id, name: 'JF', status: 'synced', videoCount: 1, matchedCount: 1 }]);
     const items = await prisma.playlistItem.findMany({ where: { playlistId: result.playlistId } });
     expect(items.map((i) => i.musicVideoId)).toEqual([video.id]);
+    expect(result.publication).toMatchObject({ status: 'success', connectorId: jf.id, matchedCount: 1, remotePlaylistId: 'remote-new' });
+    expect(provider.pushPlaylist).toHaveBeenCalledWith(expect.objectContaining({ id: jf.id }), expect.objectContaining({ name: 'Fresh', items: [expect.objectContaining({ externalId: 'jf-Server Only' })] }));
   });
 
   it('syncs every time rather than trusting an earlier sync', async () => {
@@ -132,5 +136,44 @@ describe('on-demand video sync before playlist creation', () => {
     const result = await regenerateSmartPlaylistWithSync(created.playlistId);
     expect(result).toMatchObject({ matchedCount: 1, changed: true });
     expect(result.sync[0]).toMatchObject({ status: 'synced', videoCount: 1 });
+  });
+
+  it('keeps generated membership and records a failed first publication for retry on regeneration', async () => {
+    const jf = await connector();
+    const video = await catalogVideo('Kept After Failure');
+    provider.fetchVideos.mockResolvedValue([serverVideo('Kept After Failure')]);
+    provider.pushPlaylist.mockRejectedValueOnce(new Error('Player returned 503'));
+    const result = await generatePlaylistWithSync('Retry Me', { musicVideoIds: [video.id] }, 'all', { targetConnectorId: jf.id, smart: true });
+    expect(result.publication).toMatchObject({ status: 'failed', error: 'Player returned 503' });
+    expect(await prisma.playlistItem.count({ where: { playlistId: result.playlistId } })).toBe(1);
+    const before = await prisma.playlistSync.findFirstOrThrow({ where: { playlistId: result.playlistId } });
+    expect(before).toMatchObject({ remotePlaylistId: null, lastPushStatus: 'failed' });
+    expect(await republishChangedSmartPlaylist(result.playlistId, false)).toBe(1);
+    expect(await prisma.playlist.count({ where: { name: 'Retry Me' } })).toBe(1);
+    expect(await prisma.playlistSync.findUniqueOrThrow({ where: { id: before.id } })).toMatchObject({ lastPushStatus: 'success', remotePlaylistId: 'remote-new' });
+  });
+
+  it('reports incomplete publication without claiming the full playlist reached the player', async () => {
+    const jf = await connector();
+    const video = await catalogVideo('Lost During Publication');
+    provider.fetchVideos.mockResolvedValue([serverVideo('Lost During Publication')]);
+    provider.pushPlaylist.mockResolvedValue({ remotePlaylistId: 'partial', matchedCount: 0, unmatchedTitles: ['Lost During Publication'] });
+    const result = await generatePlaylistWithSync('Partial', { musicVideoIds: [video.id] }, 'all', { targetConnectorId: jf.id });
+    expect(result.publication).toMatchObject({ status: 'partial', matchedCount: 0, unmatchedTitles: ['Lost During Publication'] });
+    expect(await prisma.playlistSync.findFirstOrThrow({ where: { playlistId: result.playlistId } })).toMatchObject({ lastPushStatus: 'partial', unmatchedCount: 1 });
+  });
+
+  it('persists publication failure when the selected player is disabled during inventory refresh', async () => {
+    const jf = await connector();
+    const video = await catalogVideo('Changed Player');
+    provider.fetchVideos.mockImplementation(async () => {
+      await prisma.libraryConnector.update({ where: { id: jf.id }, data: { enabled: false } });
+      return [serverVideo('Changed Player')];
+    });
+    const result = await generatePlaylistWithSync('Retained after disable', { musicVideoIds: [video.id] }, 'all', { targetConnectorId: jf.id });
+    expect(result.publication).toMatchObject({ status: 'failed' });
+    expect(provider.pushPlaylist).not.toHaveBeenCalled();
+    expect(await prisma.playlistSync.findFirstOrThrow({ where: { playlistId: result.playlistId } })).toMatchObject({ lastPushStatus: 'failed', lastPushError: 'Playback library is disabled or not selected' });
+    expect(await prisma.playlist.count({ where: { id: result.playlistId } })).toBe(1);
   });
 });

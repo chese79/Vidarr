@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Generate and publish playlists together (2026-11-04)
+
+- Make Generate publish to the selected player after saving ordered, confirmed-available membership.
+  Show complete/partial publication separately from saved-but-failed publication; retain Push for retry.
+- Require a usable destination, with saved-default/sole-player fallback for existing API clients.
+  Preserve generated playlists on player failure and retry failed initial smart publications.
+- Count items excluded before server lookup among publication misses instead of reporting full success.
+- Publish the user's reviewed Awesome playlist #5 and #6 to JF, verifying all 27 IDs and order in each.
+
 ### Unconfirmed artists in Music Videos and Live navigation (2026-11-04)
 
 - Include unresolved observations in the shared Library alphabet rail and rows, labeled
