@@ -5,6 +5,15 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### MusicBrainz enrichment search hints (2026-11-05)
+
+- Use existing filename/title parsing for MusicBrainz searches when server artists are uploader names.
+- Retrieve bounded MusicBrainz artist/release suggestions for unconfirmed observations, with explicit
+  Artist Review required before external facts can be applied; never promote identities automatically.
+- Permit a bounded version-suffix search fallback only for unverified suggestions. Preserve remix,
+  edit and live ambiguity in review and keep existing populated metadata intact.
+
+
 ### Production MTV plugin activation (2026-11-05)
 
 - Rebuild and activate MTV 0.1.4 on the existing Jellyfin 12.3.0 production server.

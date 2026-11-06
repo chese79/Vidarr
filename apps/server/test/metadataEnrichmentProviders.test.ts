@@ -30,6 +30,17 @@ describe('enrichment MusicBrainz HTTP evidence', () => {
     vi.stubGlobal('fetch', simulate({ missingTrack: true }));
     expect(await enrichmentAlbumEvidence(artist, 'Tomorrow', recording, release)).toEqual([]);
   });
+  it('falls back from a version suffix only for explicitly unverified review suggestions', async () => {
+    const original = simulate();
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/release/')) return original(url);
+      const query = new URL(url).searchParams.get('query') ?? '';
+      return new Response(JSON.stringify({ recordings: query.includes('radio') ? [] : [{ id: recording, title: 'Tomorrow', 'artist-credit': [{ artist: { id: artist } }], releases: [{ id: release }] }] }), { status: 200 });
+    }));
+    const rows = await enrichmentAlbumEvidence(artist, 'Tomorrow (US remix radio edit)');
+    expect(rows[0]).toMatchObject({ album: 'Your Arsenal', verified: false });
+    expect(rows[0].reason).toContain('Version suffix omitted for search suggestions only');
+  });
   it('keeps provider outages distinct from missing facts', async () => {
     vi.stubGlobal('fetch', simulate({ fail: true }));
     await expect(enrichmentAlbumEvidence(artist, 'Tomorrow', recording, release)).rejects.toThrow('503');

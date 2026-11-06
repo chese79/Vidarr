@@ -20,9 +20,10 @@ function Review({ item, onApplied }: { item: EnrichmentItem; onApplied: () => vo
       <label>Evidence <select value={choice} onChange={event => { setChoice(Number(event.target.value)); setSelected([]); }}>{evidence.map((row, index) => <option value={index} key={index}>{row.source} — {row.entityId}</option>)}</select></label>
       <p><a href={evidence[choice].url} target="_blank" rel="noreferrer">{evidence[choice].source}</a> · observed {new Date(evidence[choice].observedAt).toLocaleString()}</p>
       <p>{evidence[choice].reason}</p>
+      {evidence[choice].requiresArtistReview && <p>Artist identity review is required before these external facts can be applied.</p>}
       <table><thead><tr><th>Apply</th><th>Field</th><th>Current</th><th>Proposed</th></tr></thead><tbody>{Object.entries(evidence[choice].facts).filter(([, value]) => value != null).map(([field, value]) => <tr key={field}><td><input type="checkbox" aria-label={`Apply ${field}`} checked={selected.includes(field as EnrichmentField)} onChange={event => setSelected(event.target.checked ? [...selected, field as EnrichmentField] : selected.filter(value => value !== field))} /></td><td>{field}</td><td>{display(item.before?.Facts[field as EnrichmentField])}</td><td>{display(value)}</td></tr>)}</tbody></table>
       <label><input type="checkbox" checked={corrections} onChange={event => setCorrections(event.target.checked)} /> I reviewed the identity, video version and release evidence; allow selected populated fields to be corrected.</label>
-      <p><button disabled={!selected.length || apply.isPending} onClick={() => apply.mutate()}>{apply.isPending ? 'Applying and verifying…' : 'Apply selected facts'}</button></p>
+      <p><button disabled={!selected.length || apply.isPending || evidence[choice].requiresArtistReview} onClick={() => apply.mutate()}>{apply.isPending ? 'Applying and verifying…' : 'Apply selected facts'}</button></p>
       {apply.error && <p role="alert">{apply.error.message}</p>}
       {apply.isSuccess && <p role="status">Jellyfin metadata and MTV track verified.</p>}
     </>}

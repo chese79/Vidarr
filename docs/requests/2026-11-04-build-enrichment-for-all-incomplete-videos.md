@@ -20,6 +20,9 @@ verified, unambiguous evidence. The original MP4 must remain unchanged.
 
 ## Source and field rules
 
+On 2026-11-05 the user explicitly selected MusicBrainz as the primary external metadata source.
+Retain existing facts and IMVDb verification for video-specific director credits.
+
 - Preserve original server/NFO values and user edits. A locked item/field is never changed by the
   unattended batch. Detect changes between observation, proposal and application.
 - Reuse confirmed Vidarr/Jellyfin/Picard artist IDs and confirmed media-server/catalog links.

@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { prisma } from '../../src/db/client.js';
-import { automaticFacts, enrichAfterScan, runMetadataEnrichment, startMetadataEnrichment } from '../../src/pipeline/metadataEnrichment.js';
+import { automaticFacts, enrichAfterScan, enrichmentIdentityHint, proposeMetadata, runMetadataEnrichment, startMetadataEnrichment } from '../../src/pipeline/metadataEnrichment.js';
 import { resetDb, ensureSettings, createLibraryConnector, createLibraryVideo } from '../support/db.js';
 import { authHeaders, TEST_API_KEY } from '../support/http.js';
 import type { EnrichmentSnapshot, EnrichmentEvidence } from '@vidarr/shared-types';
@@ -9,6 +9,11 @@ import type { EnrichmentSnapshot, EnrichmentEvidence } from '@vidarr/shared-type
 const snapshot = (extra: Partial<EnrichmentSnapshot> = {}): EnrichmentSnapshot => ({ ItemId: 'video-1', LibraryId: 'videos-1', Path: '/media/video.mp4', Facts: { artist: 'Artist', title: 'Song' }, ProviderIds: {}, Locked: false, LockedFields: [], NfoHash: 'nfo', NfoValid: true, Fingerprint: 'before', OverlayValid: true, ...extra });
 const evidence = (facts: EnrichmentEvidence['facts'], verified = true): EnrichmentEvidence => ({ facts, verified, source: 'test', url: 'https://musicbrainz.org/release/test', entityId: 'test', observedAt: '2026-11-04T00:00:00Z', reason: 'fixture' });
 describe('metadata field safety', () => {
+  it('uses filename hints for uploader metadata while retaining the version for review', () => {
+    const artist = { id: 8, name: 'Morrissey', musicbrainzArtistId: 'artist-id' };
+    expect(enrichmentIdentityHint({ title: 'Morrissey - Tomorrow', artistName: 'officialmorrissey', path: 'D:\\media\\Morrissey - Tomorrow (US remix radio edit).mp4' }, [artist])).toEqual({ artist, title: 'Tomorrow (US remix radio edit)', source: 'filename' });
+    expect(enrichmentIdentityHint({ title: 'Morrissey - Tomorrow', artistName: 'uploader' }, [artist, { ...artist, id: 9 }])).toBeNull();
+  });
   it('fills unique missing facts and preserves populated identity', () => {
     expect(automaticFacts(snapshot(), [evidence({ artist: 'Other', album: 'Album', albumYear: 1992 })])).toEqual({ album: 'Album', albumYear: 1992 });
   });
@@ -109,5 +114,29 @@ describe('durable enrichment workflow', () => {
     expect(response.statusCode).toBe(200); expect(response.json().total).toBe(1);
     expect(response.json().items[0].proposal.evidence[0].source).toBe('Jellyfin album');
     expect(response.body).not.toContain('authToken');
+  });
+  it('pulls MusicBrainz suggestions for an unconfirmed uploader video without accepting identity or album facts', async () => {
+    const artist = '11111111-1111-4111-8111-111111111111', recording = '22222222-2222-4222-8222-222222222222', release = '33333333-3333-4333-8333-333333333333';
+    const original = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: any, options: any) => {
+      if (!String(url).startsWith('https://musicbrainz.org/')) return original(url, options);
+      const credit = [{ artist: { id: artist } }];
+      const body = String(url).includes('/artist?') ? { artists: [{ id: artist, name: 'Morrissey', aliases: [] }] }
+        : String(url).includes('/release/') ? { id: release, title: 'Your Arsenal', date: '1992', 'artist-credit': credit, media: [{ tracks: [{ recording: { id: recording } }] }] }
+          : { recordings: [{ id: recording, title: 'Tomorrow', 'artist-credit': credit, releases: [{ id: release }] }] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }));
+    const video = await prisma.libraryVideo.update({ where: { connectorId_externalId: { connectorId, externalId: 'video-1' } }, data: { title: 'Morrissey - Tomorrow', artistName: 'officialmorrissey', path: 'D:\\media\\Morrissey - Tomorrow (US remix radio edit).mp4' } });
+    const before = snapshot({ Facts: { artist: 'officialmorrissey', title: 'Morrissey - Tomorrow' } });
+    const proposal = await proposeMetadata(video, before);
+    expect(proposal.evidence.some(row => row.source === 'MusicBrainz artist suggestion')).toBe(true);
+    const index = proposal.evidence.findIndex(row => row.facts.album === 'Your Arsenal');
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(proposal.evidence[index]).toMatchObject({ verified: false, requiresArtistReview: true });
+    expect(proposal.automatic).toEqual({}); expect(await prisma.artist.count()).toBe(0);
+    const run = await startMetadataEnrichment(connectorId);
+    const item = await prisma.metadataEnrichmentItem.create({ data: { runId: run.id, libraryVideoId: video.id, externalId: video.externalId, title: video.title, artistName: video.artistName, beforeJson: JSON.stringify(before), proposalJson: JSON.stringify(proposal), status: 'review' } });
+    const response = await app.inject({ method: 'POST', url: `/api/v1/metadata-enrichment/items/${item.id}/apply`, headers: authHeaders(), payload: { evidenceIndex: index, fields: ['album', 'albumYear'], corrections: false } });
+    expect(response.statusCode).toBe(409); expect(response.json().error).toContain('Artist Review'); expect(sent).toHaveLength(0);
   });
 });

@@ -3,9 +3,34 @@ import type { LibraryConnector, LibraryVideo, MetadataEnrichmentRun } from '@pri
 import type { EnrichmentFacts, EnrichmentField, EnrichmentProposal, EnrichmentSnapshot } from '@vidarr/shared-types';
 import { prisma, logActivity } from '../db/client.js';
 import { createAuthedFetcher } from '../providers/library/util.js';
-import { enrichmentAlbumEvidence } from '../providers/metadata/musicbrainz.js';
+import { enrichmentAlbumEvidence, searchMusicBrainzArtists, type MusicBrainzArtist } from '../providers/metadata/musicbrainz.js';
 import { enrichmentVideoDirectors } from '../providers/metadata/imvdb.js';
 import { redactMessage } from '../security/redact.js';
+import { videoIdentities, cleanVideoTitle, isPlausibleArtistName } from './videoIdentity.js';
+import { isUsableArtistHint } from './artistObservation.js';
+import { normalizeTitle } from './normalize.js';
+
+type EnrichmentArtist = { id: number; name: string; musicbrainzArtistId: string | null };
+// Filename/title interpretation supplies search hints, never catalog identity acceptance.
+export function enrichmentIdentityHint(video: { title: string; artistName: string; path?: string | null }, artists: EnrichmentArtist[]) {
+  const byName = new Map<string, EnrichmentArtist[]>();
+  for (const artist of artists) { const key = normalizeTitle(artist.name); byName.set(key, [...(byName.get(key) ?? []), artist]); }
+  for (const hint of videoIdentities(video, { has: key => byName.has(key) })) {
+    const matches = byName.get(normalizeTitle(hint.artistName));
+    if (matches?.length === 1) return { artist: matches[0], title: hint.title, source: hint.source };
+  }
+  return null;
+}
+const artistSuggestions = new Map<string, { candidates: MusicBrainzArtist[]; observedAt: string; expiresAt: number }>();
+async function suggestedArtists(name: string) {
+  const key = normalizeTitle(name);
+  const cached = artistSuggestions.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+  const entry = { candidates: await searchMusicBrainzArtists(name, 3), observedAt: new Date().toISOString(), expiresAt: Date.now() + 86400000 };
+  if (artistSuggestions.size >= 1000) artistSuggestions.delete(artistSuggestions.keys().next().value!);
+  artistSuggestions.set(key, entry);
+  return entry;
+}
 
 const http = createAuthedFetcher('Jellyfin metadata', 'Authorization', token => `MediaBrowser Token="${token}"`);
 const fields: EnrichmentField[] = ['artist', 'title', 'album', 'albumYear', 'recordLabel', 'directors'];
@@ -74,10 +99,12 @@ export async function proposeMetadata(video: LibraryVideo, snapshot: EnrichmentS
   if (snapshot.NfoFacts) add(snapshot.NfoFacts, 'Existing music-video NFO', serverItemUrl(snapshot.ItemId), snapshot.NfoHash, true, 'Existing local musicvideo metadata; only the explicit albumyear field is an album date.');
   const linked = video.musicVideoId && !video.matchConfidence ? await prisma.musicVideo.findUnique({ where: { id: video.musicVideoId }, include: { artist: true } }) : null;
   const confirmed = linked?.artist.musicbrainzMatchStatus === 'confirmed' ? linked : null;
-  const knownArtist = confirmed?.artist ?? await prisma.artist.findFirst({ where: { name: video.artistName, musicbrainzMatchStatus: 'confirmed' } });
+  const hint = confirmed ? null : enrichmentIdentityHint(video, await prisma.artist.findMany({ where: { musicbrainzMatchStatus: 'confirmed' }, select: { id: true, name: true, musicbrainzArtistId: true } }));
+  const knownArtist = confirmed?.artist ?? hint?.artist;
+  let searchTitle = confirmed?.title ?? hint?.title ?? cleanVideoTitle(video.title);
   if (!confirmed && knownArtist) {
     proposal.artistId = knownArtist.id;
-    add({ artist: knownArtist.name, title: video.title }, 'Confirmed artist; unreviewed video hints', `/artist/${knownArtist.id}`, String(knownArtist.id), false, 'Artist identity is confirmed, but this inventory title/version and any populated corrections require review.');
+    add({ artist: knownArtist.name, title: searchTitle }, 'Confirmed artist; unreviewed video hints', `/artist/${knownArtist.id}`, String(knownArtist.id), false, `Existing confirmed artist found through ${hint?.source ?? 'metadata'} hints. This video's identity/version and populated corrections require review.`);
   }
   if (confirmed) {
     proposal.artistId = confirmed.artistId;
@@ -85,10 +112,23 @@ export async function proposeMetadata(video: LibraryVideo, snapshot: EnrichmentS
   } else proposal.notes.push('Artist/video identity is not confirmed. Resolve it in Artist Review and Video Review; title and uploader names remain hints.');
   if (snapshot.LocalAlbum) add({ album: snapshot.LocalAlbum.Name, albumYear: snapshot.LocalAlbum.Year, recordLabel: snapshot.LocalAlbum.RecordLabel || undefined }, 'Jellyfin album', serverItemUrl(snapshot.LocalAlbum.ItemId ?? snapshot.ItemId), snapshot.LocalAlbum.ItemId ?? snapshot.ItemId, true, 'Unique local album title and credited artist match.');
   const ids = Object.fromEntries(Object.entries(snapshot.ProviderIds).map(([key, value]) => [key.toLowerCase(), value]));
-  const artistId = knownArtist?.musicbrainzArtistId ?? ids.musicbrainzartist;
+  let artistId = knownArtist?.musicbrainzArtistId ?? ids.musicbrainzartist;
+  let requiresArtistReview = false;
+  if (!artistId) {
+    const nameHint = videoIdentities(video, { has: () => false }).find(row => isPlausibleArtistName(row.artistName) && isUsableArtistHint(row.artistName));
+    if (nameHint) {
+      const suggestions = await suggestedArtists(nameHint.artistName);
+      for (const candidate of suggestions.candidates) proposal.evidence.push({ facts: { artist: candidate.name }, source: 'MusicBrainz artist suggestion', url: `https://musicbrainz.org/artist/${candidate.id}`, entityId: candidate.id, observedAt: suggestions.observedAt, verified: false, requiresArtistReview: true, reason: 'Name/filename suggestion only. Confirm this identity in Artist Review, then run enrichment again.' });
+      const exact = suggestions.candidates.filter(candidate => [candidate.name, ...candidate.aliases].some(name => normalizeTitle(name) === normalizeTitle(nameHint.artistName)));
+      if (exact.length === 1) { artistId = exact[0].id; searchTitle = nameHint.title; requiresArtistReview = true; }
+    }
+  }
   if (artistId && proposal.missing.some(field => ['album', 'albumYear', 'recordLabel'].includes(field))) {
-    const candidates = await enrichmentAlbumEvidence(artistId, confirmed?.title ?? video.title, confirmed?.musicbrainzAudioRecordingId ?? ids.musicbrainztrack, ids.musicbrainzalbum);
-    for (const row of candidates) add({ album: row.album, albumYear: row.albumYear, recordLabel: row.recordLabel }, 'MusicBrainz', `https://musicbrainz.org/release/${row.releaseId}`, row.releaseId, row.verified, row.reason);
+    const candidates = await enrichmentAlbumEvidence(artistId, searchTitle, confirmed?.musicbrainzAudioRecordingId ?? ids.musicbrainztrack, ids.musicbrainzalbum);
+    for (const row of candidates) {
+      add({ album: row.album, albumYear: row.albumYear, recordLabel: row.recordLabel }, 'MusicBrainz', `https://musicbrainz.org/release/${row.releaseId}`, row.releaseId, row.verified && !requiresArtistReview, `${requiresArtistReview ? 'Artist identity needs Artist Review first. ' : ''}${row.reason}`);
+      if (requiresArtistReview) proposal.evidence[proposal.evidence.length - 1].requiresArtistReview = true;
+    }
   }
   if (confirmed?.imvdbVideoId && !snapshot.Facts.directors?.length) {
     const settings = await prisma.settings.findFirst();
@@ -184,6 +224,7 @@ export async function reviewEnrichmentItem(id: number, evidenceIndex: number, se
     const proposal: EnrichmentProposal = JSON.parse(item.proposalJson);
     const evidence = proposal.evidence[evidenceIndex];
     if (!evidence || !selected.length) throw new Error('Choose evidence and fields.');
+    if (evidence.requiresArtistReview) throw new Error('Confirm this artist identity in Artist Review, then start enrichment again before applying external facts.');
     if (!proposal.artistId && selected.some(field => ['artist', 'title', 'directors'].includes(field))) throw new Error('Confirm the artist/video identity in the established review pages first, then start a new enrichment scan.');
     if (await target(item.run.connector) !== item.run.serverId || !sameId(item.run.connector.videoLibraryId ?? '', item.run.libraryId)) throw new Error('Server/library scope changed.');
     const before: EnrichmentSnapshot = JSON.parse(item.resultJson ?? item.beforeJson);

@@ -134,11 +134,16 @@ function escapeLucene(value: string): string {
 export async function enrichmentAlbumEvidence(artistId: string, title: string, recordingId?: string, releaseId?: string) {
   const valid = (value?: string) => !!value && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
   if (!valid(artistId)) return [];
-  const recordings = valid(recordingId)
-    ? [await rateLimitedGet(`/recording/${recordingId}?inc=artist-credits+releases&fmt=json`)]
-    : (await rateLimitedGet(`/recording?query=${encodeURIComponent(`arid:${artistId} AND recording:"${escapeLucene(title)}"`)}&limit=5&fmt=json`)).recordings ?? [];
-  const exact = recordings.filter((row: any) => (!valid(recordingId) || row.id === recordingId) && (row['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === artistId)
-    && (valid(recordingId) || String(row.title).trim().toLocaleLowerCase() === title.trim().toLocaleLowerCase()));
+  const search = async (hint: string) => (await rateLimitedGet(`/recording?query=${encodeURIComponent(`arid:${artistId} AND recording:"${escapeLucene(hint)}"`)}&limit=5&fmt=json`)).recordings ?? [];
+  const credited = (rows: any[], hint: string) => rows.filter((row: any) => (!valid(recordingId) || row.id === recordingId) && (row['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === artistId)
+    && (valid(recordingId) || String(row.title).trim().toLocaleLowerCase() === hint.trim().toLocaleLowerCase()));
+  const recordings = valid(recordingId) ? [await rateLimitedGet(`/recording/${recordingId}?inc=artist-credits+releases&fmt=json`)] : await search(title);
+  let exact = credited(recordings, title);
+  let versionHint = false;
+  if (!valid(recordingId) && exact.length === 0) {
+    const baseTitle = title.replace(/\s*[(\[][^)\]]*\b(?:remix|mix|edit|live|version)\b[^)\]]*[)\]]\s*$/i, '').trim();
+    if (baseTitle && baseTitle !== title.trim()) { exact = credited(await search(baseTitle), baseTitle); versionHint = true; }
+  }
   const result: Array<{ album: string; albumYear?: number; recordLabel?: string; recordingId: string; releaseId: string; verified: boolean; reason: string }> = [];
   for (const recording of exact.slice(0, 2)) {
     const releases = valid(releaseId) ? [{ id: releaseId }] : (recording.releases ?? []).slice(0, 3);
@@ -151,7 +156,7 @@ export async function enrichmentAlbumEvidence(artistId: string, title: string, r
       const labels: string[] = [...new Set<string>((release['label-info'] ?? []).map((entry: any) => entry.label?.name).filter(Boolean))];
       result.push({ album: String(release.title), albumYear: year, recordLabel: labels.length === 1 ? labels[0] : undefined,
         recordingId: recording.id, releaseId: release.id, verified: valid(recordingId) && valid(releaseId),
-        reason: valid(recordingId) && valid(releaseId) ? 'Embedded recording and release IDs with matching artist credit and track.' : 'Recording/release edition needs review; title matching alone cannot establish this video version.' });
+        reason: valid(recordingId) && valid(releaseId) ? 'Embedded recording and release IDs with matching artist credit and track.' : `${versionHint ? 'Version suffix omitted for search suggestions only. ' : ''}Recording/release edition needs review; title matching alone cannot establish this video version.` });
     }
   }
   return result;

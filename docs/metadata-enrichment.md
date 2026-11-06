@@ -20,11 +20,20 @@ timing and an administrator-authorized Jellyfin credential. It reports a fingerp
 identity, media path, duration, fields, provider IDs, locks and NFO hash. No partial Jellyfin item
 DTO is posted to the general Items endpoint, which would risk clearing unrelated fields.
 
+MusicBrainz is the user-selected primary external source for artist, album, album year and label.
+Existing metadata remains protected; IMVDb supplies verified video-specific director credits.
 Existing valid musicvideo NFO fields, a unique local album with matching artist credit, confirmed
 Vidarr inventory/catalog links, exact accepted IMVDb video IDs and embedded MusicBrainz
 recording/release identities supply evidence. MusicBrainz release lookup checks artist credits
-and actual recording track membership. Search is bounded to five recordings, two exact-title
-recordings and three releases each, using the shared 1.1-second limiter. Name/title-only evidence
+and actual recording track membership. Search is bounded to two five-recording queries, two exact-title
+recordings and three releases each, using the shared 1.1-second limiter. The second query is allowed
+only when a trailing mix/edit/live/version suffix prevents a match; its results remain unverified
+version suggestions. Existing filename/title parsing supplies search hints when stored artists are
+uploaders. Unconfirmed observations can receive up to three MusicBrainz artist suggestions; only a
+unique exact name/alias candidate supplies album-search hints, and all dependent external facts stay
+blocked until Artist Review. Artist suggestions are cached in-process for one day, capped at 1,000
+names; provider failures are never cached as empty results. No artist/catalog identity is created,
+confirmed or downgraded by this enrichment path. Name/title-only evidence
 and editions/remixes require review. Existing confirmed unchanged video evidence may be reused
 for seven days; unresolved identities are checked again so new identity decisions can take effect.
 
