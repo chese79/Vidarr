@@ -56,6 +56,16 @@ it('uses the music-video artwork/name heading on the Live artist page', async ()
   expect(revokeObjectURL).toHaveBeenCalledWith('blob:artist-artwork');
 });
 
+it('keeps Live discovery and the add form independent', async () => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+  await mount(<LivePage artistId={42} />);
+  const add = [...host.querySelectorAll('button')].find(button => button.textContent === 'Add performance')!;
+  await act(async () => add.click()); await flush();
+  expect(host.querySelector('form')).not.toBeNull();
+  expect(host.textContent).toContain('Event history requires a setlist.fm API key');
+  expect(errors.mock.calls.filter(([message]) => String(message).includes('same key'))).toHaveLength(0);
+});
+
 it('retains the artist index and list in Live mode without music-video exclusions or global searches', async () => {
   await mount(<App />);
   expect(host.querySelector('[aria-label="Jump to a letter"]')).not.toBeNull();

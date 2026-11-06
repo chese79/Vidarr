@@ -97,9 +97,9 @@ function ArtistLivePage({ artistId, embedded }: { artistId: number; embedded: bo
     <div className="page-header"><ArtistHeading artistId={artistId} name={artist.data?.items[0]?.name ?? 'Artist'}>
       <nav aria-label="Artist catalog"><CatalogLink catalog="musicVideos" to={`/artist/${artistId}`}>Music Videos</CatalogLink> · <strong>Live &amp; Concerts</strong></nav>
     </ArtistHeading></div>
-    <Link to="/">Artist index</Link>{' · '}<Link to="/live/settings">Live &amp; Concerts settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link><LiveDiscoveryControls key={artistId} artistId={artistId} />
+    <Link to="/">Artist index</Link>{' · '}<Link to="/live/settings">Live &amp; Concerts settings and monitoring</Link>{' · '}<Link to="/live/classification">Awaiting classification</Link><LiveDiscoveryControls artistId={artistId} />
     <nav aria-label="Live views"><ActionButton aria-pressed={!recordings} onClick={() => change('view', '')}>Performances</ActionButton> <ActionButton aria-pressed={recordings} onClick={() => change('view', 'recordings')}>Recordings</ActionButton></nav>
-    <LiveStartingView key={artistId} artistId={artistId} />
+    <LiveStartingView artistId={artistId} />
     <p>Browse performances and recording versions. Identity review, verified coverage, acquisition and playback readiness remain distinct.</p>
     <div className="toolbar">
       <label>Search this artist’s Live catalog <input value={params.get('search') ?? ''} onChange={e => change('search', e.target.value)} /></label>
@@ -107,7 +107,7 @@ function ArtistLivePage({ artistId, embedded }: { artistId: number; embedded: bo
       <label>Style <select value={params.get('style') ?? ''} onChange={e => change('style', e.target.value)}><option value="">All styles</option>{LiveStyle.options.map(value => <option key={value} value={value}>{liveLabels[value]}</option>)}</select></label>
       <ActionButton onClick={() => setAdding(value => !value)}>{adding ? 'Close form' : 'Add performance'}</ActionButton>
     </div>
-    {adding && <AddPerformance key={artistId ?? 'all'} artistId={artistId} onSaved={savedId => { setAdding(false); client.invalidateQueries({ queryKey: ['live-performances'] }); navigate(`/live/performance/${savedId}`); }} />}
+    {adding && <AddPerformance artistId={artistId} onSaved={savedId => { setAdding(false); client.invalidateQueries({ queryKey: ['live-performances'] }); navigate(`/live/performance/${savedId}`); }} />}
     {error && <p role="alert">{error.message}</p>}
     {(recordings ? candidates.isLoading : performances.isLoading) && <p>Loading…</p>}
     {page && <p>{page.total} {recordings ? 'recording candidates' : 'performances'}</p>}

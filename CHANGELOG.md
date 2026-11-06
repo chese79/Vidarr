@@ -6,6 +6,7 @@ under **Unreleased** in the same commit as the change.
 ## Unreleased
 ### Full review corrections (2026-11-06)
 
+- Keep Live discovery, starting inventory and the add form independent by removing duplicate sibling keys; the artist page still resets its children when changing artists.
 - Preserve dotted sibling media sidecars during import/deletion and revalidate older MV/Live deletion plans before removal.
 - Reject failed motion decoding; keep channel-name search hints heuristic, including historical search observations. Require explicit complete torrent states and progress before importing.
 - Verify retained Jellyfin playlist IDs belong to the selected music-video library before replacement. MTV plugin 0.1.5 requires actual owned subtitle registration when reporting completed enrichment/replay.

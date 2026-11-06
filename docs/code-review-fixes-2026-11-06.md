@@ -1,6 +1,7 @@
 # Review corrections — 2026-11-06
 
-The full static review identified twelve actionable defects. The correction set preserves
+The full static review identified twelve actionable defects; broader web validation exposed
+one additional Live component-state defect. The correction set preserves
 identity review, source validation, delivery confirmation and native conditional writes.
 It also completes the pending enrichment throughput work documented in
 [metadata enrichment](metadata-enrichment.md).
@@ -19,6 +20,7 @@ It also completes the pending enrichment throughput work documented in
 | Partial-provider fixture | The recovery test explicitly persists the IMVDb ID so a director outage and its retry actually execute. |
 | Artist name lookup | Bounded joined/spaced variants are merged by MusicBrainz ID; irrelevant spaced-name results cannot suppress the original spelling. |
 | Homonymous videos | Multiple exact artist-name/title matches remain ambiguous instead of confirming the first catalog row. |
+| Live component state | The broader web suite exposed duplicate artist-ID keys on discovery, starting inventory and the add form. Their keyed artist-page parent already handles artist changes; redundant child keys are removed to keep sibling state separate. |
 
 No Prisma schema change is needed: optional proposal state remains backward-compatible JSON.
 No configuration volumes or media files are replaced by application deployment. Untracked
@@ -48,8 +50,10 @@ and the already-approved unconfirmed-artist expectation, all 66 tests in those f
 the other 125 files were unchanged and passed. The final application image passed server/web
 builds and an isolated Node 22.23.2 runtime check of the compiled sidecar and retry-control paths.
 Release image: `vidarr-review-20261106:release`, OCI manifest list
-`13b42784421e3887b3e2967d2dd4f911be417e934dc338b34e3908f6cf247ce5`, web bundle
-`index-NUsPkbMk.js`. Application replacement and enrichment resumption remain separate checks.
+`eec188a791d678c6272761f5bdbc68692b5bbc066773bbe0daa1d51444fb883c`, web bundle
+`index-ZojK4P5L.js`. All 95 web tests across 23 files passed, including the additional Live
+component-state regression. The server bundle is unchanged from the original twelve-finding
+release. Application replacement and enrichment resumption remain separate checks.
 A temporary Dockerfile serializes the unchanged server/web build stages on this 8 GB host by
 using `FROM build-server AS build-web` instead of `FROM base AS build-web`; it changes no runtime
 dependencies, application source or deployment mounts. The user requested waiting for
