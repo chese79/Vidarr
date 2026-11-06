@@ -5,6 +5,14 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Automatic artist matching and LAN access (2026-11-05)
+
+- Search unresolved artist observations in bounded background batches, including the existing backlog.
+- Automatically confirm an unambiguous candidate at 82% or better through normal MusicBrainz validation; retain competing matches, low scores and catalog conflicts for review.
+- Checkpoint attempts with a one-day cooldown so provider failures cannot starve later observations. Refresh Artist Review while background work proceeds.
+- Production Windows firewall permits TCP 3434 only from the local subnet on the Private profile, following explicit user approval. Remote-device connectivity still requires client verification.
+
+
 ### Full Vidarr enrichment rollout (2026-11-05)
 
 - Complete the no-cache application/runtime rebuild, deploy the corrected MusicBrainz lookup build,

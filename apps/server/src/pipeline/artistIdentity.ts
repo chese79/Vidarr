@@ -19,7 +19,7 @@ function evidenceJson(value: unknown) {
 
 export function artistNameSearchVariants(observedName: string): string[] {
   const primary = observedName.split(/\s+(?:feat(?:uring)?\.?|ft\.?)\s+/i, 1)[0].trim();
-  const spaced = primary.replace(/([a-z])([A-Z])/g, '$1 $2');
+  const spaced = primary.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([a-zA-Z])(\d)/g, '$1 $2');
   return [...new Set([spaced, primary].filter(Boolean))];
 }
 
@@ -129,43 +129,51 @@ async function storeCandidates(artistId: number, observedName: string, candidate
       releaseMatchCount: releaseMatches.get(candidate.id) ?? 0,
     }),
   })).sort((left, right) => right.assessment.confidence - left.assessment.confidence);
-  for (const { candidate, assessment } of assessed) {
-    await prisma.musicBrainzArtistCandidate.upsert({
-      where: { artistId_musicbrainzArtistId: { artistId, musicbrainzArtistId: candidate.id } },
-      update: {
-        status: 'suggested',
-        name: candidate.name,
-        sortName: candidate.sortName,
-        artistType: candidate.type,
-        country: candidate.country,
-        disambiguation: candidate.disambiguation,
-        score: assessment.confidence,
-        evidence: evidenceJson(assessment),
-        lastSeenAt: new Date(),
-      },
-      create: {
-        artistId,
-        musicbrainzArtistId: candidate.id,
-        name: candidate.name,
-        sortName: candidate.sortName,
-        artistType: candidate.type,
-        country: candidate.country,
-        disambiguation: candidate.disambiguation,
-        score: assessment.confidence,
-        evidence: evidenceJson(assessment),
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.artist.findUniqueOrThrow({ where: { id: artistId } });
+    if (current.musicbrainzArtistId || ['confirmed', 'linked'].includes(current.musicbrainzMatchStatus)) return;
+    await tx.musicBrainzArtistCandidate.updateMany({
+      where: { artistId, status: 'suggested', musicbrainzArtistId: { notIn: candidates.map(candidate => candidate.id) } },
+      data: { status: 'rejected' },
+    });
+    for (const { candidate, assessment } of assessed) {
+      await tx.musicBrainzArtistCandidate.upsert({
+        where: { artistId_musicbrainzArtistId: { artistId, musicbrainzArtistId: candidate.id } },
+        update: {
+          status: 'suggested',
+          name: candidate.name,
+          sortName: candidate.sortName,
+          artistType: candidate.type,
+          country: candidate.country,
+          disambiguation: candidate.disambiguation,
+          score: assessment.confidence,
+          evidence: evidenceJson(assessment),
+          lastSeenAt: new Date(),
+        },
+        create: {
+          artistId,
+          musicbrainzArtistId: candidate.id,
+          name: candidate.name,
+          sortName: candidate.sortName,
+          artistType: candidate.type,
+          country: candidate.country,
+          disambiguation: candidate.disambiguation,
+          score: assessment.confidence,
+          evidence: evidenceJson(assessment),
+        },
+      });
+    }
+    const best = assessed[0];
+    const runnerUp = assessed[1];
+    await tx.artist.update({
+      where: { id: artistId },
+      data: {
+        musicbrainzMatchStatus: best ? (runnerUp && best.assessment.confidence - runnerUp.assessment.confidence < 0.1 ? 'ambiguous' : 'suggested') : 'notFound',
+        musicbrainzMatchConfidence: best?.assessment.confidence ?? null,
+        musicbrainzMatchEvidence: best ? evidenceJson(best.assessment) : null,
+        musicbrainzRefreshedAt: new Date(),
       },
     });
-  }
-  const best = assessed[0];
-  const runnerUp = assessed[1];
-  await prisma.artist.update({
-    where: { id: artistId },
-    data: {
-      musicbrainzMatchStatus: best ? (runnerUp && best.assessment.confidence - runnerUp.assessment.confidence < 0.1 ? 'ambiguous' : 'suggested') : 'notFound',
-      musicbrainzMatchConfidence: best?.assessment.confidence ?? null,
-      musicbrainzMatchEvidence: best ? evidenceJson(best.assessment) : null,
-      musicbrainzRefreshedAt: new Date(),
-    },
   });
 }
 
@@ -181,7 +189,7 @@ export async function resolveArtistIdentityAndCatalog(
       const existing = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
       if (existing.musicbrainzArtistId) metadata = await enrichConfirmedArtist(artistId, existing.musicbrainzArtistId, observation.genre);
       else {
-        await storeCandidates(artistId, observation.name, await searchObservedArtist(observation.name), observation.genre);
+        await discoverArtistIdentityCandidates(artistId);
         return;
       }
     }
@@ -215,10 +223,15 @@ export async function discoverArtistIdentityCandidates(artistId: number, searchN
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
   const candidates = await searchObservedArtist(searchName?.trim() || artist.name);
   await storeCandidates(artistId, artist.name, candidates, artist.genre);
-  return prisma.musicBrainzArtistCandidate.findMany({
+  const suggestions = await prisma.musicBrainzArtistCandidate.findMany({
     where: { artistId, status: 'suggested' },
     orderBy: { score: 'desc' },
   });
+  const current = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+  if (current.musicbrainzMatchStatus === 'suggested' && suggestions[0]?.score >= 0.82) {
+    await confirmArtistIdentity(artistId, suggestions[0].musicbrainzArtistId);
+  }
+  return suggestions;
 }
 
 export async function confirmArtistIdentity(artistId: number, musicbrainzArtistId: string) {

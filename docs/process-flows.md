@@ -19,7 +19,7 @@ before creation. Manual curated/Live playlist review and Push are unchanged.
 ## Artist navigation and unconfirmed observations (2026-11-04)
 
 Browse Music Videos or Live → apply current filters → alphabet letters include confirmed artists
-and unconfirmed observations → open an **Unconfirmed** row → Artist Review resolves and confirms
+and unconfirmed observations → automatic matching or opening an **Unconfirmed** row → Artist Review resolves and confirms
 the MusicBrainz identity → continue normal catalog/video review or Live discovery. Visibility does
 not confirm identity, establish catalog ownership or admit source videos. Linked observations are
 represented by their canonical owner. Music Videos retains its empty-artist filter; Live does not
@@ -617,3 +617,25 @@ Metadata provides progress, evidence and pause/resume/retry. Pause/cancel takes 
 current item; applied facts remain. Native checkpoint conflicts require inspection and a fresh
 batch. Scope changes pause rather than redirect old work. Provider failures retain saved proposals
 and request UUIDs for retry. See [metadata enrichment](metadata-enrichment.md).
+
+## Automatic artist identity suggestions (2026-11-05)
+
+Observe an artist from audio/video inventory → background MusicBrainz search (three artists per
+15-second pass) → rank names, aliases and available credit evidence → validate and confirm an
+unambiguous candidate scoring at least 82% → link an existing canonical owner or collect the
+confirmed artist's video inventory. This shared artist flow serves Music Videos and Live.
+The user explicitly authorized automatic confirmation at this threshold. Scores are Vidarr's
+assessment, not a statistical probability. Exact normalized names/aliases start at 82%.
+Competing candidates less than ten percentage points apart, lower scores and conflicting catalog
+ownership remain in Artist Review. Confirmation never accepts individual source videos.
+Attempts are checkpointed before network access and cool down for one day, including failures;
+untouched observations proceed first. Suggested rows can be reconsidered after cooldown; ambiguous
+rows require explicit review. Manual searches remain available immediately. Provider errors are
+logged and preserve existing identities. Reloading/restarting resumes from persisted attempts.
+
+Production LAN access uses http://192.168.0.8:3434. Windows rule Vidarr-LAN-3434 allows inbound TCP
+3434 at that address only from LocalSubnet on Private networks. Keep the firewall enabled; remove
+that named rule to undo this change. HTTP on the host is verified separately from access on another
+computer, which requires a real client check. Guest Wi-Fi/client isolation can still block access.
+
+Verification: Node 22 server/web production builds and 71 focused artist identity, background matching, observation, Library navigation and Discover API tests passed. The loaded host required 60-second test/hook limits for the final run; initial short-limit timeouts were rerun successfully.

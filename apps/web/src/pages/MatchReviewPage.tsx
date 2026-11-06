@@ -22,10 +22,16 @@ export default function MatchReviewPage() {
   const review = useQuery({
     queryKey: ['artist-match-review', debouncedSearch, page],
     queryFn: () => api.artists.matchReviewPage({ search: debouncedSearch, offset: page * PAGE_SIZE, limit: PAGE_SIZE }),
+    refetchInterval: 15000,
   });
   const discover = useMutation({
     mutationFn: (id: number) => api.artists.discoverMusicbrainzCandidates(id, searchTerms[id]),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['artist-match-review'] }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['artist-match-review'] });
+      client.invalidateQueries({ queryKey: ['artists'] });
+      client.invalidateQueries({ queryKey: ['artistSummary'] });
+      setMessage('Search complete. Unambiguous matches of 82% or better are confirmed automatically; remaining matches need review.');
+    },
     onError: (error: Error) => setMessage(error.message),
   });
   const confirm = useMutation({
@@ -42,7 +48,7 @@ export default function MatchReviewPage() {
 
   return <div>
     <div className="page-header"><h2>Artist Review</h2></div>
-    <p className="empty-state">Audio and video observations stay here until you confirm their MusicBrainz artist. Channel names are hints, not artist identities.</p>
+    <p className="empty-state">Vidarr searches MusicBrainz automatically and confirms unambiguous matches of 82% or better after validating the artist identity. Lower scores, competing matches and catalog conflicts stay here for review.</p>
     {message && <p role="status" className="empty-state">{message} {linkedArtistId && <Link to={`/artist/${linkedArtistId}`}>Open artist</Link>}</p>}
     <div className="library-filter-bar">
       <input aria-label="Search artist observations" placeholder="Search artists" value={search} onChange={(event) => setSearch(event.target.value)} />

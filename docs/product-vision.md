@@ -105,7 +105,7 @@ pipeline is:
 
 1. consume an embedded or connector-provided MusicBrainz artist ID when available;
 2. otherwise propose MusicBrainz candidates using exact names, aliases, and supporting evidence;
-3. require review for ambiguous or name-only matches; and
+3. validate and automatically confirm unambiguous matches scoring at least 82%; require review otherwise; and
 4. retain the selected MusicBrainz ID as the stable canonical artist identity.
 
 MusicBrainz supplies canonical names, aliases, artist type, country, disambiguation, genres, and
@@ -121,7 +121,7 @@ matching evidence, not a request to import the artist's complete MusicBrainz dis
 empty scan preserves prior observations because the mount may be temporarily unavailable.
 During artist match review, Vidarr may look up a bounded sample of those observed recording and
 release IDs to compare MusicBrainz artist credits with proposed candidates. Credited evidence
-helps rank candidates but never confirms a name-only match without user review.
+helps rank candidates; the approved 82% automatic-confirmation policy below governs identity acceptance.
 
 Match Review can search MusicBrainz with an edited name while preserving the original source credit.
 Joined words such as `AmyWinehouse` and credits with `featuring`, `feat.`, or `ft.` use the primary
@@ -516,3 +516,5 @@ MTV track; populated corrections and uncertain identity/version/edition facts re
 review. Album year is separate from video year. Batches retain provenance and restart/retry state.
 No acquisition, catalog acceptance or original-video modification is implied. See
 [metadata enrichment](metadata-enrichment.md).
+
+Artist matching policy update (2026-11-05): the user authorizes automatic confirmation for an unambiguous Vidarr match score of at least 82%, after validating the MusicBrainz ID. This supersedes the name-only manual-review requirement above for this threshold. Ambiguity, lower scores and catalog conflicts retain review. Automatic background searches populate existing observations in both MV and Live; see process-flows.md for cadence and recovery.

@@ -1,0 +1,21 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+import { prisma } from '../src/db/client.js';
+import { backfillArtistIdentitySuggestions } from '../src/pipeline/artistIdentityBackfill.js';
+import { discoverArtistIdentityCandidates } from '../src/pipeline/artistIdentity.js';
+import { createArtist, createRootFolder, createQuality, createQualityProfile, resetDb } from './support/db.js';
+vi.mock('../src/pipeline/artistIdentity.js', () => ({ discoverArtistIdentityCandidates: vi.fn().mockResolvedValue([]) }));
+beforeEach(async () => { await resetDb(); vi.mocked(discoverArtistIdentityCandidates).mockReset().mockResolvedValue([]); });
+it('bounds discovery, preserves confirmed/ambiguous artists and cools failed attempts while advancing', async () => {
+  const root = await createRootFolder();
+  const profile = await createQualityProfile((await createQuality()).id);
+  const artists = [];
+  for (let i = 0; i < 5; i++) artists.push(await createArtist(root.id, profile.id, { name: `Artist ${i}` }));
+  await prisma.artist.update({ where: { id: artists[3].id }, data: { musicbrainzMatchStatus: 'ambiguous' } });
+  await prisma.artist.update({ where: { id: artists[4].id }, data: { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' } });
+  vi.mocked(discoverArtistIdentityCandidates).mockRejectedValueOnce(new Error('provider unavailable'));
+  expect(await backfillArtistIdentitySuggestions(2)).toContain('2 observations checked');
+  expect((await prisma.artist.findUniqueOrThrow({ where: { id: artists[0].id } })).musicbrainzMatchStatus).toBe('failed');
+  expect(await backfillArtistIdentitySuggestions(2)).toContain('1 observations checked');
+  expect(vi.mocked(discoverArtistIdentityCandidates).mock.calls.map(call => call[0])).toEqual(artists.slice(0, 3).map(a => a.id));
+  expect(await backfillArtistIdentitySuggestions()).toContain('0 observations checked');
+});
