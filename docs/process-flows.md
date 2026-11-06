@@ -639,3 +639,18 @@ that named rule to undo this change. HTTP on the host is verified separately fro
 computer, which requires a real client check. Guest Wi-Fi/client isolation can still block access.
 
 Verification: Node 22 server/web production builds and 71 focused artist identity, background matching, observation, Library navigation and Discover API tests passed. The loaded host required 60-second test/hook limits for the final run; initial short-limit timeouts were rerun successfully.
+
+Production verification (2026-11-05): deployed `vidarr-artist-matching-20261105:release`
+(manifest `21df77e6b1aafd42edf4fd63c543b38cde485265f99622669d788abcab76560d`).
+Healthy API/UI and the scheduled suggestion job were verified, along with real automatic artist
+confirmations. All four mounts, environment, 12 playlists and prior artist/video IDs were preserved;
+retain `vidarr-before-artist-matching-20261105` for application rollback. Jellyfin was not restarted.
+The user confirmed access from a second LAN computer after the scoped firewall rule was added.
+
+For the recovery snapshot, stop Vidarr before copying its database and any WAL/SHM/journal files
+inside `/config/operator-recovery/`; preserve the whole bundle. Windows mount reads made direct
+SQLite integrity checks excessively slow, so restore service while copying the frozen backup bundle
+to a temporary Linux filesystem for `PRAGMA quick_check`. The recovery copy passed there before
+the final replacement. Never copy a live database without SQLite's consistent-backup mechanism.
+The metadata enrichment batch resumed and advanced after replacement; rollout does not mean its
+full-library scan or review work is complete.

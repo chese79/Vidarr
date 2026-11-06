@@ -7,6 +7,8 @@ under **Unreleased** in the same commit as the change.
 
 ### Automatic artist matching and LAN access (2026-11-05)
 
+- Deploy and verify the matching update, successful production auto-confirmations, healthy background job and resumed enrichment. Preserve all 12 playlists, configuration/mounts and prior catalog IDs; retain the verified recovery bundle and rollback container.
+
 - Search unresolved artist observations in bounded background batches, including the existing backlog.
 - Automatically confirm an unambiguous candidate at 82% or better through normal MusicBrainz validation; retain competing matches, low scores and catalog conflicts for review.
 - Checkpoint attempts with a one-day cooldown so provider failures cannot starve later observations. Refresh Artist Review while background work proceeds.
