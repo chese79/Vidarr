@@ -13,6 +13,7 @@ under **Unreleased** in the same commit as the change.
 - Fix enrichment compilation and retry/worker exclusion, reset stale UI evidence/consent, and exercise real partial-provider recovery in its fixture.
 - Search all bounded artist spelling variants and retain duplicate exact video-name identities for review. Add regression coverage and document recovery in `docs/code-review-fixes-2026-11-06.md`.
 - Install and verify MTV 0.1.5.0 on native Jellyfin 12.3.0 after playback becomes idle; retain the prior plugin and preserve library/plugin configuration, subtitle defaults and playlists.
+- Deploy the reviewed Vidarr image, verify the LAN UI and unchanged mounts/environment/configuration/14 playlists, retain an integrity-checked recovery bundle and rollback container, and resume enrichment with failed-work retries. Validation covers 984 server tests (including corrected fixture reruns), 95 web tests and 89 native plugin checks.
 
 ### Enrichment throughput and partial results (2026-11-05)
 

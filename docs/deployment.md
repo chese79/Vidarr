@@ -662,3 +662,25 @@ Vimeo and other direct providers continue without YouTube authentication.
 Authenticated API endpoints: `GET /api/v1/config/youtube-cookies` returns `{ configured }`,
 `PUT` accepts `{ cookies: "<Netscape file contents>" }`, and `DELETE` removes the saved file.
 All three use the same API-key/session authentication as other settings endpoints.
+
+## Reviewed release — 2026-11-06
+
+Production runs `vidarr-review-20261106:release`, image
+`sha256:eec188a791d678c6272761f5bdbc68692b5bbc066773bbe0daa1d51444fb883c`, from the
+review fixes on `main` (`1de9179`, `2a09140`). Node 22 server/web builds and isolated runtime
+checks passed. Validation covers all 984 server tests including affected fixture reruns,
+95 web tests, 64 native core tests and 25 isolated Jellyfin API checks.
+
+On the 8 GB deployment host, an otherwise identical temporary Dockerfile uses
+`FROM build-server AS build-web` to serialize the compiler stages. Runtime dependencies and
+the tracked Docker configuration are unchanged. The manually managed production container was
+recreated with the exact prior environment and all four mounts; do not replace it using a
+different Compose volume layout. LAN health/UI and configuration/14-playlist preservation passed.
+Retain `vidarr-before-review-20261106` for rollback. The fresh private recovery bundle and its
+integrity marker remain under `/config/operator-recovery/review-before-20261106/`; copy all database
+companions together and verify the frozen copy on Linux storage as described above.
+
+Native Jellyfin 12.3.0 has MTV 0.1.5.0 active after an idle restart. The prior plugin folder and
+user/library/plugin configuration are retained. Batch 2 resumed with safe failed-provider retries
+and demonstrably advanced; the queued follow-up and reviews remain. Deployment does not imply
+full-library enrichment completion. See [the correction and verification record](code-review-fixes-2026-11-06.md).

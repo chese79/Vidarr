@@ -53,7 +53,7 @@ Release image: `vidarr-review-20261106:release`, OCI manifest list
 `eec188a791d678c6272761f5bdbc68692b5bbc066773bbe0daa1d51444fb883c`, web bundle
 `index-ZojK4P5L.js`. All 95 web tests across 23 files passed, including the additional Live
 component-state regression. The server bundle is unchanged from the original twelve-finding
-release. Application replacement and enrichment resumption remain separate checks.
+release. Production replacement, preservation and enrichment resumption were verified below.
 A temporary Dockerfile serializes the unchanged server/web build stages on this 8 GB host by
 using `FROM build-server AS build-web` instead of `FROM base AS build-web`; it changes no runtime
 dependencies, application source or deployment mounts. The user requested waiting for
@@ -72,3 +72,24 @@ A fresh stopped-service database/WAL/SHM/journal recovery bundle was saved insid
 Linux working copy passed `PRAGMA quick_check`. The private `verified.json` marker records success.
 Configuration/media volumes were retained. Host Node 24 was not used to execute application tests;
 the portable Windows fallback was checksum-verified Node 22.23.2 and does not replace system Node.
+
+## Verified production result
+
+Fix commits `1de9179` and `2a09140` are published on `main`. Production `vidarr` runs the final
+`vidarr-review-20261106:release` image above and reports healthy. LAN HTTP serves the expected
+`index-ZojK4P5L.js`. All four mounts and the full environment match the prior container; settings,
+connector configuration, all 14 playlists and membership, prior artist/video IDs, native
+configuration and subtitle defaults passed preservation checks. Later background catalog additions
+are allowed. Retain `vidarr-before-review-20261106` for application rollback; no schema change was
+introduced by these fixes. The prior native plugin folder is also retained.
+
+Batch 2 accepted the guarded failed-work retry and resume. Its cursor advanced from 3607 to 3640,
+verified changes increased from 19 to 20, and read-back confirmed registered MTV tracks. A real
+partial-provider item retained evidence and a verified changed result despite provider errors.
+Requeuing the 373 old failures lowers the checked/failed counters while those items become pending;
+it does not remove reviewed work. The observed next checkpoint had 603 checked, 600 review, three
+failed and 20 changed (changed overlaps other statuses). The queued follow-up batch is retained.
+Provider errors, uncertain facts and the remaining full-library scan are not declared complete.
+
+Task test containers and temporary Linux recovery copies were removed without volume-removal
+flags. The private consistent recovery bundle, marker, source research and production media remain.
