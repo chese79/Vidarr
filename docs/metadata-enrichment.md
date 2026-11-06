@@ -88,3 +88,24 @@ Plugin package 0.1.4.0 DLL SHA256 is
 `9a3fcd3cd9d797777f40c627c8a8bdeac4ac30f9028941a808392a2b87e19391`.
 These checks establish build/lab behavior; production activation and library-wide completion are
 reported separately. No physical Roku viewing of the new enrichment release is claimed.
+
+## Production native activation (2026-11-05)
+
+The fresh plugin rebuild passes 64 core tests and reproduces the exact verified 0.1.4.0 DLL hash
+above. Production server identity `0f6ba0becaee4e95a85e449a47153313` remains Jellyfin 12.3.0.
+Its administrator restart activates 0.1.4; the metadata capability reports enabled timing and the
+same two selected music-video libraries. Both were rebuilt/checked: 4,274 processed, 4,271 valid
+owned tracks unchanged, with only the existing missing-duration files skipped (Analog Blumpkin,
+Tesla by They Might Be Giants, and You May Be Right by Yo La Tengo). No media repair is implied.
+All 4,271 production video sizes and UTC modification times match the fresh predeployment snapshot.
+All 12 saved playlists and sync records, library options/paths, connector/settings fingerprints,
+catalog IDs and user subtitle configuration pass preservation checks. Volatile library refresh
+status is excluded from configuration comparison. A fresh consistent database backup is retained
+inside the configuration volume under `operator-recovery`; secrets remain inside that volume.
+
+A separate Docker test Jellyfin 12.1.0 named vidartest had claimed the production IP/port while the
+native production server remained reachable on loopback. Stopping that test container restored the
+configured address to the expected production identity. Its unless-stopped policy, configuration
+volume and media mounts are retained; restarting it on the same port would recreate the conflict.
+The isolated plugin lab is stopped after verification. Vidarr's full image activation is recorded
+separately from this completed native rollout and from library-wide enrichment completion.

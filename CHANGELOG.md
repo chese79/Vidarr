@@ -5,6 +5,17 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Production MTV plugin activation (2026-11-05)
+
+- Rebuild and activate MTV 0.1.4 on the existing Jellyfin 12.3.0 production server.
+- Stop the separate Docker test Jellyfin that had taken over the production network address;
+  retain its configuration and media mounts.
+- Regenerate/check all 4,274 selected music-video items: 4,271 valid owned tracks are unchanged,
+  and the three previously unreadable videos remain preserved and skipped.
+- Verify all 4,271 original production video sizes/timestamps, all 12 playlists, subtitle defaults
+  and library/connector configuration. Keep a fresh consistent Vidarr database recovery backup.
+
+
 ### Jellyfin metadata enrichment (2026-11-04)
 
 - Standard nonempty Jellyfin video scans queue restart-safe MTV metadata enrichment, retaining a
