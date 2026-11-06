@@ -5,6 +5,18 @@ under **Unreleased** in the same commit as the change.
 
 ## Unreleased
 
+### Full Vidarr enrichment rollout (2026-11-05)
+
+- Complete the no-cache application/runtime rebuild, deploy the corrected MusicBrainz lookup build,
+  and verify healthy API/UI, Node 22 and both FFmpeg tools. Keep original mounts/environment and
+  stopped rollback containers.
+- Verify all 12 playlists and their membership/sync records, the exact 4,271-video server inventory,
+  settings/connectors and production Jellyfin configuration after deployment.
+- Start full-library enrichment batch #2 with MusicBrainz as the primary external source. Retain the
+  first batch's audit; unresolved identities remain in Artist Review and provider errors remain
+  visible for retry. Deployment does not imply that every metadata field has been resolved.
+
+
 ### MusicBrainz enrichment search hints (2026-11-05)
 
 - Use existing filename/title parsing for MusicBrainz searches when server artists are uploader names.

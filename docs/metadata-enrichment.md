@@ -118,3 +118,35 @@ configured address to the expected production identity. Its unless-stopped polic
 volume and media mounts are retained; restarting it on the same port would recreate the conflict.
 The isolated plugin lab is stopped after verification. Vidarr's full image activation is recorded
 separately from this completed native rollout and from library-wide enrichment completion.
+
+## Full Vidarr rollout (2026-11-05)
+
+The complete no-cache build refreshes the application and runtime dependencies. The final image is
+`vidarr-metadata-enrichment-20261105:final` (manifest
+`9622cb00c2b250fe6e3562dcd9839f761efbde0a8d5b20b1d3807b6648482198`), including the corrected
+MusicBrainz filename/title and unconfirmed-artist suggestion path. Node 22 server/web builds,
+19 focused server/provider checks and the guarded metadata-review UI check pass for that correction;
+the initial inventory/migration/playback checks remain applicable. The served bundle is
+`/assets/index-BxcgXhEz.js`; the authenticated API and automatic scan hook are verified live.
+Runtime checks confirm Node 22.23.2, yt-dlp 2026.10.26, static FFmpeg 7.0.2 and packaged FFmpeg 5.1.9.
+
+Vidarr is healthy after replacement with all four mount identities and environment values retained.
+All 12 saved playlists, ordered membership/sync records, original catalog IDs, settings/connector
+fingerprints and Jellyfin configuration pass preservation checks. Available Vidarr video IDs match
+all 4,271 selected-library Jellyfin IDs exactly. Production playback negotiation for Morrissey /
+Tomorrow verifies the owned track and automatic burn-in without starting playback.
+
+Batch #1 is retained as a cancelled audit after the search correction, with no metadata fields
+applied. Fresh batch #2 is running over the full inventory, high-water ID 11502. MusicBrainz is the
+user-selected primary external metadata source. A live read-only search returns the English
+singer-songwriter Morrissey, but his existing Vidarr observations remain unconfirmed: normal
+Artist Review is required before dependent suggestions can be applied. No identity is silently
+promoted. During the initial batch checkpoint, MusicBrainz HTTP 503 and an IMVDb HTTP 404 are
+recorded as failed checks for retry, with existing facts retained. The batch remains in progress;
+unknown/review/failed facts are not a claim of complete metadata enrichment.
+
+The predeployment database backup and configuration baseline remain private in the configuration
+volume. Only video IDs/paths were exported for filesystem preservation checks; all 4,271 original
+sizes and UTC modification times match. Prior application containers, including the intermediate
+release, remain stopped for rollback. The conflicting Docker test Jellyfin remains stopped so the
+production address continues to resolve to the native server.
