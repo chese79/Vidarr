@@ -67,14 +67,17 @@ export function matchLibraryVideo(
   previous: PreviousMatch | null,
   rejectedMusicVideoId: number | null,
 ): MatchResult {
-  const exact = canonicalVideos.find(
+  const exact = canonicalVideos.filter(
     (v) =>
       v.normalizedArtistName === candidate.normalizedArtistName &&
       v.normalizedTitle === candidate.normalizedTitle &&
       v.id !== rejectedMusicVideoId,
   );
-  if (exact) {
-    return { musicVideoId: exact.id, matchConfidence: null };
+  if (exact.length === 1) {
+    return { musicVideoId: exact[0].id, matchConfidence: null };
+  }
+  if (exact.length > 1) {
+    return { musicVideoId: exact[0].id, matchConfidence: 'ambiguous' };
   }
 
   const sameArtist = canonicalVideos.filter(

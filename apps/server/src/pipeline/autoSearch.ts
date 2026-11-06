@@ -138,7 +138,7 @@ export async function autoSearchAndGrab(
               where: { musicVideoId_provider_url: { musicVideoId, provider: 'youtube', url } },
               update: {
                 externalId: match.candidate.youtubeVideoId,
-                authority: match.tier === 'vevo' ? 'verified' : 'heuristic',
+                authority: 'heuristic',
                 confidence: 'confirmed',
                 accepted: true,
               },
@@ -147,7 +147,7 @@ export async function autoSearchAndGrab(
                 provider: 'youtube',
                 externalId: match.candidate.youtubeVideoId,
                 url,
-                authority: match.tier === 'vevo' ? 'verified' : 'heuristic',
+                authority: 'heuristic',
                 confidence: 'confirmed',
                 discoveryOrigin: 'youtube-search',
                 accepted: true,

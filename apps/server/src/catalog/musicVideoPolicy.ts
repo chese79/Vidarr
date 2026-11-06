@@ -25,7 +25,9 @@ export function computeMusicVideoStatus(input: MusicVideoStatusInput): VideoStat
   return { ...lifecycle, eligibleForAutoSearch };
 }
 
-export function validationCategoryForSource(source: { accepted?: boolean; authority?: string; confidence?: string } | null | undefined): ValidationCategory {
+export function validationCategoryForSource(source: { accepted?: boolean; authority?: string; confidence?: string; discoveryOrigin?: string } | null | undefined): ValidationCategory {
+  // Older search results incorrectly stored VEVO-looking names as verified.
+  if (source?.discoveryOrigin === 'youtube-search') return 'additional';
   return source?.accepted && source.confidence === 'confirmed' && ['authoritative', 'verified'].includes(source.authority ?? '') ? 'canonical' : 'additional';
 }
 

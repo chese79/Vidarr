@@ -45,7 +45,7 @@ describe('playlist routes', () => {
     await prisma.libraryConnector.update({ where: { id: connector.id }, data: { userId: 'user-1', videoLibraryId: 'videos-1' } });
     await createLibraryVideo(connector.id, { musicVideoId: videoId, externalId: 'video-1', title });
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string }) => {
-      if (url.endsWith('/Items/video-1')) return { ok: true, json: async () => ({ Id: 'video-1' }) };
+      if (url.endsWith('/Items/video-1')) return { ok: true, json: async () => ({ Id: 'video-1', Type: 'MusicVideo' }) };
       if (url.includes('/Items?')) return { ok: true, json: async () => ({ Items: [{ Id: 'video-1', Name: title, Artists: ['Test Artist'] }] }) };
       if (url.endsWith('/Playlists') && options.method === 'POST') return { ok: true, status: 200, text: async () => JSON.stringify({ Id: 'published-1' }) };
       throw new Error(`Unexpected simulated player request: ${url}`);
@@ -124,8 +124,8 @@ describe('playlist routes', () => {
       requests.push(`${options.method ?? 'GET'} ${url}`);
       // Push verifies each reconciled item id directly instead of searching.
       const itemLookup = url.match(/\/Users\/[^/]+\/Items\/([^/?]+)$/);
-      if (itemLookup) return { ok: true, json: async () => ({ Id: itemLookup[1] }) };
-      if (url.includes('/Users/') && url.includes('/Items?')) return { ok: true,
+      if (itemLookup) return { ok: true, json: async () => ({ Id: decodeURIComponent(itemLookup[1]), Type: 'MusicVideo' }) };
+      if (url.includes('/Items?')) return { ok: true,
         json: async () => ({ Items: serverItems }) };
       if (url.endsWith('/Playlists') && options.method === 'POST') return { ok: true, status: 200,
         text: async () => JSON.stringify({ Id: `playlist-${nextId++}` }) };
@@ -328,8 +328,8 @@ describe('playlist routes', () => {
       const sentBodies: unknown[] = [];
       vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, options: { method?: string; body?: string }) => {
         const itemLookup = url.match(/\/Users\/[^/]+\/Items\/([^/?]+)$/);
-        if (itemLookup) return { ok: true, json: async () => ({ Id: itemLookup[1] }) };
-        if (url.includes('/Users/') && url.includes('/Items?')) return {
+        if (itemLookup) return { ok: true, json: async () => ({ Id: decodeURIComponent(itemLookup[1]), Type: 'MusicVideo' }) };
+        if (url.includes('/Items?')) return {
           ok: true, json: async () => ({ Items: [{ Id: 'video-1', Name: 'Server Only', Artists: ['Test Artist'] }] }),
         };
         if (url.endsWith('/Playlists') && options.method === 'POST') {

@@ -86,6 +86,7 @@ describe('live workflow invariants', () => {
     await observeLivePlayback('server', part.id, { ...session, sessionId: 'device-b', positionSeconds: 60 }, new Date(now + 60000));
     const view = await prisma.liveViewing.findFirstOrThrow();
     expect(view.watchedSeconds).toBe(60);
+    expect((await prisma.liveSongViewing.findFirstOrThrow()).watchedSeconds).toBe(60);
     expect(view.qualifiedAt).toBeNull();
     expect(view.completedAt).toBeNull();
     expect((await prisma.livePerformance.findUniqueOrThrow({ where: { id: performance.id } })).qualifiedPlayCount).toBe(0);

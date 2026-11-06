@@ -54,6 +54,7 @@ describe('shared media foundations', () => {
   it('retains music-video trust and authority preference without changing source order', () => {
     expect(validationCategoryForSource({ accepted: true, authority: 'verified', confidence: 'confirmed' })).toBe('canonical');
     expect(validationCategoryForSource({ accepted: true, authority: 'verified', confidence: 'probable' })).toBe('additional');
+    expect(validationCategoryForSource({ accepted: true, authority: 'verified', confidence: 'confirmed', discoveryOrigin: 'youtube-search' })).toBe('additional');
     const sources = [{ id: 1, authority: 'manual', url: 'https://manual' }, { id: 2, authority: 'authoritative', url: 'https://official' }];
     expect(preferredDirectSource(sources)?.id).toBe(2);
     expect(sources[0].id).toBe(1);

@@ -1,5 +1,5 @@
 import { backfillArtistIdentitySuggestions } from '../pipeline/artistIdentityBackfill.js';
-import { runMetadataEnrichment } from '../pipeline/metadataEnrichment.js';
+import { runMetadataEnrichment, metadataEnrichmentPending } from '../pipeline/metadataEnrichment.js';
 import { runLiveMetadataMonitoring } from '../live/metadataMonitoring.js';
 import { runLiveCandidateMatching } from '../live/discoveryEvidence.js';
 import { runExistingArtistDiscovery, existingArtistDiscoveryPending } from '../pipeline/existingArtistDiscovery.js';
@@ -67,7 +67,7 @@ async function pollAllYoutubeSources(): Promise<string> {
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
   { name: 'Artist Identity Suggestions', defaultIntervalMs: 15000, run: backfillArtistIdentitySuggestions },
-  { name: 'Music Video Metadata Enrichment', defaultIntervalMs: 15000, run: runMetadataEnrichment },
+  { name: 'Music Video Metadata Enrichment', defaultIntervalMs: 15000, run: runMetadataEnrichment, rerun: metadataEnrichmentPending },
   { name: 'Existing Artist Source Discovery', defaultIntervalMs: 60000, run: runExistingArtistDiscovery, rerun: existingArtistDiscoveryPending },
   { name: 'Live Starting Inventory', defaultIntervalMs: 60000, run: backfillLiveStartingInventories },
   { name: 'Live Candidate Matching', defaultIntervalMs: 60000, run: runLiveCandidateMatching },

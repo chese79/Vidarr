@@ -54,6 +54,7 @@ describe('quality upgrade import safety', () => {
     await fs.writeFile(sourcePath.replace('.mp4', '.en.srt'), 'subtitles');
     await fs.writeFile(path.join(directory, 'other.nfo'), 'unrelated');
     await fs.writeFile(path.join(directory, 'upgrade-other.nfo'), 'another video');
+    for (const name of ['upgrade.Live.mp4', 'upgrade.Live.nfo', 'upgrade.Live.en.srt']) await fs.writeFile(path.join(directory, name), 'sibling');
     const result = await importDownloadedFile(videoId, sourcePath, '1080p', 1234);
     const base = result.path.replace('.mp4', '');
     await expect(fs.readFile(`${base}.nfo`, 'utf8')).resolves.toContain('<title>Song</title>');
@@ -65,6 +66,7 @@ describe('quality upgrade import safety', () => {
     await expect(fs.access(sourcePath.replace('.mp4', '.nfo'))).rejects.toThrow();
     await expect(fs.readFile(path.join(directory, 'other.nfo'), 'utf8')).resolves.toBe('unrelated');
     await expect(fs.readFile(path.join(directory, 'upgrade-other.nfo'), 'utf8')).resolves.toBe('another video');
+    for (const name of ['upgrade.Live.mp4', 'upgrade.Live.nfo', 'upgrade.Live.en.srt']) await expect(fs.readFile(path.join(directory, name), 'utf8')).resolves.toBe('sibling');
     expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: videoId } })).awaitingServerScanAt).not.toBeNull();
     const completion = await prisma.history.findFirstOrThrow({ where: { musicVideoId: videoId, eventType: 'downloadFolderImported' } });
     expect(JSON.parse(completion.data)).toMatchObject({ queueId: 1234, path: result.path });

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { placeFile, type TransferMode } from './transfer.js';
 import { writeLibraryMetadata, type LibraryMetadata } from './libraryConvention.js';
+import { ownsSidecar } from '../media/sidecarOwnership.js';
 
 // Only companions belonging to this video are imported. Never move unrelated
 // directory contents, symlinks, downloader control files, or another video.
@@ -32,10 +33,10 @@ export async function stageImportBundle(source: string, destination: string, mod
         await placeFile(source, stagedVideo, 'copy');
       }
     } else await placeFile(source, stagedVideo, mode);
-    for (const entry of await fs.readdir(path.dirname(source), { withFileTypes: true })) {
+    const entries = await fs.readdir(path.dirname(source), { withFileTypes: true });
+    for (const entry of entries) {
       const suffix = entry.name.slice(sourceBase.length);
-      if (!entry.isFile() || !entry.name.startsWith(sourceBase)
-        || !(suffix.startsWith('.') || /^-(thumb|poster|fanart|banner|clearart|landscape)\./i.test(suffix))
+      if (!entry.isFile() || !ownsSidecar(path.basename(source), entry.name, entries.map(value => value.name))
         || !SIDECAR.test(entry.name)) continue;
       const companion = path.join(path.dirname(source), entry.name);
       await fs.copyFile(companion, path.join(staging, `${destinationBase}${suffix}`));

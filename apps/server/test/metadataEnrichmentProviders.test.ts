@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { enrichmentAlbumEvidence } from '../src/providers/metadata/musicbrainz.js';
+import { enrichmentAlbumEvidence, clearMusicBrainzCache } from '../src/providers/metadata/musicbrainz.js';
 import { enrichmentVideoDirectors } from '../src/providers/metadata/imvdb.js';
 const artist = '11111111-1111-4111-8111-111111111111';
 const recording = '22222222-2222-4222-8222-222222222222';
 const release = '33333333-3333-4333-8333-333333333333';
 describe('enrichment MusicBrainz HTTP evidence', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { clearMusicBrainzCache(); vi.unstubAllGlobals(); });
   function simulate(options: { wrongArtist?: boolean; missingTrack?: boolean; fail?: boolean } = {}) {
     return vi.fn(async (url: string) => {
       if (options.fail) return new Response('', { status: 503 });
@@ -44,6 +44,25 @@ describe('enrichment MusicBrainz HTTP evidence', () => {
   it('keeps provider outages distinct from missing facts', async () => {
     vi.stubGlobal('fetch', simulate({ fail: true }));
     await expect(enrichmentAlbumEvidence(artist, 'Tomorrow', recording, release)).rejects.toThrow('503');
+  });
+  it('reuses a release response for different songs on the same album', async () => {
+    const fetch = simulate(); vi.stubGlobal('fetch', fetch);
+    const first = await enrichmentAlbumEvidence(artist, 'Tomorrow', recording, release);
+    const second = await enrichmentAlbumEvidence(artist, 'Tomorrow again', recording, release);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(first[0].observedAt).toBe(second[0].observedAt);
+  });
+  it('keeps successful release evidence when another edition lookup fails', async () => {
+    const otherRelease = '44444444-4444-4444-8444-444444444444';
+    const original = simulate();
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/recording?')) return new Response(JSON.stringify({ recordings: [{ id: recording, title: 'Tomorrow', 'artist-credit': [{ artist: { id: artist } }], releases: [{ id: release }, { id: otherRelease }] }] }));
+      if (url.includes(otherRelease)) return new Response('', { status: 503 });
+      return original(url);
+    }));
+    const errors: unknown[] = [];
+    const rows = await enrichmentAlbumEvidence(artist, 'Tomorrow', undefined, undefined, error => errors.push(error));
+    expect(rows).toHaveLength(1); expect(rows[0].releaseId).toBe(release); expect(errors).toHaveLength(1);
   });
   it('retains all IMVDb directors and the canonical source URL, checking exact video identity', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ id: 1234, url: 'https://imvdb.com/video/artist/song', directors: [{ entity_name: 'First Director' }, { entity_name: 'Second Director' }] }), { status: 200 })));

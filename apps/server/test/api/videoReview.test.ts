@@ -26,10 +26,10 @@ describe('artist and video review boundaries', () => {
     artistId = (await createArtist(root.id, profile.id, { name: 'AC/DC' })).id;
   });
 
-  it('keeps an unmatched observed artist in Match Review and out of Library', async () => {
+  it('keeps an unmatched observed artist in Match Review and visible as unconfirmed in Library', async () => {
     const library = await app.inject({ method: 'GET', url: '/api/v1/artist/summary', headers: authHeaders() });
     const review = await app.inject({ method: 'GET', url: '/api/v1/artist/match-review', headers: authHeaders() });
-    expect(library.json().items).toHaveLength(0);
+    expect(library.json().items).toEqual([expect.objectContaining({ id: artistId, name: 'AC/DC', musicbrainzMatchStatus: 'unmatched' })]);
     expect(review.json()).toEqual([expect.objectContaining({ id: artistId, name: 'AC/DC' })]);
   });
 

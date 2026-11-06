@@ -654,3 +654,14 @@ to a temporary Linux filesystem for `PRAGMA quick_check`. The recovery copy pass
 the final replacement. Never copy a live database without SQLite's consistent-backup mechanism.
 The metadata enrichment batch resumed and advanced after replacement; rollout does not mean its
 full-library scan or review work is complete.
+
+Enrichment throughput update (2026-11-05): shared bounded response cache and weighted MusicBrainz scheduling preserve provider limits. Three-item checkpoints continue after a one-second yield. Independent provider failures retain successful evidence and allow guarded verified facts to publish while the failed provider stays retryable. Pause/wait before retry; uncertain native requests keep their UUID. Completed partial requests can retry unfinished providers against a fresh fingerprint with prior UUIDs retained. See metadata-enrichment.md for context invalidation, limits and recovery.
+
+Review corrections (2026-11-06): retry reserves the enrichment worker lock throughout cursor
+rewinding. Refreshed evidence clears stale field/correction selections. MTV completion requires
+both owned ASS integrity and actual subtitle registration, including request replay. Playlist
+publication rechecks retained Jellyfin IDs against the selected library before replacement.
+Local import/deletion uses conservative sidecar ownership; delayed MV/Live deletion revalidates
+older plans before any removal. Failed decoding cannot establish motion, and torrent import waits
+for an explicit completed state and complete progress. Required stages remain unchanged. See
+[the correction record](code-review-fixes-2026-11-06.md).

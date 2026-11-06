@@ -9,6 +9,7 @@ import { accessibleRootPath } from './localVideoReview.js';
 import { isPathWithinRoot } from './pathContainment.js';
 import { normalizeTitle } from './normalize.js';
 import { assertExclusiveLocalFiles } from '../media/localFileOwnership.js';
+import { ownsSidecar, assertOwnedSidecars } from '../media/sidecarOwnership.js';
 
 const ACTIVE = [...ACTIVE_DOWNLOAD_STATUSES];
 const INITIAL_DELAY_MS = 5 * 60_000;
@@ -42,14 +43,12 @@ export async function checkLocalPath(filePath: string): Promise<void> {
 export async function localBundle(filePath: string): Promise<string[]> {
   const local = mappedPath(filePath);
   await checkLocalPath(local);
-  const base = path.basename(local, path.extname(local));
   const files = [local];
   let entries;
   try { entries = await fs.readdir(path.dirname(local), { withFileTypes: true }); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return files; throw error; }
   for (const entry of entries) {
-    const suffix = entry.name.slice(base.length);
-    if (entry.isFile() && entry.name.startsWith(base) && (suffix.startsWith('.') || /^-(thumb|poster|fanart|banner|clearart|landscape)\./i.test(suffix))
+    if (entry.isFile() && ownsSidecar(path.basename(local), entry.name, entries.map(value => value.name))
       && /\.(nfo|jpg|jpeg|png|webp|srt|vtt|ass)$/i.test(entry.name)) files.push(path.join(path.dirname(local), entry.name));
   }
   for (const file of files) await checkLocalPath(file);
@@ -117,6 +116,7 @@ async function performVideoDeletion(id: number, now: Date): Promise<void> {
       remotes.push({ connector, provider, target });
     }
     // Validate every target before any destructive action; retry is idempotent.
+    await assertOwnedSidecars(video.file ? [mappedPath(video.file.path)] : [], snapshot.files);
     for (const file of snapshot.files) await checkLocalPath(file);
     await assertExclusiveLocalFiles(snapshot.files, { musicVideoId: id });
     for (const remote of remotes) await remote.provider.verifyVideoDeletion!(remote.connector, remote.target);

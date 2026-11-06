@@ -1,14 +1,25 @@
 import { beforeAll, beforeEach, afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { prisma } from '../../src/db/client.js';
-import { automaticFacts, enrichAfterScan, enrichmentIdentityHint, proposeMetadata, runMetadataEnrichment, startMetadataEnrichment } from '../../src/pipeline/metadataEnrichment.js';
-import { resetDb, ensureSettings, createLibraryConnector, createLibraryVideo } from '../support/db.js';
+import { automaticFacts, enrichAfterScan, enrichmentIdentityHint, proposeMetadata, runMetadataEnrichment, startMetadataEnrichment, withMetadataEnrichmentControl } from '../../src/pipeline/metadataEnrichment.js';
+import { resetDb, ensureSettings, createLibraryConnector, createLibraryVideo, createRootFolder, createQuality, createQualityProfile, createArtist, createMusicVideo } from '../support/db.js';
 import { authHeaders, TEST_API_KEY } from '../support/http.js';
 import type { EnrichmentSnapshot, EnrichmentEvidence } from '@vidarr/shared-types';
+import { clearMusicBrainzCache } from '../../src/providers/metadata/musicbrainz.js';
 
 const snapshot = (extra: Partial<EnrichmentSnapshot> = {}): EnrichmentSnapshot => ({ ItemId: 'video-1', LibraryId: 'videos-1', Path: '/media/video.mp4', Facts: { artist: 'Artist', title: 'Song' }, ProviderIds: {}, Locked: false, LockedFields: [], NfoHash: 'nfo', NfoValid: true, Fingerprint: 'before', OverlayValid: true, ...extra });
 const evidence = (facts: EnrichmentEvidence['facts'], verified = true): EnrichmentEvidence => ({ facts, verified, source: 'test', url: 'https://musicbrainz.org/release/test', entityId: 'test', observedAt: '2026-11-04T00:00:00Z', reason: 'fixture' });
 describe('metadata field safety', () => {
+  it('reserves the worker during retry controls and releases it on failure', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const control = withMetadataEnrichmentControl(async () => { await gate; throw new Error('retry failed'); });
+    const rejected = expect(control).rejects.toThrow('retry failed');
+    expect(await runMetadataEnrichment()).toContain('already processing');
+    await expect(withMetadataEnrichmentControl(async () => undefined)).rejects.toThrow('current item');
+    release(); await rejected;
+    expect(await withMetadataEnrichmentControl(async () => 'released')).toBe('released');
+  });
   it('uses filename hints for uploader metadata while retaining the version for review', () => {
     const artist = { id: 8, name: 'Morrissey', musicbrainzArtistId: 'artist-id' };
     expect(enrichmentIdentityHint({ title: 'Morrissey - Tomorrow', artistName: 'officialmorrissey', path: 'D:\\media\\Morrissey - Tomorrow (US remix radio edit).mp4' }, [artist])).toEqual({ artist, title: 'Tomorrow (US remix radio edit)', source: 'filename' });
@@ -38,7 +49,7 @@ describe('durable enrichment workflow', () => {
   let sent: any[];
   beforeAll(async () => { app = await buildApp(); await app.ready(); });
   afterAll(async () => { await app.close(); });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { clearMusicBrainzCache(); vi.unstubAllGlobals(); });
   beforeEach(async () => {
     await resetDb(); await ensureSettings({ apiKey: TEST_API_KEY });
     const connector = await createLibraryConnector(); connectorId = connector.id;
@@ -105,8 +116,43 @@ describe('durable enrichment workflow', () => {
     }));
     await runMetadataEnrichment();
     expect((await prisma.metadataEnrichmentItem.findFirstOrThrow()).status).toBe('failed');
+    const uncertain = await prisma.metadataEnrichmentItem.findFirstOrThrow();
+    await prisma.metadataEnrichmentItem.update({ where: { id: uncertain.id }, data: { proposalJson: JSON.stringify({ ...JSON.parse(uncertain.proposalJson), providerErrors: [{ source: 'IMVDb', message: '503' }] }) } });
     await app.inject({ method: 'POST', url: `/api/v1/metadata-enrichment/${run.id}/control`, headers: authHeaders(), payload: { action: 'retry' } });
     await runMetadataEnrichment(); expect(sent).toHaveLength(2); expect(sent[0]).toEqual(sent[1]);
+  });
+  it('applies verified album facts despite a director outage and retries only unfinished provider work with a new guarded request', async () => {
+    const artistId = '11111111-1111-4111-8111-111111111111', recording = '22222222-2222-4222-8222-222222222222', release = '33333333-3333-4333-8333-333333333333';
+    const root = await createRootFolder(); const profile = await createQualityProfile((await createQuality()).id);
+    const artist = await createArtist(root.id, profile.id, { name: 'Artist' });
+    await prisma.artist.update({ where: { id: artist.id }, data: { musicbrainzArtistId: artistId, musicbrainzMatchStatus: 'confirmed' } });
+    const video = await createMusicVideo(artist.id, { title: 'Song' });
+    await prisma.musicVideo.update({ where: { id: video.id }, data: { musicbrainzAudioRecordingId: recording, imvdbVideoId: '1234' } });
+    await prisma.libraryVideo.updateMany({ where: { connectorId }, data: { musicVideoId: video.id, matchConfidence: null } });
+    await prisma.settings.update({ where: { id: 1 }, data: { imvdbApiKey: 'fixture-directors' } });
+    state = snapshot({ ProviderIds: { MusicBrainzAlbum: release } });
+    const original = globalThis.fetch; let directorFailed = true; let mbCalls = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: any, options: any) => {
+      if (String(url).startsWith('https://imvdb.com/api/')) return directorFailed ? new Response('', { status: 404 }) : new Response(JSON.stringify({ id: 1234, directors: [{ entity_name: 'Director' }] }));
+      if (!String(url).startsWith('https://musicbrainz.org/')) return original(url, options);
+      mbCalls++; const credit = [{ artist: { id: artistId } }];
+      return new Response(JSON.stringify(String(url).includes('/release/') ? { id: release, title: 'Album', date: '1992', 'artist-credit': credit, 'label-info': [{ label: { name: 'Label' } }], media: [{ tracks: [{ recording: { id: recording } }] }] } : { id: recording, 'artist-credit': credit, releases: [{ id: release }] }));
+    }));
+    const run = await startMetadataEnrichment(connectorId); await runMetadataEnrichment();
+    const partial = await prisma.metadataEnrichmentItem.findFirstOrThrow();
+    const before = JSON.parse(partial.proposalJson);
+    expect(partial).toMatchObject({ status: 'failed', changed: true }); expect(partial.error).toContain('404');
+    expect(state.Facts).toMatchObject({ album: 'Album', albumYear: 1992, recordLabel: 'Label' });
+    expect(before.evidence.some((row: EnrichmentEvidence) => row.source === 'MusicBrainz')).toBe(true);
+    expect(mbCalls).toBe(2);
+    directorFailed = false; clearMusicBrainzCache();
+    await app.inject({ method: 'POST', url: `/api/v1/metadata-enrichment/${run.id}/control`, headers: authHeaders(), payload: { action: 'retry' } });
+    await runMetadataEnrichment();
+    const done = await prisma.metadataEnrichmentItem.findFirstOrThrow(); const proposal = JSON.parse(done.proposalJson);
+    expect(done.error).toBeNull(); expect(done.changed).toBe(true); expect(state.Facts.directors).toEqual(['Director']);
+    expect(mbCalls).toBe(2); expect(sent[1].ExpectedFingerprint).toBe('after'); expect(sent[1].RequestId).not.toBe(sent[0].RequestId);
+    expect(proposal.previousRequestIds).toContain(sent[0].RequestId);
+    expect(proposal.evidence.find((row: EnrichmentEvidence) => row.source === 'MusicBrainz').observedAt).toBe(before.evidence.find((row: EnrichmentEvidence) => row.source === 'MusicBrainz').observedAt);
   });
   it('pages evidence and never returns connector credentials', async () => {
     const run = await startMetadataEnrichment(connectorId); await runMetadataEnrichment();

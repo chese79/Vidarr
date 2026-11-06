@@ -6,7 +6,7 @@ import { api } from '../api/client';
 
 const display = (value: unknown) => Array.isArray(value) ? value.join(', ') : value == null || value === '' ? 'Missing' : String(value);
 function Review({ item, onApplied }: { item: EnrichmentItem; onApplied: () => void }) {
-  const [choice, setChoice] = useState(item.proposal?.reviewRequest?.evidenceIndex ?? 0);
+  const [choice, setChoice] = useState(Math.min(item.proposal?.reviewRequest?.evidenceIndex ?? 0, Math.max(0, (item.proposal?.evidence.length ?? 0) - 1)));
   const [selected, setSelected] = useState<EnrichmentField[]>(item.proposal?.reviewRequest?.fields ?? []);
   const [corrections, setCorrections] = useState(!!item.proposal?.reviewRequest?.corrections.length);
   const evidence = item.proposal?.evidence ?? [];
@@ -16,8 +16,8 @@ function Review({ item, onApplied }: { item: EnrichmentItem; onApplied: () => vo
     {item.proposal?.notes.map(note => <p key={note}>{note}</p>)}
     <p><Link to="/match-review">Artist Review</Link> · <Link to="/video-review">Video Review</Link></p>
     <p>Still missing: {item.proposal?.missing.join(', ') || 'None'}. Suggestions below are evidence, and may require identity or edition review.</p>
-    {evidence.length > 0 && <>
-      <label>Evidence <select value={choice} onChange={event => { setChoice(Number(event.target.value)); setSelected([]); }}>{evidence.map((row, index) => <option value={index} key={index}>{row.source} — {row.entityId}</option>)}</select></label>
+    {evidence[choice] && <>
+      <label>Evidence <select value={choice} onChange={event => { setChoice(Number(event.target.value)); setSelected([]); setCorrections(false); }}>{evidence.map((row, index) => <option value={index} key={index}>{row.source} — {row.entityId}</option>)}</select></label>
       <p><a href={evidence[choice].url} target="_blank" rel="noreferrer">{evidence[choice].source}</a> · observed {new Date(evidence[choice].observedAt).toLocaleString()}</p>
       <p>{evidence[choice].reason}</p>
       {evidence[choice].requiresArtistReview && <p>Artist identity review is required before these external facts can be applied.</p>}
@@ -58,7 +58,7 @@ export default function MetadataEnrichmentPage() {
       {control.error && <p role="alert">{control.error.message}</p>}
       <p><label>Search <input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} /></label>{' '}<label>Status <select value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="">All</option>{['pending', 'updated', 'complete', 'review', 'unknown', 'failed'].map(value => <option key={value}>{value}</option>)}</select></label></p>
       {items.error && <p role="alert">{items.error.message}</p>}
-      {items.isLoading ? <p>Loading…</p> : items.data?.items.map(item => <Review key={item.id} item={item} onApplied={refresh} />)}
+      {items.isLoading ? <p>Loading…</p> : items.data?.items.map(item => <Review key={JSON.stringify([item.id, item.before?.Fingerprint, item.proposal])} item={item} onApplied={refresh} />)}
       <p><button disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button> Page {page} · {items.data?.total ?? 0} items <button disabled={page * 25 >= (items.data?.total ?? 0)} onClick={() => setPage(page + 1)}>Next</button></p>
     </>}
   </section>;

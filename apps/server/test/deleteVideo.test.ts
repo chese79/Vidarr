@@ -25,7 +25,7 @@ afterEach(async () => { vi.restoreAllMocks(); await fs.rm(directory, { recursive
 it('deletes the owned bundle and catalog while preserving unrelated files and recording identities', async () => {
   const video = await createMusicVideo(artistId, { title: 'Song', youtubeVideoId: 'youtube-id', hasFile: true });
   const file = path.join(directory, 'Song.mp4');
-  for (const name of ['Song.mp4', 'Song.nfo', 'Song-thumb.jpg', 'Song.en.srt', 'Song 2.mp4']) await fs.writeFile(path.join(directory, name), 'fixture');
+  for (const name of ['Song.mp4', 'Song.nfo', 'Song-thumb.jpg', 'Song.en.srt', 'Song.mtv-info.eng.ass', 'Song 2.mp4', 'Song.Live.mp4', 'Song.Live.nfo', 'Song.Live.en.srt']) await fs.writeFile(path.join(directory, name), 'fixture');
   await createMusicVideoFile(video.id, { path: file });
   await expect(deleteMusicVideo(video.id, false)).rejects.toThrow('confirmation');
   await deleteMusicVideo(video.id, true);
@@ -33,7 +33,7 @@ it('deletes the owned bundle and catalog while preserving unrelated files and re
   await processPendingVideoDeletions();
   expect(await prisma.musicVideo.count()).toBe(1);
   await runDue(video.id);
-  expect(await fs.readdir(directory)).toEqual(['Song 2.mp4']);
+  expect((await fs.readdir(directory)).sort()).toEqual(['Song 2.mp4', 'Song.Live.en.srt', 'Song.Live.mp4', 'Song.Live.nfo'].sort());
   expect(await prisma.musicVideo.count()).toBe(0);
   expect(await prisma.deletedVideoRecord.count()).toBe(1);
   expect(isScanExcluded(await loadScanExclusions(), artistId, { youtubeVideoId: 'youtube-id' })).toBe(false);
@@ -50,6 +50,21 @@ it('allows deletion without confirmation only when warning is disabled', async (
   await deleteMusicVideo(video.id, false);
   await runDue(video.id);
   expect(await prisma.musicVideo.count()).toBe(0);
+});
+
+it('refuses a legacy persisted plan that claimed a dotted sibling sidecar', async () => {
+  const video = await createMusicVideo(artistId, { title: 'Song', hasFile: true });
+  const file = path.join(directory, 'Song.mp4'), sibling = path.join(directory, 'Song.Live.nfo');
+  for (const name of ['Song.mp4', 'Song.Live.mp4', 'Song.Live.nfo']) await fs.writeFile(path.join(directory, name), 'retained');
+  await createMusicVideoFile(video.id, { path: file });
+  await deleteMusicVideo(video.id, true);
+  const scheduled = await prisma.musicVideo.findUniqueOrThrow({ where: { id: video.id } });
+  const plan = JSON.parse(scheduled.deletionTargets!); plan.files.push(sibling);
+  await prisma.musicVideo.update({ where: { id: video.id }, data: { deletionTargets: JSON.stringify(plan) } });
+  await runDue(video.id);
+  expect((await prisma.musicVideo.findUniqueOrThrow({ where: { id: video.id } })).deletionError).toContain('Sidecar ownership');
+  await expect(fs.readFile(file, 'utf8')).resolves.toBe('retained');
+  await expect(fs.readFile(sibling, 'utf8')).resolves.toBe('retained');
 });
 
 it('retains a locked file and retries forty minutes later', async () => {

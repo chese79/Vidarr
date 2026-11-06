@@ -117,7 +117,8 @@ describe('Jellyfin playlist push by reconciled id', () => {
 
   it('uses the verified reconciled id and never searches', async () => {
     const calls = stubFetch((method, path) => {
-      if (path === '/Users/u1/Items/abc') return reply(200, { Id: 'abc' });
+      if (path === '/Users/u1/Items/abc') return reply(200, { Id: 'abc', Type: 'MusicVideo' });
+      if (path.startsWith('/Items?ParentId=lib&')) return reply(200, { Items: [{ Id: 'abc' }], TotalRecordCount: 1 });
       if (method === 'POST' && path === '/Playlists') return reply(200, { Id: 'pl' });
       return undefined;
     });

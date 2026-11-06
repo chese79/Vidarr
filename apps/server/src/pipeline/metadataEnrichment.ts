@@ -26,7 +26,8 @@ async function suggestedArtists(name: string) {
   const key = normalizeTitle(name);
   const cached = artistSuggestions.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached;
-  const entry = { candidates: await searchMusicBrainzArtists(name, 3), observedAt: new Date().toISOString(), expiresAt: Date.now() + 86400000 };
+  const candidates = await searchMusicBrainzArtists(name, 3);
+  const entry = { candidates, observedAt: candidates[0]?.observedAt ?? new Date().toISOString(), expiresAt: Date.now() + 86400000 };
   if (artistSuggestions.size >= 1000) artistSuggestions.delete(artistSuggestions.keys().next().value!);
   artistSuggestions.set(key, entry);
   return entry;
@@ -89,17 +90,18 @@ export async function enrichAfterScan(connectorId: number) {
   catch (error) { await logActivity('warn', 'metadata-enrichment', `Scan succeeded; enrichment unavailable: ${redactMessage(error instanceof Error ? error.message : String(error))}`); }
 }
 
-export async function proposeMetadata(video: LibraryVideo, snapshot: EnrichmentSnapshot, serverUrl = ''): Promise<EnrichmentProposal> {
-  const proposal: EnrichmentProposal = { evidence: [], automatic: {}, missing: missingFacts(snapshot.Facts), notes: [] };
+export async function proposeMetadata(video: LibraryVideo, snapshot: EnrichmentSnapshot, serverUrl = '', previous?: EnrichmentProposal, artists?: EnrichmentArtist[]): Promise<EnrichmentProposal> {
+  const proposal: EnrichmentProposal = { evidence: [], automatic: {}, missing: missingFacts(snapshot.Facts), notes: [], providerErrors: [], completedProviders: [] };
+  const failed = (source: string, error: unknown) => proposal.providerErrors!.push({ source, message: redactMessage(error instanceof Error ? error.message : String(error)) });
   const observedAt = new Date().toISOString();
-  const add = (facts: EnrichmentFacts, source: string, url: string, entityId: string, verified: boolean, reason: string) => proposal.evidence.push({ facts, source, url, entityId, observedAt, verified, reason });
+  const add = (facts: EnrichmentFacts, source: string, url: string, entityId: string, verified: boolean, reason: string, fetchedAt = observedAt) => proposal.evidence.push({ facts, source, url, entityId, observedAt: fetchedAt, verified, reason });
   if (!snapshot.NfoValid) { proposal.notes.push(snapshot.NfoError ?? 'Invalid NFO was preserved.'); return proposal; }
   if (snapshot.Locked) { proposal.notes.push('Locked metadata was preserved.'); return proposal; }
   const serverItemUrl = (id: string) => serverUrl ? `${serverUrl.replace(/\/$/, '')}/web/index.html#!/details?id=${encodeURIComponent(id)}` : '/connectors';
   if (snapshot.NfoFacts) add(snapshot.NfoFacts, 'Existing music-video NFO', serverItemUrl(snapshot.ItemId), snapshot.NfoHash, true, 'Existing local musicvideo metadata; only the explicit albumyear field is an album date.');
   const linked = video.musicVideoId && !video.matchConfidence ? await prisma.musicVideo.findUnique({ where: { id: video.musicVideoId }, include: { artist: true } }) : null;
   const confirmed = linked?.artist.musicbrainzMatchStatus === 'confirmed' ? linked : null;
-  const hint = confirmed ? null : enrichmentIdentityHint(video, await prisma.artist.findMany({ where: { musicbrainzMatchStatus: 'confirmed' }, select: { id: true, name: true, musicbrainzArtistId: true } }));
+  const hint = confirmed ? null : enrichmentIdentityHint(video, artists ?? await prisma.artist.findMany({ where: { musicbrainzMatchStatus: 'confirmed' }, select: { id: true, name: true, musicbrainzArtistId: true } }));
   const knownArtist = confirmed?.artist ?? hint?.artist;
   let searchTitle = confirmed?.title ?? hint?.title ?? cleanVideoTitle(video.title);
   if (!confirmed && knownArtist) {
@@ -115,6 +117,7 @@ export async function proposeMetadata(video: LibraryVideo, snapshot: EnrichmentS
   let artistId = knownArtist?.musicbrainzArtistId ?? ids.musicbrainzartist;
   let requiresArtistReview = false;
   if (!artistId) {
+    try {
     const nameHint = videoIdentities(video, { has: () => false }).find(row => isPlausibleArtistName(row.artistName) && isUsableArtistHint(row.artistName));
     if (nameHint) {
       const suggestions = await suggestedArtists(nameHint.artistName);
@@ -122,19 +125,42 @@ export async function proposeMetadata(video: LibraryVideo, snapshot: EnrichmentS
       const exact = suggestions.candidates.filter(candidate => [candidate.name, ...candidate.aliases].some(name => normalizeTitle(name) === normalizeTitle(nameHint.artistName)));
       if (exact.length === 1) { artistId = exact[0].id; searchTitle = nameHint.title; requiresArtistReview = true; }
     }
+    } catch (error) { failed('MusicBrainz artist', error); }
   }
-  if (artistId && proposal.missing.some(field => ['album', 'albumYear', 'recordLabel'].includes(field))) {
-    const candidates = await enrichmentAlbumEvidence(artistId, searchTitle, confirmed?.musicbrainzAudioRecordingId ?? ids.musicbrainztrack, ids.musicbrainzalbum);
+  proposal.providerContext = JSON.stringify([video.externalId, video.path, artistId, searchTitle, confirmed?.id, confirmed?.imvdbVideoId, confirmed?.musicbrainzAudioRecordingId ?? ids.musicbrainztrack, ids.musicbrainzalbum, requiresArtistReview]);
+  const reuse = (source: string) => {
+    if (!previous || previous.providerContext !== proposal.providerContext || !previous.completedProviders?.includes(source)) return false;
+    proposal.evidence.push(...previous.evidence.filter(row => row.source === source));
+    proposal.completedProviders!.push(source);
+    return true;
+  };
+  // Independent providers can overlap, while MusicBrainz retains one fair, rate-limited lane.
+  const directors = (async () => {
+    if (reuse('IMVDb') || !confirmed?.imvdbVideoId || snapshot.Facts.directors?.length) return;
+    try {
+      const settings = await prisma.settings.findFirst();
+      if (settings?.imvdbApiKey) return await enrichmentVideoDirectors(settings.imvdbApiKey, confirmed.imvdbVideoId);
+    } catch (error) { failed('IMVDb', error); }
+  })();
+  if (!reuse('MusicBrainz') && artistId && proposal.missing.some(field => ['album', 'albumYear', 'recordLabel'].includes(field))) {
+    try {
+    let releaseFailed = false;
+    const candidates = await enrichmentAlbumEvidence(artistId, searchTitle, confirmed?.musicbrainzAudioRecordingId ?? ids.musicbrainztrack, ids.musicbrainzalbum, error => { releaseFailed = true; failed('MusicBrainz', error); });
     for (const row of candidates) {
-      add({ album: row.album, albumYear: row.albumYear, recordLabel: row.recordLabel }, 'MusicBrainz', `https://musicbrainz.org/release/${row.releaseId}`, row.releaseId, row.verified && !requiresArtistReview, `${requiresArtistReview ? 'Artist identity needs Artist Review first. ' : ''}${row.reason}`);
+      add({ album: row.album, albumYear: row.albumYear, recordLabel: row.recordLabel }, 'MusicBrainz', `https://musicbrainz.org/release/${row.releaseId}`, row.releaseId, row.verified && !requiresArtistReview, `${requiresArtistReview ? 'Artist identity needs Artist Review first. ' : ''}${row.reason}`, row.observedAt);
       if (requiresArtistReview) proposal.evidence[proposal.evidence.length - 1].requiresArtistReview = true;
     }
+    if (!releaseFailed) proposal.completedProviders!.push('MusicBrainz');
+    } catch (error) { failed('MusicBrainz', error); }
   }
-  if (confirmed?.imvdbVideoId && !snapshot.Facts.directors?.length) {
-    const settings = await prisma.settings.findFirst();
-    if (settings?.imvdbApiKey) {
-      const details = await enrichmentVideoDirectors(settings.imvdbApiKey, confirmed.imvdbVideoId);
-      if (details.directors.length) add({ directors: details.directors }, 'IMVDb', details.url, confirmed.imvdbVideoId, true, 'Established exact video identity.');
+  const details = await directors;
+  if (details) {
+    proposal.completedProviders!.push('IMVDb');
+    if (details.directors.length) add({ directors: details.directors }, 'IMVDb', details.url, confirmed!.imvdbVideoId!, true, 'Established exact video identity.');
+  }
+  if (previous?.providerContext === proposal.providerContext && proposal.providerErrors?.some(row => row.source === 'MusicBrainz')) {
+    for (const row of previous.evidence.filter(row => row.source === 'MusicBrainz')) {
+      if (!proposal.evidence.some(current => current.source === row.source && current.entityId === row.entityId)) proposal.evidence.push(row);
     }
   }
   proposal.automatic = automaticFacts(snapshot, proposal.evidence);
@@ -150,9 +176,18 @@ async function apply(connector: LibraryConnector, run: MetadataEnrichmentRun, ex
   return http.send(connector, 'POST', `/MtvOverlay/Metadata/${encodeURIComponent(externalId)}`, { LibraryId: run.libraryId, RequestId: requestId, ExpectedFingerprint: snapshot.Fingerprint, Facts: facts, Corrections: corrections, Provenance: JSON.stringify(evidence) }) as Promise<EnrichmentSnapshot>;
 }
 let busy = false;
+export const metadataEnrichmentBusy = () => busy;
+export async function withMetadataEnrichmentControl<T>(operation: () => Promise<T>): Promise<T> {
+  if (busy) throw new Error('Pause the batch and wait for the current item before retrying failed work.');
+  busy = true;
+  try { return await operation(); } finally { busy = false; }
+}
+let continuing = false;
+export const metadataEnrichmentPending = () => continuing;
 export async function runMetadataEnrichment(): Promise<string> {
   if (busy) return 'Enrichment is already processing.';
   busy = true;
+  continuing = false;
   try {
     let run = await prisma.metadataEnrichmentRun.findFirst({ where: { status: 'running' }, orderBy: { id: 'asc' } });
     if (!run) {
@@ -171,6 +206,7 @@ export async function runMetadataEnrichment(): Promise<string> {
       await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { status: 'paused', error: redactMessage((error as Error).message) } });
       return 'Enrichment paused: check target configuration.';
     }
+    const artists = await prisma.artist.findMany({ where: { musicbrainzMatchStatus: 'confirmed' }, select: { id: true, name: true, musicbrainzArtistId: true } });
     for (let n = 0; n < 3; n++) {
       if ((await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).status !== 'running') break;
       const cursor = (await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).cursor;
@@ -185,32 +221,35 @@ export async function runMetadataEnrichment(): Promise<string> {
         // Persist the exact request before sending; a restart retries the same idempotency key.
         let snapshot: EnrichmentSnapshot = JSON.parse(item.beforeJson);
         let proposal: EnrichmentProposal = JSON.parse(item.proposalJson);
-        if (!snapshot || !proposal) {
+        if (!snapshot || !proposal || proposal.retryProviders) {
+          const previous = proposal?.retryProviders ? proposal : undefined;
           snapshot = await http.get(connector, snapshotPath(video.externalId, run.libraryId));
           const earlier = await prisma.metadataEnrichmentItem.findFirst({ where: { runId: { not: run.id }, externalId: video.externalId, run: { connectorId: run.connectorId, serverId: run.serverId, libraryId: run.libraryId }, status: { notIn: ['pending', 'failed'] }, updatedAt: { gte: new Date(Date.now() - 7 * 86400000) } }, orderBy: { id: 'desc' } });
           const previousSnapshot: EnrichmentSnapshot | null = earlier ? JSON.parse(earlier.resultJson ?? earlier.beforeJson) : null;
           const cached: EnrichmentProposal | null = earlier ? JSON.parse(earlier.proposalJson) : null;
           const cacheStillConfirmed = cached?.artistId && video.musicVideoId && !video.matchConfidence
             && await prisma.musicVideo.count({ where: { id: video.musicVideoId, artistId: cached.artistId, artist: { musicbrainzMatchStatus: 'confirmed' } } });
-          proposal = previousSnapshot?.Fingerprint === snapshot.Fingerprint && cached && cacheStillConfirmed ? cached : await proposeMetadata(video, snapshot, connector.host);
+          proposal = !previous && previousSnapshot?.Fingerprint === snapshot.Fingerprint && cached && !cached.providerErrors?.length && cacheStillConfirmed ? cached : await proposeMetadata(video, snapshot, connector.host, previous, artists);
+          if (previous) proposal.previousRequestIds = [...(previous.previousRequestIds ?? []), ...(previous.requestId ? [previous.requestId] : [])];
           proposal.automatic = automaticFacts(snapshot, proposal.evidence);
           proposal.requestId = randomUUID();
           delete proposal.reviewRequest;
-          await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { beforeJson: JSON.stringify(snapshot), proposalJson: JSON.stringify(proposal) } });
+          await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { beforeJson: JSON.stringify(snapshot), proposalJson: JSON.stringify(proposal), resultJson: null } });
         }
         let after = snapshot;
         const changes = Object.keys(proposal.automatic).length > 0;
         after = await apply(connector, run, video.externalId, snapshot, proposal.automatic, [], proposal.evidence, proposal.requestId ?? itemRequestId(run.id, item.id));
         const needsReview = proposal.notes.some(note => note.startsWith('Artist/video identity')) || proposal.evidence.some(row => Object.entries(row.facts).some(([field, value]) => populated(value) && JSON.stringify(value) !== JSON.stringify(after.Facts[field as EnrichmentField])));
-        const status = needsReview ? 'review' : !missingFacts(after.Facts).length ? 'complete' : proposal.notes.length && !proposal.evidence.length ? 'review' : changes ? 'updated' : 'unknown';
+        const status = proposal.providerErrors?.length ? 'failed' : needsReview ? 'review' : !missingFacts(after.Facts).length ? 'complete' : proposal.notes.length && !proposal.evidence.length ? 'review' : changes ? 'updated' : 'unknown';
         proposal.missing = missingFacts(after.Facts);
-        await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status, changed: changes, proposalJson: JSON.stringify(proposal), resultJson: JSON.stringify(after), error: null, attempts: { increment: 1 } } });
+        await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status, changed: item.changed || changes, proposalJson: JSON.stringify(proposal), resultJson: JSON.stringify(after), error: proposal.providerErrors?.length ? proposal.providerErrors.map(row => `${row.source}: ${row.message}`).join('; ') : null, attempts: { increment: 1 } } });
       } catch (error) {
         await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status: 'failed', error: redactMessage((error as Error).message), attempts: { increment: 1 } } });
       }
       await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { cursor: video.id, leaseAt: new Date() } });
       await refreshCounters(run.id);
     }
+    continuing = await prisma.metadataEnrichmentRun.count({ where: { status: 'running' } }) > 0;
     return 'Enrichment checkpoint saved.';
   } finally { busy = false; }
 }
@@ -237,7 +276,7 @@ export async function reviewEnrichmentItem(id: number, evidenceIndex: number, se
     const result = await apply(item.run.connector, item.run, item.externalId, pending.before, pending.facts, pending.corrections, evidence, pending.id);
     delete proposal.reviewRequest;
     proposal.missing = missingFacts(result.Facts);
-    await prisma.metadataEnrichmentItem.update({ where: { id }, data: { proposalJson: JSON.stringify(proposal), resultJson: JSON.stringify(result), status: missingFacts(result.Facts).length ? 'review' : 'complete', changed: true, error: null } });
+    await prisma.metadataEnrichmentItem.update({ where: { id }, data: { proposalJson: JSON.stringify(proposal), resultJson: JSON.stringify(result), status: proposal.providerErrors?.length ? 'failed' : missingFacts(result.Facts).length ? 'review' : 'complete', changed: true, error: proposal.providerErrors?.length ? proposal.providerErrors.map(row => `${row.source}: ${row.message}`).join('; ') : null } });
     await refreshCounters(item.runId);
     return result;
   } finally { busy = false; }

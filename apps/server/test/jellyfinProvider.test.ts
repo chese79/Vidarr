@@ -185,7 +185,8 @@ describe('jellyfinProvider', () => {
     // One real item so the push gets as far as creating the replacement (an
     // empty playlist is refused before any create is attempted).
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ Id: 'jf-1' }))
+      .mockResolvedValueOnce(jsonResponse({ Id: 'jf-1', Type: 'MusicVideo' }))
+      .mockResolvedValueOnce(jsonResponse({ Items: [{ Id: 'jf-1' }], TotalRecordCount: 1 }))
       .mockResolvedValueOnce(jsonResponse({}, 500));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -199,8 +200,16 @@ describe('jellyfinProvider', () => {
 
     // Item verification, then the failed create — and nothing after it: the old
     // playlist must never be deleted when its replacement couldn't be created.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1][1]?.method).toBe('POST');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][1]?.method).toBe('POST');
     expect(fetchMock.mock.calls.some((call) => call[1]?.method === 'DELETE')).toBe(false);
+  });
+  it.each(['outside-library', 'Movie'])('rejects a retained item with invalid library/type %s before publication', async reason => {
+    const fetchMock = vi.fn(async (url: string) => String(url).includes('/Items?')
+      ? jsonResponse({ Items: [], TotalRecordCount: 0 })
+      : jsonResponse({ Id: 'retained', Type: reason === 'Movie' ? 'Movie' : 'MusicVideo' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(jellyfinProvider.pushPlaylist!(connector({ id: 791 }), { name: 'Scoped', items: [{ artistName: 'Artist', title: 'Song', externalId: 'retained' }], existingRemoteId: 'old' })).rejects.toThrow('outside the selected');
+    expect(fetchMock.mock.calls.every(call => !String(call[0]).includes('/Playlists'))).toBe(true);
   });
 });

@@ -4,6 +4,21 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Full review corrections (2026-11-06)
+
+- Preserve dotted sibling media sidecars during import/deletion and revalidate older MV/Live deletion plans before removal.
+- Reject failed motion decoding; keep channel-name search hints heuristic, including historical search observations. Require explicit complete torrent states and progress before importing.
+- Verify retained Jellyfin playlist IDs belong to the selected music-video library before replacement. MTV plugin 0.1.5 requires actual owned subtitle registration when reporting completed enrichment/replay.
+- Fix enrichment compilation and retry/worker exclusion, reset stale UI evidence/consent, and exercise real partial-provider recovery in its fixture.
+- Search all bounded artist spelling variants and retain duplicate exact video-name identities for review. Add regression coverage and document recovery in `docs/code-review-fixes-2026-11-06.md`.
+- Install and verify MTV 0.1.5.0 on native Jellyfin 12.3.0 after playback becomes idle; retain the prior plugin and preserve library/plugin configuration, subtitle defaults and playlists.
+
+### Enrichment throughput and partial results (2026-11-05)
+
+- Cache and coalesce successful MusicBrainz responses with bounded memory and original observation times; schedule interactive, enrichment and maintenance requests fairly within the existing provider limit.
+- Continue active checkpoints promptly, share artist inventory reads and overlap independent provider research.
+- Preserve successful release/provider evidence and publish verified missing facts even when another provider fails. Retain provider errors, sticky update counts, and safe retries with fresh fingerprints only after confirmed native read-back.
+- Give short artist candidate transactions a 30-second limit on slower storage; preserve all identity, review, locking and publication checks.
 
 ### Automatic artist matching and LAN access (2026-11-05)
 

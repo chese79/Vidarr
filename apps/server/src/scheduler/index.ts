@@ -2,6 +2,7 @@ import { prisma, logActivity } from '../db/client.js';
 import { JOBS } from './jobs.js';
 import { sourceCollectionDue } from '../pipeline/artistVideoBackfill.js';
 import { redactMessage } from '../security/redact.js';
+import { withProviderPriority } from '../providers/metadata/requestScheduling.js';
 
 const running = new Set<string>();
 
@@ -9,7 +10,7 @@ async function runJob(job: (typeof JOBS)[number]): Promise<void> {
   if (running.has(job.name)) return; // don't overlap a still-running instance of itself
   running.add(job.name);
   try {
-    const message = await job.run();
+    const message = await withProviderPriority(job.name === 'Music Video Metadata Enrichment' ? 'enrichment' : 'background', () => job.run());
     await prisma.scheduledTask.update({
       where: { name: job.name },
       data: { lastRunAt: new Date(), lastResult: 'success', lastError: null },

@@ -30,6 +30,10 @@ describe('tokenSimilarity', () => {
 });
 
 describe('matchLibraryVideo', () => {
+  it('requires review when different catalog identities share an exact artist and title', () => {
+    const candidate = { normalizedArtistName: 'shared name', normalizedTitle: 'song', releaseYear: null };
+    expect(matchLibraryVideo(candidate, [{ ...candidate, id: 101 }, { ...candidate, id: 102 }], { musicVideoId: 101, matchConfidence: null }, null)).toEqual({ musicVideoId: 101, matchConfidence: 'ambiguous' });
+  });
   const catalog: CanonicalVideo[] = [
     { id: 1, normalizedArtistName: 'the weeknd', normalizedTitle: 'blinding lights', releaseYear: 2019 },
     { id: 2, normalizedArtistName: 'the weeknd', normalizedTitle: 'save your tears', releaseYear: 2020 },

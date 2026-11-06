@@ -124,7 +124,8 @@ async function computeFrozenFractionOnce(filePath: string, sampleSeconds?: numbe
     let stderrBuf = '';
     child.stderr.on('data', (d) => (stderrBuf += d.toString()));
     child.on('error', reject);
-    child.on('close', () => resolve(stderrBuf)); // freezedetect run "fails" null output by design; ignore exit code
+    child.on('close', code => code === 0 ? resolve(stderrBuf)
+      : reject(new NotAVideoError(`Motion inspection decode failed: ${stderrBuf.trim().slice(-2000) || code}`)));
   });
 
   // freezedetect only logs freeze_duration when a frozen span ENDS (motion

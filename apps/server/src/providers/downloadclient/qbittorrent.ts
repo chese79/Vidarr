@@ -38,6 +38,7 @@ const STATES_DOWNLOADING = new Set([
   'allocating',
 ]);
 const STATES_FAILED = new Set(['error', 'missingFiles']);
+const STATES_COMPLETE = new Set(['uploading', 'stalledUP', 'queuedUP', 'forcedUP', 'pausedUP', 'stoppedUP']);
 
 export const qbittorrentProvider: DownloadClientProvider = {
   async testConnection(client) {
@@ -87,7 +88,7 @@ export const qbittorrentProvider: DownloadClientProvider = {
     if (STATES_FAILED.has(torrent.state)) {
       return { status: 'failed', progress: 0, error: `qBittorrent state: ${torrent.state}` };
     }
-    if (STATES_DOWNLOADING.has(torrent.state)) {
+    if (STATES_DOWNLOADING.has(torrent.state) || !STATES_COMPLETE.has(torrent.state) || Number(torrent.progress) !== 1) {
       return { status: 'downloading', progress: Number(torrent.progress ?? 0) };
     }
     return {

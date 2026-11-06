@@ -150,3 +150,43 @@ volume. Only video IDs/paths were exported for filesystem preservation checks; a
 sizes and UTC modification times match. Prior application containers, including the intermediate
 release, remain stopped for rollback. The conflicting Docker test Jellyfin remains stopped so the
 production address continues to resolve to the native server.
+
+## Enrichment throughput and partial-provider recovery (2026-11-05)
+
+MusicBrainz HTTP responses use a process-local cache: 15-minute TTL, at most 256 entries and 32 MiB.
+Identical in-flight requests share one fetch; consumers receive independent JSON objects. Successful
+empty responses are cached, failures are not. Artist suggestions retain their existing one-day
+bounded cache. Reused MusicBrainz release evidence retains its actual observation timestamp.
+
+All MusicBrainz requests still use one lane with at least 1.1 seconds after each response. Scheduler
+work carries its class through asynchronous calls: the weighted rotation offers one interactive,
+two enrichment and one maintenance turn, skipping empty classes. Interactive requests and background
+artist/genre/source work therefore retain opportunities without letting either backlog monopolize
+the provider. No provider quota is bypassed. Independent director and album research may overlap.
+The worker shares a confirmed-artist snapshot within each three-item checkpoint and immediately
+continues pending work after a one-second scheduler yield, instead of waiting for another 15-second
+tick. Metadata writes remain ordered, fingerprinted and idempotent; pause/cancel still finish only
+the current item. Pause and wait for that item before applying review or retrying failed work.
+
+Provider errors are isolated. A release or director failure does not discard successful evidence
+from another release/provider. Verified missing fields may be applied and the owned track verified
+while the item remains Failed with its provider-specific error. Updated counts remain true across
+retries. Unverified facts, release/version ambiguity, metadata locks and populated corrections retain
+their existing review requirements; artist confirmation keeps its approved 82% policy.
+
+Retry failed preserves uncertain publication requests and their UUIDs exactly. After confirmed native
+read-back, a partial-provider retry may take a fresh fingerprint and new UUID, retaining prior UUIDs
+and successful provider evidence for the same item/path/artist/version/provider-ID context. It asks
+only unfinished providers again. Context changes invalidate evidence reuse. No new request replaces
+an unverified native operation, and a pending reviewed selection must be retried before providers.
+Existing proposal JSON remains readable; these optional fields need no schema migration. Actor writes
+use a 30-second transaction bound (10-second lock wait) for the short artist candidate transaction;
+no provider/network call runs inside that transaction. Configuration/media mounts stay unchanged.
+## Review recovery corrections (2026-11-06)
+
+Retry holds the same exclusive control lock as the batch worker and manual apply until its
+proposal flags and cursor are saved. Busy work returns a conflict; pause and wait for the current
+item before retrying. Changed evidence/fingerprints reset the browser's selected fields and
+correction consent. MTV plugin 0.1.5 checks actual owned subtitle registration in metadata
+snapshots and completed-request replay, in addition to file integrity. A missing stream remains
+incomplete and requires a fresh guarded request rather than a false completion report.

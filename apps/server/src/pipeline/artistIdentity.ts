@@ -27,7 +27,6 @@ async function searchObservedArtist(name: string): Promise<MusicBrainzArtist[]> 
   const results = new Map<string, MusicBrainzArtist>();
   for (const variant of artistNameSearchVariants(name)) {
     for (const candidate of await searchMusicBrainzArtists(variant)) results.set(candidate.id, candidate);
-    if (results.size && variant !== name) break;
   }
   return [...results.values()];
 }
@@ -174,7 +173,7 @@ async function storeCandidates(artistId: number, observedName: string, candidate
         musicbrainzRefreshedAt: new Date(),
       },
     });
-  });
+  }, { maxWait: 10_000, timeout: 30_000 });
 }
 
 export async function resolveArtistIdentityAndCatalog(

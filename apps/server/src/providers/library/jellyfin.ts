@@ -84,7 +84,10 @@ async function resolvePlaylistItemId(config: LibraryConnector, item: PlaylistPus
   if (item.externalId) {
     try {
       const found = await jellyfinGet(config, `/Users/${config.userId}/Items/${encodeURIComponent(item.externalId)}`);
-      if (found?.Id) return found.Id as string;
+      if (found?.Id === item.externalId && found.Type === 'MusicVideo'
+        && (await playbackLibraryIds(config)).has(item.externalId)) return found.Id as string;
+      // A retained identity must never silently resolve to another item/library.
+      if (found?.Id) throw new Error('Jellyfin playlist item is outside the selected music-video library; resync before publishing.');
     } catch (err) {
       if (!isNotFound(err)) throw err;
     }
@@ -252,6 +255,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
   },
 
   async pushPlaylist(config, { name, items, existingRemoteId }): Promise<PlaylistPushResult> {
+    playbackLibraries.delete(config.id);
     if (!config.userId) {
       throw new Error('Jellyfin connector has no resolved user id; run Test first.');
     }

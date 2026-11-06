@@ -1,5 +1,5 @@
 // Runs only against the isolated native lab and its synthetic music-video fixture.
-import { readFile, writeFile, stat } from 'node:fs/promises';
+import { readFile, writeFile, stat, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 const base='http://host.docker.internal:18096';
@@ -49,6 +49,26 @@ try{
   check((await request(route,{...body,RequestId:randomUUID(),ExpectedFingerprint:edited.Fingerprint,Facts:{recordLabel:'Must be refused'}})).status===409,'edited owned track blocks metadata write');
   check((await read()).Facts.recordLabel==='Fixture Label','failed overlay guard preserves metadata');
  }finally{await writeFile(local(track),ownTrack);}
+ // Remove only the synthetic fixture's registration through a normal refresh,
+ // then restore identical ASS bytes. Hash validity alone must not close replay.
+ const held=local(track)+'.held-for-registration-test';
+ await rename(local(track),held);
+ try{
+  await api(`/Items/${fixture.Id}/Refresh?MetadataRefreshMode=FullRefresh&ImageRefreshMode=None&ReplaceAllMetadata=false&ReplaceAllImages=false`,{});
+  let absent=false;
+  for(let n=0;n<30;n++){
+   const item=await api(`/Users/${session.User.Id}/Items/${fixture.Id}`);
+   if(!item.MediaSources?.[0]?.MediaStreams?.some(stream=>stream.Path?.endsWith('.mtv-info.eng.ass'))){absent=true;break;}
+   await new Promise(resolve=>setTimeout(resolve,1000));
+  }
+  check(absent,'synthetic owned stream registration removed for replay regression');
+ }finally{await rename(held,local(track));}
+ const unregistered=await read();
+ check(unregistered.Fingerprint===after.Fingerprint,'registration-only loss preserves metadata fingerprint');
+ check(!unregistered.OverlayValid,'valid ASS bytes without registered stream are incomplete');
+ check((await request(route,body)).status===409,'completed request replay rejects missing stream registration');
+ const recovered=await api(route,{...body,RequestId:randomUUID(),ExpectedFingerprint:unregistered.Fingerprint,Facts:{},Corrections:[]});
+ check(recovered.OverlayValid,'fresh targeted request restores owned stream registration');
  check(Buffer.compare(await readFile(mediaPath),mediaBefore)===0&&(await stat(mediaPath)).mtimeMs===mediaStat.mtimeMs,'original video bytes and modification time unchanged');
  for(const [file,bytes] of others)check(Buffer.compare(await readFile(file),bytes)===0,'other music-video tracks unchanged by targeted refresh');
  await writeFile('/artifacts/enrichment-lab-report.json',JSON.stringify({serverVersion:publicInfo.Version,checks,productionModified:false,sourceHash:createHash('sha256').update(mediaBefore).digest('hex')},null,2));

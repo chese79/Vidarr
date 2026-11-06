@@ -1,9 +1,12 @@
 import { normalizeTitle, squash } from '../../pipeline/normalize.js';
+import { FairRequestQueue, JsonRequestCache } from './requestScheduling.js';
 
 const API_BASE = 'https://musicbrainz.org/ws/2';
 const MIN_REQUEST_INTERVAL_MS = 1_100;
-let requestChain = Promise.resolve();
-let lastRequestAt = 0;
+const requests = new FairRequestQueue(MIN_REQUEST_INTERVAL_MS);
+const cache = new JsonRequestCache();
+const observed = new WeakMap<object, string>();
+export const clearMusicBrainzCache = () => cache.clear();
 
 export interface MusicBrainzArtist {
   id: string;
@@ -19,20 +22,11 @@ export interface MusicBrainzArtist {
   youtubeChannels?: string[];
   imvdbSlug?: string | null;
   score?: number;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  observedAt?: string;
 }
 
 async function rateLimitedGet(path: string): Promise<any> {
-  let release!: () => void;
-  const previous = requestChain;
-  requestChain = new Promise<void>((resolve) => { release = resolve; });
-  await previous;
-  try {
-    const delay = Math.max(0, MIN_REQUEST_INTERVAL_MS - (Date.now() - lastRequestAt));
-    if (delay) await sleep(delay);
+  const result = await cache.get(path, () => requests.enqueue(async () => {
     const response = await fetch(`${API_BASE}${path}`, {
       headers: {
         Accept: 'application/json',
@@ -40,12 +34,11 @@ async function rateLimitedGet(path: string): Promise<any> {
       },
       signal: AbortSignal.timeout(15_000),
     });
-    lastRequestAt = Date.now();
     if (!response.ok) throw new Error(`MusicBrainz request failed: ${response.status} ${response.statusText}`);
-    return response.json();
-  } finally {
-    release();
-  }
+    return { body: await response.json(), observedAt: new Date().toISOString() };
+  }));
+  if (result.body && typeof result.body === 'object') observed.set(result.body, result.observedAt);
+  return result.body;
 }
 
 export function mapArtist(value: any): MusicBrainzArtist {
@@ -131,7 +124,7 @@ function escapeLucene(value: string): string {
 }
 
 // Bounded album evidence, separate from video discovery and catalog admission.
-export async function enrichmentAlbumEvidence(artistId: string, title: string, recordingId?: string, releaseId?: string) {
+export async function enrichmentAlbumEvidence(artistId: string, title: string, recordingId?: string, releaseId?: string, onError?: (error: unknown) => void) {
   const valid = (value?: string) => !!value && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
   if (!valid(artistId)) return [];
   const search = async (hint: string) => (await rateLimitedGet(`/recording?query=${encodeURIComponent(`arid:${artistId} AND recording:"${escapeLucene(hint)}"`)}&limit=5&fmt=json`)).recordings ?? [];
@@ -144,19 +137,21 @@ export async function enrichmentAlbumEvidence(artistId: string, title: string, r
     const baseTitle = title.replace(/\s*[(\[][^)\]]*\b(?:remix|mix|edit|live|version)\b[^)\]]*[)\]]\s*$/i, '').trim();
     if (baseTitle && baseTitle !== title.trim()) { exact = credited(await search(baseTitle), baseTitle); versionHint = true; }
   }
-  const result: Array<{ album: string; albumYear?: number; recordLabel?: string; recordingId: string; releaseId: string; verified: boolean; reason: string }> = [];
+  const result: Array<{ album: string; albumYear?: number; recordLabel?: string; recordingId: string; releaseId: string; verified: boolean; reason: string; observedAt?: string }> = [];
   for (const recording of exact.slice(0, 2)) {
     const releases = valid(releaseId) ? [{ id: releaseId }] : (recording.releases ?? []).slice(0, 3);
     for (const ref of releases) {
+      try {
       const release = await rateLimitedGet(`/release/${encodeURIComponent(ref.id)}?inc=artist-credits+labels+recordings+release-groups&fmt=json`);
       if (release.id !== ref.id) throw new Error('MusicBrainz returned a different release identity');
       if (!(release['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === artistId)) continue;
       if (!(release.media ?? []).some((medium: any) => (medium.tracks ?? []).some((track: any) => track.recording?.id === recording.id))) continue;
       const date = release.date; const year = typeof date === 'string' && /^\d{4}(?:-|$)/.test(date) ? Number(date.slice(0, 4)) : undefined;
       const labels: string[] = [...new Set<string>((release['label-info'] ?? []).map((entry: any) => entry.label?.name).filter(Boolean))];
-      result.push({ album: String(release.title), albumYear: year, recordLabel: labels.length === 1 ? labels[0] : undefined,
+      result.push({ album: String(release.title), albumYear: year, recordLabel: labels.length === 1 ? labels[0] : undefined, observedAt: observed.get(release),
         recordingId: recording.id, releaseId: release.id, verified: valid(recordingId) && valid(releaseId),
         reason: valid(recordingId) && valid(releaseId) ? 'Embedded recording and release IDs with matching artist credit and track.' : `${versionHint ? 'Version suffix omitted for search suggestions only. ' : ''}Recording/release edition needs review; title matching alone cannot establish this video version.` });
+      } catch (error) { if (!onError) throw error; onError(error); }
     }
   }
   return result;
@@ -165,7 +160,7 @@ export async function enrichmentAlbumEvidence(artistId: string, title: string, r
 export async function searchMusicBrainzArtists(name: string, limit = 5): Promise<MusicBrainzArtist[]> {
   const query = encodeURIComponent(`artist:"${escapeLucene(name)}"`);
   const body = await rateLimitedGet(`/artist?query=${query}&limit=${limit}&fmt=json`);
-  return (body.artists ?? []).map(mapArtist);
+  return (body.artists ?? []).map((value: any) => ({ ...mapArtist(value), observedAt: observed.get(body) }));
 }
 
 export async function lookupRecordingArtistIds(recordingId: string): Promise<string[]> {

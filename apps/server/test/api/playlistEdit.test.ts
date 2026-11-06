@@ -46,7 +46,17 @@ function stubJellyfin(options: { deleteStatus?: number; missingItems?: string[] 
     });
     const itemLookup = url.match(/\/Users\/[^/]+\/Items\/([^/?]+)$/);
     if (itemLookup && method === 'GET') {
-      return options.missingItems?.includes(itemLookup[1]) ? reply(404) : reply(200, { Id: itemLookup[1] });
+      const id = decodeURIComponent(itemLookup[1]);
+      return options.missingItems?.includes(id) ? reply(404) : reply(200, { Id: id, Type: 'MusicVideo' });
+    }
+    const parsed = new URL(url);
+    if (method === 'GET' && parsed.pathname === '/Items' && parsed.searchParams.has('ParentId')) {
+      const videos = await prisma.libraryVideo.findMany({ where: { available: true,
+        externalId: { notIn: options.missingItems ?? [] }, connector: { videoLibraryId: parsed.searchParams.get('ParentId') } }, select: { externalId: true } });
+      return reply(200, { Items: videos.map(video => ({ Id: video.externalId, Type: 'MusicVideo' })), TotalRecordCount: videos.length });
+    }
+    if (method === 'GET' && parsed.searchParams.has('SearchTerm')) {
+      return reply(200, { Items: [], TotalRecordCount: 0 });
     }
     if (url.endsWith('/Playlists') && method === 'POST') {
       created.push(JSON.parse(init.body ?? '{}'));
@@ -142,6 +152,7 @@ describe('playlist editing', () => {
         await createMusicVideoFile(old.id);
         const recent = await createMusicVideo(artistId, { title: 'Recent', hasFile: true, releaseYear: 2005 });
         await createMusicVideoFile(recent.id, { path: '/media/recent.mp4' });
+        for (const video of [old, recent]) await createLibraryVideo(connectorId, { musicVideoId: video.id, externalId: `ext-${video.title}`, title: video.title });
         const created = await call('POST', '/playlist/generate', {
           name: 'Smart', filters: { yearMin: 1990 }, matchMode: 'all', smart: true,
         });

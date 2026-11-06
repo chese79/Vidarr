@@ -65,6 +65,7 @@ describe('observed artist-credit match evidence', () => {
     vi.mocked(searchMusicBrainzArtists).mockClear();
     await discoverArtistIdentityCandidates(artist.id);
     expect(searchMusicBrainzArtists).toHaveBeenCalledWith('Amy Winehouse');
+    expect(searchMusicBrainzArtists).toHaveBeenCalledWith('AmyWinehouse');
   });
 
   it('restores suggestions on rediscovery and reports a failed confirmation', async () => {

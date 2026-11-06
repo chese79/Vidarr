@@ -201,6 +201,7 @@ describe('autoSearchAndGrab — YouTube candidate validation', () => {
 
     expect(outcome.grabbed).toBe(true);
     expect(vi.mocked(validateCandidate)).toHaveBeenCalledWith('vevo-id', 'Blinding Lights');
+    expect(await prisma.acquisitionSource.findFirstOrThrow({ where: { musicVideoId: video.id } })).toMatchObject({ authority: 'heuristic', confidence: 'confirmed' });
   });
 
   it('rejects a VEVO-tier match whose title matches a reject pattern, same as any other tier', async () => {

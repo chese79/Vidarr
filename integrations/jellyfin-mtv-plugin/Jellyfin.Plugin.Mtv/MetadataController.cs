@@ -26,7 +26,7 @@ public sealed class MetadataController(OverlayService overlays):ControllerBase
 
 public sealed partial class OverlayService
 {
- public object MetadataCapabilities()=>new{Version="0.1.4",MetadataEnrichment=true,Enabled=Configuration.Enabled,LibraryIds=Configuration.LibraryIds,TimingEnabled=Configuration.IntroSeconds>0||Configuration.OutroSeconds>0};
+ public object MetadataCapabilities()=>new{Version="0.1.5",MetadataEnrichment=true,Enabled=Configuration.Enabled,LibraryIds=Configuration.LibraryIds,TimingEnabled=Configuration.IntroSeconds>0||Configuration.OutroSeconds>0};
  private MusicVideo Selected(Guid id,Guid root)
  {
   if(!Configuration.Enabled||!Configuration.LibraryIds.Contains(root)||!library.GetVirtualFolders().Any(x=>Guid.Parse(x.ItemId)==root&&x.CollectionType==CollectionTypeOptions.musicvideos))throw new InvalidOperationException("Select an enabled music-video library");
@@ -49,7 +49,7 @@ public sealed partial class OverlayService
   var fingerprint=EnrichedNfo.Hash(JsonSerializer.Serialize(new{video.Id,video.Path,facts,video.ProviderIds,video.IsLocked,locked,nfo.Hash,video.RunTimeTicks}));
   EnrichmentFacts? nfoFacts=null;
   if(nfo.Valid&&nfo.Text is not null){var xml=EnrichedNfo.Parse(nfo.Text).Root!;string? One(string tag){var values=xml.Elements(tag).Select(x=>x.Value.Trim()).Where(x=>x.Length>0).Distinct().ToArray();return values.Length==1?values[0]:null;}var year=One("albumyear");nfoFacts=new(One("artist"),One("title"),One("album"),int.TryParse(year,out var y)&&y is >=1000 and <=9999?y:null,One("studio"),xml.Elements("director").Select(x=>x.Value.Trim()).Where(x=>x.Length>0).Distinct().ToArray());}
-  return new(id,root,video.Path,facts,new(video.ProviderIds),video.IsLocked||nfoLocked,locked,nfo.Hash,nfo.Valid,nfo.Error,fingerprint,album,Store.Valid(id),nfoFacts);
+  return new(id,root,video.Path,facts,new(video.ProviderIds),video.IsLocked||nfoLocked,locked,nfo.Hash,nfo.Valid,nfo.Error,fingerprint,album,Store.Valid(id)&&OwnedStream(video) is not null,nfoFacts);
  }
  public async Task<MetadataSnapshot> Enrich(Guid id,MetadataPatch patch,CancellationToken token)
  {

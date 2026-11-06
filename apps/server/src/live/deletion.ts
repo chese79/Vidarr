@@ -7,6 +7,7 @@ import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import { redactMessage } from '../security/redact.js';
 import { LiveError } from './policy.js';
 import { assertExclusiveLocalFiles } from '../media/localFileOwnership.js';
+import { assertOwnedSidecars } from '../media/sidecarOwnership.js';
 
 const snapshotSchema = z.object({ files: z.array(z.string()), partIds: z.array(z.number()), targets: z.array(z.object({ connectorId: z.number(), host: z.string(), type: z.string(), libraryId: z.string(), externalId: z.string(), expectedPath: z.string() })),
   exclusions: z.array(z.object({ artistId: z.number(), scope: z.string(), fingerprint: z.string() })) });
@@ -65,6 +66,7 @@ export async function processRecordingDeletions(now = new Date()) {
       const copies = await prisma.recordingServerCopy.findMany({ where: { part: { recordingId: row.id } } });
       if (copies.some(copy => !snapshot.targets.some(target => target.connectorId === copy.connectorId && target.libraryId === copy.libraryId && target.externalId === copy.externalId && target.expectedPath === copy.expectedPath))) throw new LiveError('Server ownership changed after deletion was scheduled; review its targets before retrying');
       const remotes = [];
+      await assertOwnedSidecars(parts.map(part => part.path).filter((value): value is string => Boolean(value)), snapshot.files);
       for (const target of snapshot.targets) {
         const configured = await prisma.libraryConnector.findUniqueOrThrow({ where: { id: target.connectorId } });
         if (configured.host !== target.host || configured.type !== target.type || !configured.enabled) throw new LiveError('Restore the original playback server before retrying deletion');

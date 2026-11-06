@@ -212,3 +212,19 @@ ownership are checked before write-back. Request journals and original NFO backu
 plugin data directory. Explicit `<albumyear>` stays separate from `<year>`. Windows and Linux use
 the same server-local writer and bundled Kabel. See [the workflow](../../docs/metadata-enrichment.md).
 Production activation is a separate verified deployment, not implied by building this release.
+
+## 0.1.5 completion verification
+
+Metadata snapshots and completed request replays require both an intact owned ASS file and its
+registered subtitle stream. A valid file whose registration disappeared reports `OverlayValid`
+false and completed replay returns a conflict. A fresh request with a current fingerprint can
+refresh/register the owned track without changing media bytes or user subtitle preferences.
+The isolated enrichment smoke test removes the synthetic item's registration while preserving
+ASS bytes, verifies rejection, and restores it with a fresh targeted request.
+
+Production verification (2026-11-06): after the user-requested wait for idle playback, installed
+0.1.5.0 on native Jellyfin 12.3.0 and verified active status, capability version and an existing
+real owned stream. Sixty-four core and 25 isolated API checks passed. The prior plugin folder,
+library/plugin configuration, subtitle defaults and playlists are retained. DLL SHA256:
+`d198ede8bba6e82f031b61922512cc90a10e31988b25a7c0d9f7f26590bfa7fd`.
+This is server verification, not an additional physical Roku test.

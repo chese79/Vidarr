@@ -1,13 +1,13 @@
 {
  "category":"General",
- "changelog":"Add elevated scoped metadata enrichment, conditional Jellyfin/NFO write-back, explicit album year, provenance journals and targeted owned-track refresh; preserve Kabel and metadata/subtitle backups.",
+ "changelog":"Verify registered owned subtitle streams as well as ASS hashes when reporting metadata enrichment completion, including replayed requests.",
  "description":"Owned ASS info tracks for selected MusicVideo libraries; no movie/TV or user subtitle-default changes.",
  "guid":"c9298ca5-50d5-4be6-8771-eae3b2bb8b86",
  "name":"MTV Music Video Info",
  "overview":"Separate Jellyfin server plugin for music-video metadata overlays.",
  "owner":"Vidarr",
  "targetAbi":"12.3.0.0",
- "version":"0.1.4.0",
+ "version":"0.1.5.0",
  "status":"Active",
  "autoUpdate":false,
  "assemblies":[]
