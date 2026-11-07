@@ -95,7 +95,7 @@ export async function processRecordingDeletions(now = new Date()) {
         }
         await tx.recording.update({ where: { id: row.id }, data: { deletionState: 'deleted', deletionNextAttemptAt: null, deletionTargets: null, reviewStatus: 'deleted' } });
         await tx.history.create({ data: { recordingId: row.id, eventType: 'deleted', data: JSON.stringify({ parts: snapshot.partIds.length }) } });
-      }, { maxWait: 10_000, timeout: 30_000 });
+      }, { maxWait: 10_000, timeout: 120_000 });
     } catch (error) {
       await prisma.recording.updateMany({ where: { id: row.id }, data: { deletionState: 'failed', deletionError: redactMessage(error), deletionNextAttemptAt: new Date(now.getTime() + 40 * 60000) } });
       await logActivity('warn', 'recording-deletion', error);

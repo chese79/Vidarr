@@ -148,7 +148,7 @@ async function performVideoDeletion(id: number, now: Date): Promise<void> {
       ] } });
       await tx.libraryVideo.deleteMany({ where: { id: { in: snapshot.targets.map(t => t.libraryVideoId) }, musicVideoId: id, matchConfidence: null } });
       await tx.musicVideo.delete({ where: { id } });
-    }, { maxWait: 10_000, timeout: 30_000 });
+    }, { maxWait: 10_000, timeout: 120_000 });
     await logActivity('info', 'video-deletion', `Deleted video ${id}; local bundle and ${snapshot.targets.length} confirmed server copies removed.`).catch(() => {});
   } catch (error) {
     const message = redactMessage(error);

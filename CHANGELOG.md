@@ -4,6 +4,10 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Large deletion cascade recovery (2026-11-06)
+
+- Bound MV/Live completion transactions to two minutes after a production catalog cascade took 37.6 seconds. Keep the ten-second lock wait, thirty-second intent timeout, normal deletion delay and all ownership/playback/retry checks.
+
 ### Enrichment rollout and iteration cleanup (2026-11-06)
 
 - Deploy the tested lookup/deletion recovery update with the same mounts, environment and saved enrichment journals; retain a verified private database recovery bundle.
