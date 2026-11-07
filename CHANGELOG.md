@@ -4,6 +4,12 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Enrichment rollout and iteration cleanup (2026-11-06)
+
+- Deploy the tested lookup/deletion recovery update with the same mounts, environment and saved enrichment journals; retain a verified private database recovery bundle.
+- Allow bounded cold-start readiness before rollback. After verification, remove superseded Vidarr containers/images and scoped build cache; retain the current release and configuration/media volumes. Scoped cleanup reports 5.794 GB reclaimed.
+- Record this cleanup requirement in development and deployment instructions for future iterations.
+
 ### Deletion performance and recovery (2026-11-06)
 
 - Avoid rebuilding the entire directory-name array for every file during deletion preflight; retain the existing sidecar ownership checks.

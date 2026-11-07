@@ -31,6 +31,12 @@ canonical artist catalog, media-server integration, download-source priority, an
 - Do not modify or remove Docker configuration volumes or media files as part of source updates.
 - Rebuild and recreate only the Vidarr service unless the requested change explicitly involves a
   different service.
+- During rebuild/deploy iterations, remove superseded Vidarr test, failed and rollback containers,
+  old Vidarr image tags and cache records identified as Vidarr after the replacement passes health, preservation
+  and enrichment-resume checks. Keep the current release and private verified recovery backups.
+- Never remove volumes during this cleanup or force-remove image layers still used by the current
+  release. Preserve unrelated services. Allow up to ten minutes for cold startup readiness on the
+  Windows-mounted configuration database before rolling back.
 - Never commit credentials, API keys, passwords, databases, downloaded media, or local `.env`
   files.
 

@@ -629,6 +629,13 @@ and request UUIDs for retry. Successful public MusicBrainz responses survive res
 fair lane. A deployment resumes the paused batch and its saved native requests without resetting
 the cursor or requeuing completed items. See [metadata enrichment](metadata-enrichment.md).
 
+For deployment iterations: retain a verified private recovery bundle → replace only Vidarr → allow
+bounded cold-start readiness → verify health, configuration/playlists and saved enrichment journals
+→ resume the same batch → remove superseded Vidarr containers/images and cache records proven to
+belong to Vidarr. Keep all configuration/media volumes and the current image. Do not use a global
+prune across unrelated services. A failed readiness check restores the prior container before any
+superseded artifacts are removed. See [deployment](deployment.md).
+
 ## Automatic artist identity suggestions (2026-11-05)
 
 Observe an artist from audio/video inventory → background MusicBrainz search (three artists per

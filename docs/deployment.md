@@ -684,3 +684,43 @@ Native Jellyfin 12.3.0 has MTV 0.1.5.0 active after an idle restart. The prior p
 user/library/plugin configuration are retained. Batch 2 resumed with safe failed-provider retries
 and demonstrably advanced; the queued follow-up and reviews remain. Deployment does not imply
 full-library enrichment completion. See [the correction and verification record](code-review-fixes-2026-11-06.md).
+
+## Enrichment lookup rollout and iteration cleanup — 2026-11-06
+
+The server update from `7bb5ca3` and `5a2594d` runs as
+`vidarr-enrichment-speed-20261106:release`, image
+`sha256:dfd7d42d23597b26e665a1485aaeee3534a4c0eaf915a99091572ee6638a0fc5`.
+Node 22 compiles the server onto the previously verified runtime; the web bundle and runtime
+dependencies stay at the reviewed release. Final validation passes 85 enrichment, cache, MV/Live
+workflow and recovery checks, plus a network-disabled, cross-process production-cache smoke test.
+The earlier MusicBrainz consumer regressions also pass.
+
+The replacement retains all four mount identities and environment values. Configuration,
+connectors, 14 playlists and unrelated catalog IDs pass preservation checks, allowing only the
+separately requested Yo La Tengo removals. All 1,189 predeployment enrichment item journals match
+their saved fingerprints; batch 2 resumes from its existing cursor and batch 3 remains queued.
+Successful public lookups persist in `/config/cache/musicbrainz-v1`. The fresh consistent recovery
+bundle under `/config/operator-recovery/enrichment-speed-20261106/` passes SQLite `quick_check`
+on Linux storage. It remains private in the configuration volume.
+
+Allow a bounded ten-minute health-readiness window for cold initialization on this host. The
+original short loop rolled back before startup completed; the longer readiness check succeeds.
+Verify the exact running image, health, mount/environment identities and saved data before cleanup.
+
+The user requests cleanup after each verified iteration. Remove only superseded Vidarr containers
+without volume-removal flags, then their explicitly identified image tags/digests without forced
+image removal. For cache, use ownership-specific filters such as
+`docker buildx prune --all --force --filter 'description~=(?i)vidarr'` after inspecting matching
+records. [Docker documents these description and ID filters](https://docs.docker.com/reference/cli/docker/buildx/prune/).
+The scoped cleanup reports 5.794 GB reclaimed. Shared layers needed by the current image remain.
+Global cache/image pruning was rejected by automatic approval review because it could remove
+unrelated artifacts. Superseded retained containers/images in earlier rollout notes are now removed;
+the current image, unrelated services and configuration/media volumes remain. Preserve verified
+recovery backups independently of container/image retention.
+
+Native Jellyfin stays running during Vidarr replacement. Its aggregate API fingerprint differs
+from the snapshot around the requested deletions; no identical aggregate-native-DTO claim is made.
+Current native DTO diagnostics are retained privately. The MTV plugin XML and all seven library
+options files retain modification times preceding this deployment, and this update does not write
+native global configuration. Item metadata changes and the requested media deletions remain separate
+from global settings verification.
