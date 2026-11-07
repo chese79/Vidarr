@@ -4,6 +4,12 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Deletion performance and recovery (2026-11-06)
+
+- Avoid rebuilding the entire directory-name array for every file during deletion preflight; retain the existing sidecar ownership checks.
+- Give MV/Live deletion intent and completion transactions a bounded 30-second execution timeout on slower storage; retain frozen targets, playback checks and the existing delayed retry workflow.
+- Verify retry after media removal succeeds but the catalog completion transaction fails, preserving frozen targets until the catalog, references and deletion ledger are finalized.
+
 ### Enrichment lookup reuse (2026-11-06)
 
 - Space MusicBrainz requests from their start times, retaining the single fair request lane and 1.1-second provider limit while avoiding an extra delay after slow responses.

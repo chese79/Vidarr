@@ -52,6 +52,29 @@ it('allows deletion without confirmation only when warning is disabled', async (
   expect(await prisma.musicVideo.count()).toBe(0);
 });
 
+it('finishes from frozen targets after media removal succeeds but the completion transaction fails', async () => {
+  const video = await createMusicVideo(artistId, { hasFile: true });
+  const file = path.join(directory, 'Song.mp4'); await fs.writeFile(file, 'fixture');
+  await createMusicVideoFile(video.id, { path: file });
+  const connector = await createLibraryConnector({ type: 'plex' });
+  await createLibraryVideo(connector.id, { musicVideoId: video.id, path: '/server/song.mp4' });
+  vi.spyOn(plexProvider, 'verifyVideoDeletion').mockResolvedValue(undefined);
+  vi.spyOn(plexProvider, 'isVideoInUse').mockResolvedValue(false);
+  const remove = vi.spyOn(plexProvider, 'deleteVideo').mockResolvedValue(undefined);
+  await deleteMusicVideo(video.id, true);
+  const frozen = (await prisma.musicVideo.findUniqueOrThrow({ where: { id: video.id } })).deletionTargets;
+  const transaction = vi.spyOn(prisma, '$transaction').mockRejectedValueOnce(new Error('Completion transaction timed out'));
+  await runDue(video.id); transaction.mockRestore();
+  await expect(fs.access(file)).rejects.toMatchObject({ code: 'ENOENT' });
+  expect(await prisma.musicVideo.findUniqueOrThrow({ where: { id: video.id } })).toMatchObject({ deletionState: 'failed', deletionTargets: frozen });
+  expect(await prisma.deletedVideoRecord.count()).toBe(0);
+  await runDue(video.id);
+  expect(remove).toHaveBeenCalledTimes(2);
+  expect(await prisma.musicVideo.count()).toBe(0);
+  expect(await prisma.libraryVideo.count()).toBe(0);
+  expect(await prisma.deletedVideoRecord.count()).toBe(1);
+});
+
 it('refuses a legacy persisted plan that claimed a dotted sibling sidecar', async () => {
   const video = await createMusicVideo(artistId, { title: 'Song', hasFile: true });
   const file = path.join(directory, 'Song.mp4'), sibling = path.join(directory, 'Song.Live.nfo');

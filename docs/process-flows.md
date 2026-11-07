@@ -304,6 +304,14 @@ current item identity, type, selected library membership and every media path ag
 path; changed or additional versions require reconciliation. Local paths must be regular files
 inside an accessible configured root; symlinks, unavailable mounts and shared ownership block
 deletion. Delete only the video and same-base metadata/artwork/subtitles, not the artist directory.
+MV and Live deletion intents/completion use bounded database-only transactions: a ten-second lock
+wait and thirty-second execution timeout allow slower storage to record completed removal. Server
+and filesystem work remains outside these transactions; retries still verify exact targets.
+Directory names are gathered once per local bundle, retaining the exact sidecar ownership rules.
+Node 22 verification includes 50 MV/Live workflow/recovery checks, including a failed completion
+transaction after successful media removal: frozen targets survive and a later idempotent attempt
+finishes catalog/reference cleanup and the deletion ledger. This does not shorten the five-minute
+initial delay or forty-minute automatic retry interval.
 
 A one-minute scheduled job processes due deletions in bounded batches. Any server, playback check or filesystem failure retains the entry and frozen remaining targets with a visible
 error and a next attempt 40 minutes later. Further failures retry every 40 minutes. Reschedule delete restarts the five-minute delay. Already absent targets are safe on retry; authentication errors are not

@@ -47,9 +47,10 @@ export async function localBundle(filePath: string): Promise<string[]> {
   let entries;
   try { entries = await fs.readdir(path.dirname(local), { withFileTypes: true }); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return files; throw error; }
+  const names = entries.map(value => value.name);
   for (const entry of entries) {
-    if (entry.isFile() && ownsSidecar(path.basename(local), entry.name, entries.map(value => value.name))
-      && /\.(nfo|jpg|jpeg|png|webp|srt|vtt|ass)$/i.test(entry.name)) files.push(path.join(path.dirname(local), entry.name));
+    if (entry.isFile() && /\.(nfo|jpg|jpeg|png|webp|srt|vtt|ass)$/i.test(entry.name)
+      && ownsSidecar(path.basename(local), entry.name, names)) files.push(path.join(path.dirname(local), entry.name));
   }
   for (const file of files) await checkLocalPath(file);
   return files;
@@ -93,7 +94,7 @@ export async function deleteMusicVideo(id: number, confirmed: boolean): Promise<
         deletionNextAttemptAt: new Date(Date.now() + INITIAL_DELAY_MS) } });
     if (!claimed.count) throw new VideoDeletionError('Deletion state changed; refresh and try again.');
     if (await tx.downloadQueueItem.count({ where: { musicVideoId: id, status: { in: ACTIVE } } })) throw new VideoDeletionError('A download started; finish or remove it from Queue first.');
-  });
+  }, { maxWait: 10_000, timeout: 30_000 });
 }
 
 async function performVideoDeletion(id: number, now: Date): Promise<void> {
@@ -147,7 +148,7 @@ async function performVideoDeletion(id: number, now: Date): Promise<void> {
       ] } });
       await tx.libraryVideo.deleteMany({ where: { id: { in: snapshot.targets.map(t => t.libraryVideoId) }, musicVideoId: id, matchConfidence: null } });
       await tx.musicVideo.delete({ where: { id } });
-    });
+    }, { maxWait: 10_000, timeout: 30_000 });
     await logActivity('info', 'video-deletion', `Deleted video ${id}; local bundle and ${snapshot.targets.length} confirmed server copies removed.`).catch(() => {});
   } catch (error) {
     const message = redactMessage(error);

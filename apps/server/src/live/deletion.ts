@@ -47,7 +47,7 @@ export async function scheduleRecordingDeletion(id: number, confirmed: boolean, 
     await tx.recording.update({ where: { id }, data: { deletionState: 'pending', deletionError: null,
       deletionNextAttemptAt: new Date(Date.now() + 5 * 60000), deletionTargets: JSON.stringify({ files: [...new Set(files)], targets, partIds: recording.parts.map(part => part.id), exclusions }) } });
     if (await tx.downloadQueueItem.count({ where: { recordingId: id, status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } } })) throw new LiveError('Finish or remove the active download before deleting');
-  });
+  }, { maxWait: 10_000, timeout: 30_000 });
 }
 export async function processRecordingDeletions(now = new Date()) {
   const rows = await prisma.recording.findMany({ where: { deletionState: { in: ['pending', 'failed'] }, deletionNextAttemptAt: { lte: now } }, take: 20 });
@@ -95,7 +95,7 @@ export async function processRecordingDeletions(now = new Date()) {
         }
         await tx.recording.update({ where: { id: row.id }, data: { deletionState: 'deleted', deletionNextAttemptAt: null, deletionTargets: null, reviewStatus: 'deleted' } });
         await tx.history.create({ data: { recordingId: row.id, eventType: 'deleted', data: JSON.stringify({ parts: snapshot.partIds.length }) } });
-      });
+      }, { maxWait: 10_000, timeout: 30_000 });
     } catch (error) {
       await prisma.recording.updateMany({ where: { id: row.id }, data: { deletionState: 'failed', deletionError: redactMessage(error), deletionNextAttemptAt: new Date(now.getTime() + 40 * 60000) } });
       await logActivity('warn', 'recording-deletion', error);
