@@ -4,6 +4,12 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Enrichment lookup reuse (2026-11-06)
+
+- Space MusicBrainz requests from their start times, retaining the single fair request lane and 1.1-second provider limit while avoiding an extra delay after slow responses.
+- Reuse successful public lookups across restarts with a bounded 24-hour disk cache beside the database; retain original observation times and recover from expired, corrupt or unavailable cache entries.
+- Deduplicate release-edition requests within each proposal, including failures. Preserve artist research, review, locks and saved native request IDs; resume the existing batch after deployment.
+
 ### Full review corrections (2026-11-06)
 
 - Keep Live discovery, starting inventory and the add form independent by removing duplicate sibling keys; the artist page still resets its children when changing artists.

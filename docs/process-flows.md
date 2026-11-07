@@ -616,7 +616,10 @@ verify read-back and track -> record updated/complete/review/unknown/failed outc
 Metadata provides progress, evidence and pause/resume/retry. Pause/cancel takes effect after the
 current item; applied facts remain. Native checkpoint conflicts require inspection and a fresh
 batch. Scope changes pause rather than redirect old work. Provider failures retain saved proposals
-and request UUIDs for retry. See [metadata enrichment](metadata-enrichment.md).
+and request UUIDs for retry. Successful public MusicBrainz responses survive restarts in a bounded
+24-hour cache, retaining their original observation times. Start-spaced requests still share one
+fair lane. A deployment resumes the paused batch and its saved native requests without resetting
+the cursor or requeuing completed items. See [metadata enrichment](metadata-enrichment.md).
 
 ## Automatic artist identity suggestions (2026-11-05)
 

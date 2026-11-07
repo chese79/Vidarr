@@ -69,4 +69,15 @@ describe('enrichment MusicBrainz HTTP evidence', () => {
     expect(await enrichmentVideoDirectors('fixture-key', '1234')).toEqual({ directors: ['First Director', 'Second Director'], url: 'https://imvdb.com/video/artist/song' });
     await expect(enrichmentVideoDirectors('fixture-key', '9999')).rejects.toThrow('different video');
   });
+  it('does not repeat a failed release lookup shared by two candidate recordings', async () => {
+    const otherRecording = '55555555-5555-4555-8555-555555555555';
+    const fetch = vi.fn(async (url: string) => url.includes('/release/')
+      ? new Response('', { status: 503 }) : new Response(JSON.stringify({ recordings: [recording, otherRecording].map(id => ({ id, title: 'Tomorrow', 'artist-credit': [{ artist: { id: artist } }], releases: [{ id: release }, { id: release }] })) })));
+    vi.stubGlobal('fetch', fetch);
+    const errors: unknown[] = [];
+    expect(await enrichmentAlbumEvidence(artist, 'Tomorrow', undefined, undefined, error => errors.push(error))).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(2); expect(errors).toHaveLength(1);
+    await enrichmentAlbumEvidence(artist, 'Tomorrow', undefined, undefined, () => {});
+    expect(fetch).toHaveBeenCalledTimes(3); // Failed lookups are retried on a later attempt.
+  });
 });

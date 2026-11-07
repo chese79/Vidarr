@@ -1,10 +1,16 @@
 import { normalizeTitle, squash } from '../../pipeline/normalize.js';
 import { FairRequestQueue, JsonRequestCache } from './requestScheduling.js';
+import { PublicResponseStore } from './publicResponseStore.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const API_BASE = 'https://musicbrainz.org/ws/2';
 const MIN_REQUEST_INTERVAL_MS = 1_100;
 const requests = new FairRequestQueue(MIN_REQUEST_INTERVAL_MS);
-const cache = new JsonRequestCache();
+const databaseFile = process.env.DATABASE_URL?.split('?')[0];
+const store = process.env.NODE_ENV === 'production' && databaseFile && /^file:(?:\/|[a-z]:[\\/])/i.test(databaseFile)
+  ? new PublicResponseStore(path.join(path.dirname(fileURLToPath(new URL(databaseFile, import.meta.url))), 'cache', 'musicbrainz-v1')) : undefined;
+const cache = new JsonRequestCache(24 * 60 * 60_000, 512, 32 * 1024 * 1024, store);
 const observed = new WeakMap<object, string>();
 export const clearMusicBrainzCache = () => cache.clear();
 
@@ -138,11 +144,16 @@ export async function enrichmentAlbumEvidence(artistId: string, title: string, r
     if (baseTitle && baseTitle !== title.trim()) { exact = credited(await search(baseTitle), baseTitle); versionHint = true; }
   }
   const result: Array<{ album: string; albumYear?: number; recordLabel?: string; recordingId: string; releaseId: string; verified: boolean; reason: string; observedAt?: string }> = [];
+  const releaseLookups = new Map<string, Promise<any>>();
+  const reportedErrors = new Set<string>();
   for (const recording of exact.slice(0, 2)) {
-    const releases = valid(releaseId) ? [{ id: releaseId }] : (recording.releases ?? []).slice(0, 3);
+    const releases: Array<{ id: string }> = valid(releaseId) ? [{ id: releaseId! }]
+      : [...new Map<string, { id: string }>((recording.releases ?? []).filter((ref: any) => valid(ref.id)).map((ref: any) => [ref.id, ref])).values()].slice(0, 3);
     for (const ref of releases) {
       try {
-      const release = await rateLimitedGet(`/release/${encodeURIComponent(ref.id)}?inc=artist-credits+labels+recordings+release-groups&fmt=json`);
+      let lookup = releaseLookups.get(ref.id);
+      if (!lookup) { lookup = rateLimitedGet(`/release/${encodeURIComponent(ref.id)}?inc=artist-credits+labels+recordings+release-groups&fmt=json`); releaseLookups.set(ref.id, lookup); }
+      const release = await lookup;
       if (release.id !== ref.id) throw new Error('MusicBrainz returned a different release identity');
       if (!(release['artist-credit'] ?? []).some((credit: any) => credit.artist?.id === artistId)) continue;
       if (!(release.media ?? []).some((medium: any) => (medium.tracks ?? []).some((track: any) => track.recording?.id === recording.id))) continue;
@@ -151,7 +162,7 @@ export async function enrichmentAlbumEvidence(artistId: string, title: string, r
       result.push({ album: String(release.title), albumYear: year, recordLabel: labels.length === 1 ? labels[0] : undefined, observedAt: observed.get(release),
         recordingId: recording.id, releaseId: release.id, verified: valid(recordingId) && valid(releaseId),
         reason: valid(recordingId) && valid(releaseId) ? 'Embedded recording and release IDs with matching artist credit and track.' : `${versionHint ? 'Version suffix omitted for search suggestions only. ' : ''}Recording/release edition needs review; title matching alone cannot establish this video version.` });
-      } catch (error) { if (!onError) throw error; onError(error); }
+      } catch (error) { if (!onError) throw error; if (!reportedErrors.has(ref.id)) { reportedErrors.add(ref.id); onError(error); } }
     }
   }
   return result;

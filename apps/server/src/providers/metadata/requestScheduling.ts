@@ -11,7 +11,7 @@ export class FairRequestQueue {
   private rotation: ProviderPriority[] = ['interactive', 'enrichment', 'enrichment', 'background'];
   private cursor = 0;
   private running = false;
-  private lastFinishedAt = 0;
+  private lastStartedAt: number | undefined;
   constructor(private intervalMs = 1100) {}
   enqueue<T>(work: () => Promise<T>, priority = context.getStore() ?? 'interactive'): Promise<T> {
     const promise = new Promise<T>((resolve, reject) => {
@@ -25,11 +25,13 @@ export class FairRequestQueue {
     this.running = true;
     try {
       while (Object.values(this.queues).some(queue => queue.length)) {
+        const delay = this.lastStartedAt === undefined ? 0 : Math.max(0, this.intervalMs - (Date.now() - this.lastStartedAt));
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+        // Select after the wait so newly arrived interactive work gets its turn.
         let next: (() => Promise<void>) | undefined;
         while (!next) next = this.queues[this.rotation[this.cursor++ % this.rotation.length]].shift();
-        const delay = Math.max(0, this.intervalMs - (Date.now() - this.lastFinishedAt));
-        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-        try { await next(); } finally { this.lastFinishedAt = Date.now(); }
+        this.lastStartedAt = Date.now();
+        await next();
       }
     } finally { this.running = false; }
   }
@@ -41,7 +43,8 @@ export class JsonRequestCache {
   private values = new Map<string, { json: string; expires: number; bytes: number }>();
   private pending = new Map<string, Promise<string>>();
   private bytes = 0;
-  constructor(private ttlMs = 15 * 60_000, private maxEntries = 256, private maxBytes = 32 * 1024 * 1024) {}
+  constructor(private ttlMs = 15 * 60_000, private maxEntries = 256, private maxBytes = 32 * 1024 * 1024,
+    private store?: { get(key: string): Promise<{ json: string; expires: number } | undefined>; set(key: string, json: string, expires: number): Promise<void> }) {}
   clear() { this.values.clear(); this.bytes = 0; }
   async get<T>(key: string, load: () => Promise<T>): Promise<T> {
     const cached = this.values.get(key);
@@ -53,20 +56,29 @@ export class JsonRequestCache {
     let task = this.pending.get(key);
     if (!task) {
       task = (async () => {
-        const json = JSON.stringify(await load());
-        const bytes = Buffer.byteLength(json);
-        if (bytes <= this.maxBytes) {
-          while (this.values.size && (this.values.size >= this.maxEntries || this.bytes + bytes > this.maxBytes)) {
-            const oldest = this.values.keys().next().value!;
-            this.bytes -= this.values.get(oldest)!.bytes; this.values.delete(oldest);
-          }
-          this.values.set(key, { json, bytes, expires: Date.now() + this.ttlMs }); this.bytes += bytes;
+        const saved = await this.store?.get(key);
+        if (saved && saved.expires > Date.now()) {
+          this.remember(key, saved.json, saved.expires);
+          return saved.json;
         }
+        const json = JSON.stringify(await load());
+        const expires = Date.now() + this.ttlMs;
+        this.remember(key, json, expires);
+        await this.store?.set(key, json, expires);
         return json;
       })();
       this.pending.set(key, task);
     }
     try { return JSON.parse(await task); }
     finally { if (this.pending.get(key) === task) this.pending.delete(key); }
+  }
+  private remember(key: string, json: string, expires: number) {
+    const bytes = Buffer.byteLength(json);
+    if (bytes > this.maxBytes) return;
+    while (this.values.size && (this.values.size >= this.maxEntries || this.bytes + bytes > this.maxBytes)) {
+      const oldest = this.values.keys().next().value!;
+      this.bytes -= this.values.get(oldest)!.bytes; this.values.delete(oldest);
+    }
+    this.values.set(key, { json, bytes, expires }); this.bytes += bytes;
   }
 }

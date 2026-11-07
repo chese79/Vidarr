@@ -153,12 +153,13 @@ production address continues to resolve to the native server.
 
 ## Enrichment throughput and partial-provider recovery (2026-11-05)
 
-MusicBrainz HTTP responses use a process-local cache: 15-minute TTL, at most 256 entries and 32 MiB.
+MusicBrainz HTTP responses use a bounded cache (updated 2026-11-06): 24-hour TTL, at most 512 in-memory entries and 32 MiB.
 Identical in-flight requests share one fetch; consumers receive independent JSON objects. Successful
 empty responses are cached, failures are not. Artist suggestions retain their existing one-day
 bounded cache. Reused MusicBrainz release evidence retains its actual observation timestamp.
 
-All MusicBrainz requests still use one lane with at least 1.1 seconds after each response. Scheduler
+All MusicBrainz requests still use one lane with at least 1.1 seconds between request starts. A slow
+response counts toward this interval; requests never overlap. Scheduler
 work carries its class through asynchronous calls: the weighted rotation offers one interactive,
 two enrichment and one maintenance turn, skipping empty classes. Interactive requests and background
 artist/genre/source work therefore retain opportunities without letting either backlog monopolize
@@ -182,6 +183,33 @@ an unverified native operation, and a pending reviewed selection must be retried
 Existing proposal JSON remains readable; these optional fields need no schema migration. Actor writes
 use a 30-second transaction bound (10-second lock wait) for the short artist candidate transaction;
 no provider/network call runs inside that transaction. Configuration/media mounts stay unchanged.
+## Persistent lookup reuse (2026-11-06)
+
+In production with an absolute SQLite `DATABASE_URL`, successful public MusicBrainz responses also
+persist beside the database under `cache/musicbrainz-v1`. The disk cache holds at most 4,096 entries
+and 128 MiB of serialized response envelopes, with the same 24-hour expiration. Each file is written
+through an atomic temporary-file rename. Startup discards expired entries and interrupted writes;
+invalid entries are fetched again. Cache hits retain their original observation and expiration times.
+Errors are never persisted. An unavailable cache falls back to live requests with one diagnostic.
+This disposable cache contains public responses only, not connector credentials or batch state.
+Stop Vidarr before removing that dedicated directory to force fresh lookups; no database migration
+or configuration-volume replacement is required. Tests use temporary directories and never this cache.
+
+Release-edition lookups shared by candidate recordings are performed once per proposal, including
+failed lookups; later proposals can retry failures normally. Artist research retains its existing
+review hints even when album fields already exist. Identity, edition, review and metadata-lock checks stay
+the same. Enrichment remains sequential with the existing three-item checkpoints and one-second
+scheduler yield. Deployment pauses the current batch, retains its cursor, proposals, native UUIDs,
+review decisions and queued follow-up, then resumes that batch without retrying completed work.
+
+Verification uses Node 22 server compilation and 35 focused enrichment/provider/scheduler/cache
+checks, including uncertain native publication, partial-provider recovery, disk expiration/bounds,
+corruption, independent consumers and failed lookups. Additional MusicBrainz identity, genre and
+Live consumer regressions pass. A production-mode smoke test runs separate processes in the exact
+release image with networking disabled and temporary writable config storage: the second process
+reuses the first response with its original observation time, while a relative database URL keeps
+the memory-only fallback. No production volumes or provider writes are used by these tests.
+
 ## Review recovery corrections (2026-11-06)
 
 Retry holds the same exclusive control lock as the batch worker and manual apply until its

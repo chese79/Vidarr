@@ -33,6 +33,31 @@ it('coalesces identical requests and returns independent cached objects', async 
   expect(load).toHaveBeenCalledTimes(1);
 });
 
+it('counts slow response time toward spacing without overlapping requests', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(0);
+  const queue = new FairRequestQueue(1100), starts: number[] = [];
+  let active = 0, maxActive = 0;
+  const work = async () => {
+    starts.push(Date.now()); maxActive = Math.max(maxActive, ++active);
+    await new Promise(resolve => setTimeout(resolve, 2000)); active--;
+  };
+  const jobs = [queue.enqueue(work), queue.enqueue(work)];
+  await vi.runAllTimersAsync(); await Promise.all(jobs);
+  expect(starts).toEqual([0, 2000]); expect(maxActive).toBe(1);
+});
+
+it('selects priority after the spacing wait, including new interactive arrivals', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(0);
+  const queue = new FairRequestQueue(1100), order: string[] = [];
+  const first = queue.enqueue(async () => {}, 'background');
+  await first;
+  const background = queue.enqueue(async () => { order.push('background'); }, 'background');
+  await vi.advanceTimersByTimeAsync(500);
+  const interactive = queue.enqueue(async () => { order.push('interactive'); }, 'interactive');
+  await vi.runAllTimersAsync(); await Promise.all([background, interactive]);
+  expect(order).toEqual(['interactive', 'background']);
+});
+
 it('expires successes, bounds memory, and never caches a failed request as empty data', async () => {
   vi.useFakeTimers();
   const cache = new JsonRequestCache(100, 1, 128);
