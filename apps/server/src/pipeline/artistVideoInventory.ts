@@ -1,4 +1,5 @@
-import { prisma, logActivity } from '../db/client.js';
+import { prisma, logActivity, withForegroundReads } from '../db/client.js';
+import { BoundedWorkQueue } from './boundedWork.js';
 import { prepareLiveStartingInventory } from '../live/startingInventory.js';
 import { refreshArtistMetadata } from './metadataRefresh.js';
 import { scanLocalVideoCandidates } from './localVideoReview.js';
@@ -24,11 +25,18 @@ interface CollectionOptions {
   localScan?: () => Promise<unknown>;
 }
 const collections = new Map<number, Promise<ArtistVideoCollectionResult>>();
+const collectionQueue = new BoundedWorkQueue(2);
 
 export function collectArtistVideoInventory(artistId: number, options: CollectionOptions = {}): Promise<ArtistVideoCollectionResult> {
   const existing = collections.get(artistId);
   if (existing) return existing;
-  const task = runCollection(artistId, options).finally(() => collections.delete(artistId));
+  const task = withForegroundReads(async () => {
+    // Persist waiting work before acquiring a slot. The existing source backfill
+    // can recover it after a restart; monitoring and video decisions stay intact.
+    await prisma.artist.updateMany({ where: { id: artistId, musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null } },
+      data: { videoInventoryStatus: 'pending' } });
+    return collectionQueue.run(() => withForegroundReads(() => runCollection(artistId, options), () => false));
+  }, () => false).finally(() => collections.delete(artistId));
   collections.set(artistId, task);
   return task;
 }

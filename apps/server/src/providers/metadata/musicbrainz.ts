@@ -239,8 +239,8 @@ export interface ArtistMatchAssessment {
 }
 
 // MusicBrainz's search score is useful for candidate ordering but must not be
-// treated as identity confirmation. Exact canonical/alias name plus separate
-// evidence can be auto-confirmed; exact name alone remains a review proposal.
+// treated as identity confirmation. Vidarr's assessed score, starting at 82%
+// for an exact canonical/alias name, governs automatic validated confirmation.
 export function assessArtistCandidate(
   observedName: string,
   candidate: MusicBrainzArtist,

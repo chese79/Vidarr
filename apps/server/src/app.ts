@@ -8,7 +8,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyCookie from '@fastify/cookie';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
-import { prisma } from './db/client.js';
+import { prisma, withForegroundReads } from './db/client.js';
 import { liveWorkflowRoutes } from './api/liveWorkflows.js';
 import { liveRoutes } from './api/live.js';
 import { artistRoutes } from './api/artist.js';
@@ -65,6 +65,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   } });
 
+  // The predicate expires when the response is sent: detached work must not keep
+  // borrowing the foreground read pool after the originating request finishes.
+  app.addHook('onRequest', (_req, reply, done) => {
+    withForegroundReads(done, () => !reply.sent && !reply.raw.destroyed);
+  });
   app.addHook('preSerialization', async (_req, _reply, payload) => withoutRetiredPlayCounters(payload));
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ZodError) {

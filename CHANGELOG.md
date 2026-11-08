@@ -4,6 +4,16 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Responsiveness and automatic artist acceptance (2026-11-07)
+
+- Reserve a bounded reader pool for active web requests, including artist summary/review and Live/Queue pagination, so background work cannot consume the browsing pool. Expire detached request context; preserve transaction connection/rollback behavior and diagnostic redaction.
+- Limit artist source collections to two concurrent scans, saving waiting artists as pending for restart recovery and preserving per-artist deduplication.
+- Populate Library genre filters without downloading the entire artist catalog; retain the legacy fallback if genre statistics fail.
+- Compute Library summary statistics once for the page, total and alphabet rail; aggregate unmatched/category counts and limit candidate/review/image lookups to the visible page. Preserve empty-page metadata and existing filters.
+- Automatically accept the highest-ranked validated MusicBrainz match at 82% or above, even with a close runner-up, then scan sources. Process saved qualifying suggestions and legacy ambiguous rows without repeating the search; persist failed-attempt cooldowns across restarts.
+- Preserve existing canonical ownership protections and individual video review. Linking an observation also starts source collection for its canonical artist.
+- Deploy locally with verified backup and exact preservation of 6,811 saved enrichment journals, configuration and 14 playlists; resume the same batch and verify advancement. Validate 188 unique server checks across full/targeted runs and 13 UI checks; clean superseded Vidarr containers/images and scoped cache after verification.
+
 ### LAN access restoration (2026-11-07)
 
 - Restore the local instance at `http://192.168.0.8:3434` through a per-user Windows TCP listener that discovers Docker's current loopback port and starts at logon.

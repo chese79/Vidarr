@@ -296,8 +296,8 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
   });
   // Use the same effective labels and parent groups as Genres and playlists;
   // the existing artist list remains a fallback while statistics are loading.
-  const allArtists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list });
   const genreStats = useQuery({ queryKey: ['genreStats', 1], queryFn: () => api.genres.stats(1) });
+  const allArtists = useQuery({ queryKey: ['artists'], queryFn: api.artists.list, enabled: genreStats.isError });
   const genreOptions = genreFilterOptions(genreStats.data, allArtists.data ?? []);
 
   const canAdd = (rootFolders.data?.length ?? 0) > 0 && (qualityProfiles.data?.length ?? 0) > 0;

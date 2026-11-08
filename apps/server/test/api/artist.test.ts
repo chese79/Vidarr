@@ -74,6 +74,16 @@ describe('artist routes', () => {
     expect(emptyApproval.json()).toEqual({ grabbed: 0, skipped: 0 });
   });
 
+  it('keeps totals and base letters for empty pages and serializes artist timestamps', async () => {
+    const alpha=await createArtist(rootFolderId,qualityProfileId,{name:'Alpha',sortName:'Alpha'});
+    await createArtist(rootFolderId,qualityProfileId,{name:'Beta',sortName:'Beta'});
+    const get=async(query:string)=>(await app.inject({url:'/api/v1/artist/summary?hideWithoutVideos=false&'+query,headers:authHeaders()})).json();
+    const first=await get('pageSize=1');expect(first.items[0]).toMatchObject({id:alpha.id,addedAt:alpha.addedAt.toISOString()});
+    expect(await get('pageSize=1&page=99')).toMatchObject({items:[],total:2,availableLetters:['A','B']});
+    expect(await get('letter=Z')).toMatchObject({items:[],total:0,availableLetters:['A','B']});
+    expect(await get('search=No%20Such%20Artist')).toMatchObject({items:[],total:0,availableLetters:[]});
+  });
+
   it('hides only artists with zero available, known and unmatched videos before paging and letter counts', async () => {
     const empty = await createArtist(rootFolderId, qualityProfileId, { name: 'Empty', sortName: 'Empty' });
     const known = await createArtist(rootFolderId, qualityProfileId, { name: 'Known', sortName: 'Known' });

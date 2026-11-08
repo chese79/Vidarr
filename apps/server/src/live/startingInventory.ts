@@ -1,4 +1,4 @@
-import { prisma, logActivity } from '../db/client.js';
+import { prisma, readPrisma, logActivity } from '../db/client.js';
 import type { Prisma } from '@prisma/client';
 import { getMusicBrainzLiveReferences, getMusicBrainzLiveEventReferences } from '../providers/metadata/musicbrainz.js';
 import type { DiscoveredYoutubeVideo } from '../providers/youtube/musicDiscovery.js';
@@ -106,8 +106,8 @@ export async function liveStartingItems(artistId: number, kind: 'video' | 'refer
   const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId }, select: { name: true, musicbrainzArtistId: true, liveDiscoveryStatus: true,
     liveDiscoveryAttemptedAt: true, liveDiscoveryCompletedAt: true, liveDiscoveryError: true, videoInventoryStatus: true, videoInventoryError: true } });
   const where = { ...visibleLiveDiscoveries, artistId, kind, ...(search.trim() ? { title: { contains: search.trim() } } : {}) };
-  const [total, items] = await prisma.$transaction([prisma.liveDiscoveryItem.count({ where }),
-    prisma.liveDiscoveryItem.findMany({ where, orderBy: [{ rank: 'desc' }, { id: 'asc' }], skip: offset, take: limit,
+  const [total, items] = await Promise.all([readPrisma.liveDiscoveryItem.count({ where }),
+    readPrisma.liveDiscoveryItem.findMany({ where, orderBy: [{ rank: 'desc' }, { id: 'asc' }], skip: offset, take: limit,
       include: { recording: { select: { claimedCoverage: true, reviewStatus: true, parts: { select: { available: true, serverCopies: { where: { available: true }, select: { id: true } } } },
         queueItems: { where: { status: { in: ['queued', 'downloading', 'importing', 'submissionUnknown'] } }, select: { status: true }, take: 1 } } } } })]);
   const evidence = await discoveryEvidence(items, artist);

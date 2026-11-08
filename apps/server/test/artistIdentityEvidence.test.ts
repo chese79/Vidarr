@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '../src/db/client.js';
-import { artistNameSearchVariants, confirmArtistIdentity, discoverArtistIdentityCandidates } from '../src/pipeline/artistIdentity.js';
+import { artistNameSearchVariants, autoConfirmStoredArtistIdentity, confirmArtistIdentity, discoverArtistIdentityCandidates } from '../src/pipeline/artistIdentity.js';
+import { collectArtistVideoInventory } from '../src/pipeline/artistVideoInventory.js';
 import { lookupMusicBrainzArtist, searchMusicBrainzArtists } from '../src/providers/metadata/musicbrainz.js';
 import { createArtist, createLibraryConnector, createQuality, createQualityProfile, createRootFolder, resetDb } from './support/db.js';
 
@@ -19,7 +20,7 @@ vi.mock('../src/providers/metadata/musicbrainz.js', async (importOriginal) => {
     ]),
     lookupRecordingArtistIds: lookups.recording,
     lookupReleaseArtistIds: lookups.release,
-    lookupMusicBrainzArtist: vi.fn(),
+    lookupMusicBrainzArtist: vi.fn().mockResolvedValue({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Shared Name', sortName: 'Shared Name', type: null, country: null, disambiguation: null, genres: [], aliases: [], imvdbSlug: 'shared-name' }),
   };
 });
 
@@ -72,13 +73,33 @@ describe('observed artist-credit match evidence', () => {
     const root = await createRootFolder();
     const quality = await createQuality();
     const profile = await createQualityProfile(quality.id);
-    const artist = await createArtist(root.id, profile.id, { name: 'Shared Name' });
+    const artist = await createArtist(root.id, profile.id, { name: 'Different Observation' });
     await discoverArtistIdentityCandidates(artist.id);
     await prisma.musicBrainzArtistCandidate.updateMany({ where: { artistId: artist.id }, data: { status: 'rejected' } });
     expect(await discoverArtistIdentityCandidates(artist.id)).toHaveLength(2);
     vi.mocked(lookupMusicBrainzArtist).mockRejectedValueOnce(new Error('MusicBrainz unavailable'));
     await expect(confirmArtistIdentity(artist.id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).rejects.toThrow('confirmation failed');
     expect(await prisma.musicBrainzArtistCandidate.count({ where: { artistId: artist.id, status: 'suggested' } })).toBe(2);
+  });
+
+  it('accepts the highest 82% match even with an equally scored runner-up and scans sources', async () => {
+    const root=await createRootFolder(); const profile=await createQualityProfile((await createQuality()).id);
+    const artist=await createArtist(root.id,profile.id,{name:'Shared Name'});
+    vi.mocked(collectArtistVideoInventory).mockClear();
+    await discoverArtistIdentityCandidates(artist.id);
+    expect((await prisma.artist.findUniqueOrThrow({where:{id:artist.id}})).musicbrainzMatchStatus).toBe('confirmed');
+    expect(collectArtistVideoInventory).toHaveBeenCalledWith(artist.id,{refreshImvdb:false});
+  });
+
+  it('accepts a saved legacy ambiguous proposal without searching MusicBrainz again', async () => {
+    const root=await createRootFolder(); const profile=await createQualityProfile((await createQuality()).id);
+    const artist=await createArtist(root.id,profile.id,{name:'Shared Name'});
+    await prisma.artist.update({where:{id:artist.id},data:{musicbrainzMatchStatus:'ambiguous'}});
+    await prisma.musicBrainzArtistCandidate.create({data:{artistId:artist.id,musicbrainzArtistId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'Shared Name',score:0.82,evidence:'{}'}});
+    vi.mocked(searchMusicBrainzArtists).mockClear();
+    expect(await autoConfirmStoredArtistIdentity(artist.id)).toBe(true);
+    expect(searchMusicBrainzArtists).not.toHaveBeenCalled();
+    expect((await prisma.artist.findUniqueOrThrow({where:{id:artist.id}})).musicbrainzMatchStatus).toBe('confirmed');
   });
 
   it('links a duplicate observation to an existing Library artist without deleting its source evidence', async () => {

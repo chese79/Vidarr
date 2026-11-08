@@ -648,16 +648,42 @@ remain required; a generic local deployment request does not authorize remote pu
 
 Observe an artist from audio/video inventory → background MusicBrainz search (three artists per
 15-second pass) → rank names, aliases and available credit evidence → validate and confirm an
-unambiguous candidate scoring at least 82% → link an existing canonical owner or collect the
+highest-ranked candidate scoring at least 82% → link an existing canonical owner and collect the
 confirmed artist's video inventory. This shared artist flow serves Music Videos and Live.
 The user explicitly authorized automatic confirmation at this threshold. Scores are Vidarr's
 assessment, not a statistical probability. Exact normalized names/aliases start at 82%.
-Competing candidates less than ten percentage points apart, lower scores and conflicting catalog
-ownership remain in Artist Review. Confirmation never accepts individual source videos.
+The 2026-11-07 user policy removes the extra runner-up margin check: a close competing candidate
+does not block an 82% acceptance. Lower scores and conflicting catalog ownership remain in Artist
+Review. Confirmation never accepts individual source videos.
 Attempts are checkpointed before network access and cool down for one day, including failures;
-untouched observations proceed first. Suggested rows can be reconsidered after cooldown; ambiguous
-rows require explicit review. Manual searches remain available immediately. Provider errors are
+untouched observations proceed first. Saved suggestions at 82% or above, including legacy ambiguous
+rows, are accepted without another search or waiting for the search cooldown. The attempt is saved
+before validation so failures wait one day, across restarts, instead of retrying every 15 seconds.
+Low-score suggested/ambiguous rows can be searched again after cooldown. Manual searches remain available immediately. Provider errors are
 logged and preserve existing identities. Reloading/restarting resumes from persisted attempts.
+
+Source admission (2026-11-07): save the accepted artist's source state as pending → wait for one
+of two collection slots → scan sources → preserve collection/review outcomes. Waiting work is
+visible in persisted artist state and recovered by the existing backfill after restart, with its
+normal retry cooldown. Per-artist deduplication preserves a single collection result. Acceptance
+does not wait for a source slot and never approves individual videos or enables monitoring.
+
+Library loading (2026-11-07): fetch the paged artist summary and genre statistics → populate genre
+filters from statistics → fetch the complete legacy artist list only if statistics fail. Automatic
+refresh and existing filters remain. Active web-request authentication/model reads and the explicitly read-only artist
+summary/review SQL use a two-connection reader pool, including independent Live and Queue
+pagination reads. These read-only pairs avoid SQLite's writer-locking Prisma transaction wrapper;
+counts and page rows can reflect adjacent commits while discovery runs. Mutating transactions
+retain the single writer; transaction reads never leave their connection. Scheduled/background
+reads stay on the background connection, and response completion expires the foreground context
+for detached tasks. Source collections explicitly relinquish that context. WAL exposes committed data during
+background writes; no result cache delays credential changes or user edits.
+
+The artist summary computes shared statistics once in a single statement for page, total and
+alphabet rail. Unmatched/category counts use grouped passes; candidate and review lookups run
+only for returned rows, and image hints fetch only their normalized names. An empty/out-of-range
+page returns no artist placeholder while retaining its total and base-filter letters. Existing
+count filters, article-aware ordering, unconfirmed navigation and timestamp serialization remain.
 
 Production LAN access uses http://192.168.0.8:3434. Windows rule Vidarr-LAN-3434 allows inbound TCP
 3434 at that address only from LocalSubnet on Private networks. Keep the firewall enabled; remove

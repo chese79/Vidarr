@@ -105,7 +105,7 @@ pipeline is:
 
 1. consume an embedded or connector-provided MusicBrainz artist ID when available;
 2. otherwise propose MusicBrainz candidates using exact names, aliases, and supporting evidence;
-3. validate and automatically confirm unambiguous matches scoring at least 82%; require review otherwise; and
+3. validate and automatically confirm the highest-ranked match scoring at least 82%; require review below that threshold; and
 4. retain the selected MusicBrainz ID as the stable canonical artist identity.
 
 MusicBrainz supplies canonical names, aliases, artist type, country, disambiguation, genres, and
@@ -517,4 +517,4 @@ review. Album year is separate from video year. Batches retain provenance and re
 No acquisition, catalog acceptance or original-video modification is implied. See
 [metadata enrichment](metadata-enrichment.md).
 
-Artist matching policy update (2026-11-05): the user authorizes automatic confirmation for an unambiguous Vidarr match score of at least 82%, after validating the MusicBrainz ID. This supersedes the name-only manual-review requirement above for this threshold. Ambiguity, lower scores and catalog conflicts retain review. Automatic background searches populate existing observations in both MV and Live; see process-flows.md for cadence and recovery.
+Artist matching policy update (2026-11-07): the user authorizes automatic confirmation of the highest-ranked Vidarr match score of at least 82%, after validating the MusicBrainz ID. A close runner-up no longer requires a confirmation click. Saved qualifying suggestions, including legacy ambiguous observations, are processed without a new search. Lower scores and conflicting existing catalog ownership retain review; provider failures retry without discarding evidence. Acceptance starts source collection for the canonical artist in both MV and Live, including when linking an observation to an existing owner. Individual source videos retain their separate review requirements. See process-flows.md for cadence and recovery.

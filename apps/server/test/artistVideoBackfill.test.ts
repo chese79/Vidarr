@@ -49,6 +49,31 @@ describe('automatic video inventory backfill', () => {
     } });
   }
 
+  it('persists queued collections for recovery and runs at most two artist scans at once', async () => {
+    const root=await createRootFolder({path:rootPath});const profile=await createQualityProfile((await createQuality()).id);
+    const artists=[];
+    for(let i=0;i<3;i++){
+      const artist=await createArtist(root.id,profile.id,{name:`Queued ${i}`});
+      await prisma.artist.update({where:{id:artist.id},data:{musicbrainzMatchStatus:'confirmed',musicbrainzArtistId:`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`,videoInventoryStatus:'complete',videoInventoryCheckedAt:new Date()}});
+      await prisma.youtubeSource.create({data:{artistId:artist.id,url:`https://www.youtube.com/@queued${i}`,type:'channel'}});artists.push(artist);
+    }
+    const releases:Array<()=>void>=[];
+    vi.mocked(listChannelVideos).mockClear();
+    for(let i=0;i<2;i++)vi.mocked(listChannelVideos).mockImplementationOnce(()=>new Promise(resolve=>releases.push(()=>resolve([]))));
+    vi.mocked(listChannelVideos).mockResolvedValue([]);
+    const {collectArtistVideoInventory}=await import('../src/pipeline/artistVideoInventory.js');
+    const tasks=artists.map(artist=>collectArtistVideoInventory(artist.id,{refreshImvdb:false,scanLocal:false}));
+    try{
+      await vi.waitFor(()=>expect(releases).toHaveLength(2));
+      expect(listChannelVideos).toHaveBeenCalledTimes(2);
+      const states=await prisma.artist.findMany({where:{id:{in:artists.map(artist=>artist.id)}},select:{id:true,videoInventoryStatus:true}});
+      expect(states.filter(artist=>artist.videoInventoryStatus==='running')).toHaveLength(2);
+      const queued=states.filter(artist=>artist.videoInventoryStatus==='pending');expect(queued).toHaveLength(1);
+      const {sourceCollectionDue}=await import('../src/pipeline/artistVideoBackfill.js');
+      expect(await prisma.artist.count({where:{AND:[sourceCollectionDue(),{id:queued[0].id}]}})).toBe(1);
+    }finally{releases.forEach(release=>release());await Promise.all(tasks);vi.mocked(listChannelVideos).mockResolvedValue([{youtubeVideoId:'test-song',title:'Test Artist - Song (Official Music Video)'}]);}
+  });
+
   it('retries partial checks after cooldown without erasing earlier candidates or success timestamps', async () => {
     const artist = await confirmedArtist();
     const { backfillArtistVideoInventories } = await import('../src/pipeline/artistVideoBackfill.js');

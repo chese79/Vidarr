@@ -9,7 +9,7 @@ import {
   BulkMonitorArtistsBodySchema,
   BulkArtistIdsBodySchema,
 } from '@vidarr/shared-types';
-import { prisma, logActivity } from '../db/client.js';
+import { prisma, readPrisma, logActivity } from '../db/client.js';
 import { sortNameFor, normalizeTitle } from '../pipeline/normalize.js';
 import { refreshArtistMetadata } from '../pipeline/metadataRefresh.js';
 import { matchStandardGenre } from '../pipeline/genreMatch.js';
@@ -35,8 +35,8 @@ async function loadArtistReview(search?: string, offset = 0, limit?: number) {
   const predicate = Prisma.sql`a."musicbrainzMatchStatus" NOT IN ('confirmed', 'linked')
     ${search ? Prisma.sql`AND a."name" LIKE ${`%${escapeLikeTerm(search)}%`} ESCAPE '\\'` : Prisma.empty}`;
   const [count, ranks] = await Promise.all([
-    prisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`SELECT COUNT(*) AS total FROM "Artist" a WHERE ${predicate}`),
-    prisma.$queryRaw<Array<{ id: number; suggestedMatchCount: bigint }>>(Prisma.sql`
+    readPrisma.$queryRaw<Array<{ total: bigint }>>(Prisma.sql`SELECT COUNT(*) AS total FROM "Artist" a WHERE ${predicate}`),
+    readPrisma.$queryRaw<Array<{ id: number; suggestedMatchCount: bigint }>>(Prisma.sql`
       SELECT a."id", (SELECT COUNT(*) FROM "MusicBrainzArtistCandidate" c
         WHERE c."artistId" = a."id" AND c."status" = 'suggested') AS suggestedMatchCount
       FROM "Artist" a WHERE ${predicate}
@@ -82,6 +82,8 @@ interface ArtistSummaryRow {
   aggregatePlayCount: number | null;
   letter: string;
 }
+type ArtistSummaryMetadata = { total: number | bigint; availableLetters: string };
+type ArtistSummaryResult = Omit<ArtistSummaryRow, 'id'> & ArtistSummaryMetadata & { id: number | null };
 
 export async function artistRoutes(app: FastifyInstance) {
   app.post('/api/v1/artist/:id/confirm-genres-download-all', async (req, reply) => {
@@ -299,12 +301,9 @@ export async function artistRoutes(app: FastifyInstance) {
   // objects), and minKnownVideos/minPlayCount/hasMissing/letter filter those
   // aggregates before LIMIT/OFFSET paginates — so a request only ever pulls
   // one page of ARTIST rows into Node, regardless of catalog size. The one
-  // accepted tradeoff: the CTE chain below recomputes per-video aggregates
-  // across the whole MusicVideo table on each of the three queries (page,
-  // total, availableLetters) rather than a single shared temp table — still
-  // entirely inside SQLite over indexed FKs, and vastly cheaper than the
-  // previous approach of loading every artist's full video/file/queue graph
-  // into JS on every request. A genre filter resolves only lightweight artist/
+  // CTE chain materializes shared statistics once for the page, total and rail.
+  // Count related videos in grouped passes; only the returned page needs review/
+  // candidate lookups. A genre filter resolves only lightweight artist/
   // provenance rows first, using the same effective hierarchy as genre statistics;
   // the resulting IDs are applied in SQL before counts, letters and pagination.
   //
@@ -384,6 +383,7 @@ export async function artistRoutes(app: FastifyInstance) {
       video_stats AS (
         SELECT
           mv."artistId" AS "artistId",
+          mv."catalogKind" AS "catalogKind",
           mv."monitored" AS "isMonitored",
           CASE WHEN mv."hasFile" = 1 THEN 1 ELSE 0 END AS "isLocal",
           CASE WHEN mv."hasFile" = 1 OR ls."musicVideoId" IS NOT NULL THEN 1 ELSE 0 END AS "isAvailable",
@@ -401,6 +401,8 @@ export async function artistRoutes(app: FastifyInstance) {
         SELECT
           "artistId",
           COUNT(*) AS "known",
+          SUM(CASE WHEN "catalogKind" = 'supplementary' THEN 1 ELSE 0 END) AS "supplementary",
+          SUM(CASE WHEN "catalogKind" = 'inventory' THEN 1 ELSE 0 END) AS "inventory",
           SUM("isLocal") AS "local",
           SUM("isAvailable") AS "available",
           SUM("isDownloading") AS "downloading",
@@ -410,13 +412,19 @@ export async function artistRoutes(app: FastifyInstance) {
         FROM video_stats
         GROUP BY "artistId"
       ),
-      filtered AS (
+      unmatched_stats AS (
+        SELECT lv."normalizedArtistName", COUNT(*) AS "unmatched"
+        FROM "LibraryVideo" lv JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
+        WHERE lc."enabled" = 1 AND lv."available" = 1
+          AND (lv."musicVideoId" IS NULL OR lv."matchConfidence" IS NOT NULL)
+        GROUP BY lv."normalizedArtistName"
+      ),
+      filtered AS MATERIALIZED (
         SELECT
           a."id" AS "id",
           a."addedAt" AS "addedAt",
           a."videoInventoryStatus" AS "videoInventoryStatus",
           a."videoInventoryError" AS "videoInventoryError",
-          (SELECT COUNT(*) FROM "VideoReviewCandidate" vrc WHERE vrc."artistId" = a."id" AND vrc."decision" = 'pending') AS "pendingVideoReviewCount",
           a."name" AS "name",
           a."sortName" AS "sortName",
           ${librarySortName} AS "librarySortName",
@@ -424,9 +432,6 @@ export async function artistRoutes(app: FastifyInstance) {
           a."monitored" AS "monitored",
           a."musicbrainzMatchStatus" AS "musicbrainzMatchStatus",
           a."musicbrainzMatchConfidence" AS "musicbrainzMatchConfidence",
-          (SELECT c."musicbrainzArtistId" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = a."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateId",
-          (SELECT c."name" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = a."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateName",
-          (SELECT c."score" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = a."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateScore",
           a."posterUrl" AS "posterUrl",
           COALESCE(s."known", 0) AS "knownVideoCount",
           COALESCE(s."local", 0) AS "localVideoCount",
@@ -434,18 +439,9 @@ export async function artistRoutes(app: FastifyInstance) {
           COALESCE(s."known", 0) - COALESCE(s."available", 0) AS "missingVideoCount",
           COALESCE(s."downloading", 0) AS "downloadingVideoCount",
           COALESCE(s."monitored", 0) AS "monitoredVideoCount",
-          (SELECT COUNT(*) FROM "LibraryVideo" ulv
-             JOIN "LibraryConnector" ulc ON ulc."id" = ulv."connectorId"
-             WHERE ulc."enabled" = 1 AND ulv."available" = 1
-               AND ulv."normalizedArtistName" = LOWER(TRIM(a."name"))
-               AND (ulv."musicVideoId" IS NULL OR ulv."matchConfidence" IS NOT NULL)
-          ) AS "unmatchedVideoCount",
-          (SELECT COUNT(*) FROM "MusicVideo" smv
-             WHERE smv."artistId" = a."id" AND smv."catalogKind" = 'supplementary'
-          ) AS "supplementaryVideoCount",
-          (SELECT COUNT(*) FROM "MusicVideo" imv
-             WHERE imv."artistId" = a."id" AND imv."catalogKind" = 'inventory'
-          ) AS "inventoryVideoCount",
+          COALESCE(u."unmatched", 0) AS "unmatchedVideoCount",
+          COALESCE(s."supplementary", 0) AS "supplementaryVideoCount",
+          COALESCE(s."inventory", 0) AS "inventoryVideoCount",
           CASE WHEN COALESCE(s."playCountKnownN", 0) > 0 THEN s."playCountSum" ELSE NULL END AS "aggregatePlayCount",
           CASE
             WHEN UPPER(SUBSTR(${librarySortName}, 1, 1)) BETWEEN 'A' AND 'Z'
@@ -454,38 +450,45 @@ export async function artistRoutes(app: FastifyInstance) {
           END AS "letter"
         FROM "Artist" a
         LEFT JOIN artist_stats s ON s."artistId" = a."id"
+        LEFT JOIN unmatched_stats u ON u."normalizedArtistName" = LOWER(TRIM(a."name"))
         WHERE ${baseWhere}
       )
     `;
 
-    const [page, totalRows, letterRows, imageableNames] = await Promise.all([
-      prisma.$queryRaw<ArtistSummaryRow[]>(Prisma.sql`
+    const rows = await readPrisma.$queryRaw<ArtistSummaryResult[]>(Prisma.sql`
         ${filteredCte}
-        SELECT * FROM filtered WHERE ${refineWhere}
-        ORDER BY "librarySortName" COLLATE NOCASE ASC, "id" ASC
-        LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}
-      `),
-      prisma.$queryRaw<{ total: number }[]>(Prisma.sql`
-        ${filteredCte}
-        SELECT COUNT(*) AS "total" FROM filtered WHERE ${refineWhere}
-      `),
-      // availableLetters reflects search/genre/monitored only (not the
-      // count/letter/hasMissing refinements) — matches the rail's job of
-      // showing every letter reachable from the *current* base filters.
-      prisma.$queryRaw<{ letter: string }[]>(Prisma.sql`
-        ${filteredCte}
-        SELECT DISTINCT "letter" FROM filtered WHERE ${query.hideWithoutVideos === 'true' ? videoPresence : Prisma.sql`1=1`}
-      `),
+        SELECT page.*,
+          (SELECT COUNT(*) FROM "VideoReviewCandidate" vrc WHERE vrc."artistId" = page."id" AND vrc."decision" = 'pending') AS "pendingVideoReviewCount",
+          (SELECT c."musicbrainzArtistId" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = page."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateId",
+          (SELECT c."name" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = page."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateName",
+          (SELECT c."score" FROM "MusicBrainzArtistCandidate" c WHERE c."artistId" = page."id" AND c."status" = 'suggested' ORDER BY c."score" DESC LIMIT 1) AS "musicbrainzCandidateScore",
+          totals."total", letters."availableLetters"
+        FROM (SELECT COUNT(*) AS "total" FROM filtered WHERE ${refineWhere}) totals
+        CROSS JOIN (
+          SELECT json_group_array("letter") AS "availableLetters" FROM (
+            SELECT DISTINCT "letter" FROM filtered
+            WHERE ${query.hideWithoutVideos === 'true' ? videoPresence : Prisma.sql`1=1`}
+          )
+        ) letters
+        LEFT JOIN (
+          SELECT * FROM filtered WHERE ${refineWhere}
+          ORDER BY "librarySortName" COLLATE NOCASE ASC, "id" ASC
+          LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}
+        ) page ON 1=1
+        ORDER BY page."librarySortName" COLLATE NOCASE ASC, page."id" ASC
+      `);
+    // The metadata side always yields one row, even for an empty/out-of-range
+    // page. Never expose its null page placeholder as an artist.
+    const page = rows.filter((row): row is ArtistSummaryRow & ArtistSummaryMetadata => row.id !== null);
+    const imageableNames = page.length ? await prisma.libraryArtist.findMany({
       // Cheap existence hint for whether the image proxy has anything to try
       // — avoids every row firing a request that will just 404. A name match
       // against a connector whose provider doesn't implement fetchArtistImage
       // (Subsonic) is a rare, harmless over-estimate: the proxy route below
       // just 404s in that case, same as an artist with no image at all.
-      prisma.libraryArtist.findMany({
-        where: { connector: { enabled: true } },
+        where: { connector: { enabled: true }, normalizedName: { in: page.map(row => normalizeTitle(row.name)) } },
         select: { normalizedName: true },
-      }),
-    ]);
+      }) : [];
     const imageableNameSet = new Set(imageableNames.map((a) => a.normalizedName));
 
     const items = page.map((row) => ({
@@ -515,11 +518,11 @@ export async function artistRoutes(app: FastifyInstance) {
       inventoryVideoCount: Number(row.inventoryVideoCount),
       aggregatePlayCount: row.aggregatePlayCount == null ? null : Number(row.aggregatePlayCount),
     }));
-    const availableLetters = letterRows.map((r) => r.letter).sort();
+    const availableLetters = (JSON.parse(rows[0]?.availableLetters ?? '[]') as string[]).sort();
 
     return {
       items,
-      total: Number(totalRows[0]?.total ?? 0),
+      total: Number(rows[0]?.total ?? 0),
       page: query.page,
       pageSize: query.pageSize,
       availableLetters,

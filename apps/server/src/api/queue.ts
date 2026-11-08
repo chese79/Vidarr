@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
-import { prisma } from '../db/client.js';
+import { prisma, readPrisma } from '../db/client.js';
 import { refreshQueue } from '../pipeline/grab.js';
 import { z } from 'zod';
 import { getDownloadClientProvider } from '../providers/downloadclient/index.js';
@@ -121,9 +121,9 @@ export async function queueRoutes(app: FastifyInstance) {
         pageSize: z.coerce.number().int().min(1).max(100).default(50),
       }).parse(req.query);
       const where = { eventType };
-      const [total, items] = await prisma.$transaction([
-        prisma.history.count({ where }),
-        prisma.history.findMany({ where, orderBy: [{ date: 'desc' }, { id: 'desc' }],
+      const [total, items] = await Promise.all([
+        readPrisma.history.count({ where }),
+        readPrisma.history.findMany({ where, orderBy: [{ date: 'desc' }, { id: 'desc' }],
           skip: (page - 1) * pageSize, take: pageSize,
           include: { recording: { select: { id: true, title: true, claimedCoverage: true, parts: { select: { available: true, serverCopies: { where: { available: true, connector: { enabled: true } }, select: { connectorId: true, libraryId: true } } } } } }, musicVideo: { include: { artist: { include: { rootFolder: { select: { targetConnectorId: true } } } },
             libraryVideos: { where: { available: true, matchConfidence: null, connector: { enabled: true } }, select: { connectorId: true } } } } } }),

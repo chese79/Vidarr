@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { CreateLivePerformance, CreateRecordingCandidate, UpdateLivePerformance, LiveSetting, LiveStyle } from '@vidarr/shared-types';
-import { prisma } from '../db/client.js';
+import { prisma, readPrisma } from '../db/client.js';
 
 const idParams = z.object({ id: z.coerce.number().int().positive() });
 const querySchema = z.object({
@@ -22,8 +22,8 @@ export async function liveRoutes(app: FastifyInstance) {
   app.get('/api/v1/live/artists', async req => {
     const query = querySchema.parse(req.query);
     const where = { id: query.artistId, musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null }, ...(query.search ? { name: { contains: query.search } } : {}) };
-    const [total, items] = await prisma.$transaction([prisma.artist.count({ where }),
-      prisma.artist.findMany({ where, select: artistSelect, orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: query.offset, take: query.limit })]);
+    const [total, items] = await Promise.all([readPrisma.artist.count({ where }),
+      readPrisma.artist.findMany({ where, select: artistSelect, orderBy: [{ name: 'asc' }, { id: 'asc' }], skip: query.offset, take: query.limit })]);
     return { total, items, offset: query.offset, limit: query.limit };
   });
 
@@ -34,8 +34,8 @@ export async function liveRoutes(app: FastifyInstance) {
       ...(query.search ? { OR: [{ title: { contains: query.search } }, { venue: { contains: query.search } },
         { city: { contains: query.search } }, { artist: { name: { contains: query.search } } }] } : {}),
     };
-    const [total, rows] = await prisma.$transaction([prisma.livePerformance.count({ where }),
-      prisma.livePerformance.findMany({ where, include: summaryInclude, orderBy: { id: 'desc' }, skip: query.offset, take: query.limit })]);
+    const [total, rows] = await Promise.all([readPrisma.livePerformance.count({ where }),
+      readPrisma.livePerformance.findMany({ where, include: summaryInclude, orderBy: { id: 'desc' }, skip: query.offset, take: query.limit })]);
     const states = await performanceStates(rows.map(row => row.id));
     return { total, offset: query.offset, limit: query.limit, items: rows.map(row => ({ ...row, recordingState: states.get(row.id) })) };
   });
@@ -76,8 +76,8 @@ export async function liveRoutes(app: FastifyInstance) {
     const query = catalogQuerySchema.parse(req.query);
     const where: Prisma.RecordingWhereInput = { catalogType: 'live', reviewStatus: { notIn: ['returnedToMusicVideos', 'deleted', 'identifiedDuplicate'] }, performances: { some: { performance: { removedAt: null, artistId: query.artistId, setting: query.setting, style: query.style } } },
       ...(query.search ? { title: { contains: query.search } } : {}) };
-    const [total, items] = await prisma.$transaction([prisma.recording.count({ where }),
-      prisma.recording.findMany({ where, include: recordingInclude, orderBy: { id: 'desc' }, skip: query.offset, take: query.limit })]);
+    const [total, items] = await Promise.all([readPrisma.recording.count({ where }),
+      readPrisma.recording.findMany({ where, include: recordingInclude, orderBy: { id: 'desc' }, skip: query.offset, take: query.limit })]);
     return { total, items, offset: query.offset, limit: query.limit };
   });
 

@@ -127,7 +127,9 @@ async function storeCandidates(artistId: number, observedName: string, candidate
       recordingMatchCount: recordingMatches.get(candidate.id) ?? 0,
       releaseMatchCount: releaseMatches.get(candidate.id) ?? 0,
     }),
-  })).sort((left, right) => right.assessment.confidence - left.assessment.confidence);
+  })).sort((left, right) => right.assessment.confidence - left.assessment.confidence
+    || (right.candidate.score ?? 0) - (left.candidate.score ?? 0)
+    || left.candidate.id.localeCompare(right.candidate.id));
   await prisma.$transaction(async (tx) => {
     const current = await tx.artist.findUniqueOrThrow({ where: { id: artistId } });
     if (current.musicbrainzArtistId || ['confirmed', 'linked'].includes(current.musicbrainzMatchStatus)) return;
@@ -163,11 +165,10 @@ async function storeCandidates(artistId: number, observedName: string, candidate
       });
     }
     const best = assessed[0];
-    const runnerUp = assessed[1];
     await tx.artist.update({
       where: { id: artistId },
       data: {
-        musicbrainzMatchStatus: best ? (runnerUp && best.assessment.confidence - runnerUp.assessment.confidence < 0.1 ? 'ambiguous' : 'suggested') : 'notFound',
+        musicbrainzMatchStatus: best ? 'suggested' : 'notFound',
         musicbrainzMatchConfidence: best?.assessment.confidence ?? null,
         musicbrainzMatchEvidence: best ? evidenceJson(best.assessment) : null,
         musicbrainzRefreshedAt: new Date(),
@@ -224,13 +225,31 @@ export async function discoverArtistIdentityCandidates(artistId: number, searchN
   await storeCandidates(artistId, artist.name, candidates, artist.genre);
   const suggestions = await prisma.musicBrainzArtistCandidate.findMany({
     where: { artistId, status: 'suggested' },
-    orderBy: { score: 'desc' },
+    orderBy: [{ score: 'desc' }, { id: 'asc' }],
   });
-  const current = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
-  if (current.musicbrainzMatchStatus === 'suggested' && suggestions[0]?.score >= 0.82) {
-    await confirmArtistIdentity(artistId, suggestions[0].musicbrainzArtistId);
-  }
+  await autoConfirmStoredArtistIdentity(artistId);
   return suggestions;
+}
+
+// Also consumes saved proposals, including legacy ambiguous rows, without paying
+// for another search. The persisted attempt marker gives provider failures a
+// restart-safe cooldown without delaying proposals that have never been tried.
+export async function autoConfirmStoredArtistIdentity(artistId: number): Promise<boolean> {
+  const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+  if (artist.musicbrainzArtistId || ['confirmed', 'linked'].includes(artist.musicbrainzMatchStatus)) return false;
+  const candidate = await prisma.musicBrainzArtistCandidate.findFirst({
+    where: { artistId, status: 'suggested', score: { gte: 0.82 } },
+    orderBy: [{ score: 'desc' }, { id: 'asc' }],
+  });
+  if (!candidate) return false;
+  let evidence: Record<string, unknown> = {};
+  try { evidence = JSON.parse(artist.musicbrainzMatchEvidence ?? '{}') ?? {}; } catch { /* retain identity even with old malformed evidence */ }
+  await prisma.artist.update({ where: { id: artistId }, data: {
+    musicbrainzRefreshedAt: new Date(),
+    musicbrainzMatchEvidence: evidenceJson({ ...evidence, autoConfirmationAttemptedAt: new Date().toISOString() }),
+  } });
+  await confirmArtistIdentity(artistId, candidate.musicbrainzArtistId);
+  return true;
 }
 
 export async function confirmArtistIdentity(artistId: number, musicbrainzArtistId: string) {
@@ -249,6 +268,7 @@ export async function confirmArtistIdentity(artistId: number, musicbrainzArtistI
         musicbrainzMatchEvidence: evidenceJson({ source: 'existing-library-artist', canonicalArtistId: owner.id, musicbrainzArtistId }),
       } });
     });
+    void collectArtistVideoInventory(owner.id).catch((error) => logActivity('warn', 'artist-identity:inventory', error));
     return prisma.artist.findUniqueOrThrow({ where: { id: owner.id } });
   }
   await resolveArtistIdentityAndCatalog(artistId, {

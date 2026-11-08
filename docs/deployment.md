@@ -313,13 +313,29 @@ See [process flows](process-flows.md#youtube-music-official-discovery-2026-10-16
 
 ### SQLite access and download ordering
 
-The application uses one Prisma SQLite connection (`connection_limit=1`) to serialize API,
-source-collection and background queue database work. Network requests and transfers remain
-concurrent. Runtime connection URLs default to `socket_timeout=15` and `pool_timeout=30` seconds;
-explicit timeout parameters are preserved. WAL and the 15-second busy timeout remain enabled at
-startup, now on the same connection used for subsequent operations. Keep transactions short and
+The application serializes mutations and complete transactions on one Prisma SQLite writer
+(`connection_limit=1`), together with background model reads. Since 2026-11-07, active web-request
+model reads and explicitly read-only artist summary/review SQL use a reserved two-connection pool,
+avoiding the background queue. Request context expires when the response is sent, so detached
+work cannot retain that reservation. Source collection explicitly runs outside that context.
+Read-only pagination pairs for Live and Queue history use independent committed reads on that pool.
+They deliberately avoid Prisma transaction wrappers, which acquire SQLite's writer lock even
+for a read-only batch. Counts and pages can reflect adjacent commits during active discovery;
+normal refresh reconciles them. The artist summary instead returns page/total/letters from one
+statement: materialize shared aggregates once, group unmatched and category counts, and perform
+candidate/review/image lookups only for the visible page. Empty pages retain total and rail data.
+Interactive and array transaction reads stay on their original writer connection, retaining
+read-your-writes, ordering and rollback. Raw SQL is never automatically classified or rerouted.
+Both clients retain credential/error diagnostic redaction. No schema migration or result cache
+is involved. Network requests and transfers remain concurrent. Runtime connection URLs default
+to `socket_timeout=15` and `pool_timeout=30` seconds; explicit timeouts are preserved. WAL persists
+for the database and the 15-second writer busy timeout remains enabled at startup. Keep transactions short and
 use their supplied transaction client for every query inside them. Failed source collections
 retain existing data and remain eligible for the normal ten-minute retry or Refresh all sources.
+Artist source collections run at most two at a time, with FIFO waiting within the process and
+per-artist deduplication. Waiting artists are persisted as `pending` before acquiring a slot;
+the existing source backfill recovers them after restart under its ten-minute retry policy.
+This admission limit does not enable downloads, accept videos, or discard source evidence.
 
 The additive `20261016170000_download_queue_order` migration adds a queue-position column and
 index. Existing requests default to zero and retain added-time/ID FIFO order. Manual reorder
@@ -791,3 +807,59 @@ processed, 480 updated); batch 3 resumed from cursor 6101 and advances to 6148 (
 Host checks return HTTP 200 for both LAN health and UI; the listener binds the intended address.
 A fresh second-computer test remains separate from these host-side checks. Temporary failed-candidate
 and audit containers can be removed after these checks without volume-removal flags.
+
+## Browsing responsiveness and automatic acceptance — 2026-11-07
+
+The local release is `vidarr-performance-20261107:release`, manifest
+`sha256:98fba2ab0bed9a116173923d3536efc9cec67975c0d4791b5ef3468732455ebb`.
+It reserves the two-connection reader for active web requests, bounds artist collection to two
+workers, and computes the artist summary in one statement. Library gets genre filters from
+statistics, with its legacy full-list fallback only on failure. The web bundle remains the
+verified `index-CMqMrANy.js`; the final server-only iterations reuse it. Native Jellyfin and
+unrelated Docker services remain running. No database schema or runtime dependencies changed.
+
+MusicBrainz matching automatically validates and accepts the highest-ranked proposal at 82% or
+above, including legacy ambiguous rows. Saved qualifying proposals take priority over new searches;
+their validation attempts are checkpointed before HTTP and cool down on failure. Acceptance starts
+or queues source collection, including an existing canonical owner after linking. Lower scores and
+conflicting catalog ownership retain review; individual source videos are never accepted merely
+because the artist matched. The observed qualifying backlog decreased from 318 to 214, with new
+confirmed artists and queued source scans visible in production; it is ongoing work, not a claim
+that every artist/source scan has finished.
+
+Node 22 server/web builds pass. Verification covers 188 unique server checks across full and
+targeted runs and 13 UI checks. A full reserved-reader/source-limit run passed 186 checks; its one
+remaining queue-test assertion assumed which artist would obtain a slot first. After correcting
+only that assertion, all six source/backfill checks pass, including two running scans and one
+persisted/recoverable waiting scan. The subsequent summary-only change passes all 51 artist API
+checks, including new empty-page/total/letter/timestamp coverage. Real authenticated requests during
+a held background writer, transaction ordering/rollback, provider failures, acceptance at exactly
+82%, competing candidates, saved-proposal priority and restart cooldown are covered.
+
+Point-in-time HTTP checks during enrichment compare the same four-request workload:
+
+| Endpoint | Before | Final |
+| --- | ---: | ---: |
+| Enrichment status | 5.50 s | 0.30 s |
+| Artist summary | 8.28 s | 3.88 s |
+| Legacy complete artist list | 8.86 s | 2.47 s |
+
+That comparison includes the large complete-list request that Library now avoids. With the actual
+Library request pattern, the summary takes 1.50 s alone; a six-request mixed Library/Live/Queue
+check completes in 0.10–2.21 s, with all responses HTTP 200. Basic root/profile/Live-list reads take
+0.10–0.30 s in that check. These are local HTTP observations under active background work.
+
+Every replacement retains all four mounts and environment values. The last cutover exactly
+matches all 6,811 saved enrichment journal hashes, settings, connector configuration and 14
+playlists before resuming batch 3 at cursor 6439 (2,804 processed). A fresh-directory Linux copy
+of `/config/operator-recovery/performance-summary-20261107/database/` passes SQLite quick_check
+and matches all 6,811 snapshot hashes. Post-resume checks retain every saved journal ID, show
+6,849 total journals, and show batch 3 running at cursor 6476 (2,841 processed). Batch 1 stays
+cancelled and batch 2 stays completed. Earlier verified recovery bundles remain private alongside
+the latest `preservation.json`, `resume.json` and `verified-final.json` records.
+
+After health, preservation and resume checks, superseded Vidarr containers/image references are
+removed without volume-removal or forced image flags. Description-filtered Vidarr build-cache
+cleanup reclaims 26.99 MB. Current-release/shared layers, configuration/media volumes and unrelated
+services remain. Final LAN health/UI checks pass at `http://192.168.0.8:3434`. All changes remain
+local; no Git push, image upload or external deployment is performed.

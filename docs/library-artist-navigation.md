@@ -12,10 +12,20 @@ catalog match remain unmatched inventory; row visibility does not establish conf
 availability. Expanding an unconfirmed row explains identity review instead of mounting catalog
 discovery or Live controls.
 
-Identity confirmation, uncertain-source review, validation, import and server delivery requirements
-are unchanged. Row candidate confirmation uses the existing reviewed MusicBrainz path. Visibility
+Artist identity now follows the 2026-11-07 automatic acceptance policy: validate and accept the
+highest-ranked match at 82% or above and start source collection, including saved legacy ambiguous
+proposals. A close runner-up no longer requires a click. Below-threshold identities and conflicting
+catalog ownership retain review; uncertain-video review, validation, import and delivery remain.
+Visibility
 does not rewrite artist IDs, merge observations, change monitoring preferences or create videos
 or performances.
+
+Library genre filters use genre statistics without loading the complete artist catalog on entry.
+The legacy artist-list fallback runs only if statistics fail. Paged summaries and active web-request model
+reads use a reserved two-connection reader pool alongside the background/writer connection; transactional reads
+remain inside their transaction. No cached credential/identity results are introduced.
+Accepted artists queue source collection automatically, with at most two collections running.
+Waiting state persists for restart recovery through the existing source backfill.
 
 ## Interrupted-sync recovery evidence
 
