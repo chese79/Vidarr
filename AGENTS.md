@@ -28,6 +28,10 @@ canonical artist catalog, media-server integration, download-source priority, an
 
 ## Deployment safety
 
+- Keep work local until the user explicitly requests publication. Local edits, tests, commits,
+  merges and deployments to the existing local instance are allowed. Git pushes, package/image
+  uploads and external deployments require that explicit publication instruction.
+
 - Do not modify or remove Docker configuration volumes or media files as part of source updates.
 - Rebuild and recreate only the Vidarr service unless the requested change explicitly involves a
   different service.

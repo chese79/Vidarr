@@ -639,6 +639,11 @@ belong to Vidarr. Keep all configuration/media volumes and the current image. Do
 prune across unrelated services. A failed readiness check restores the prior container before any
 superseded artifacts are removed. See [deployment](deployment.md).
 
+Publication boundary (2026-11-06): keep subsequent work, commits/merges and local-instance
+deployment local → wait for the user's explicit publication instruction before pushing Git,
+uploading packages/images or deploying externally. Local validation and deployment confirmation
+remain required; a generic local deployment request does not authorize remote publication.
+
 ## Automatic artist identity suggestions (2026-11-05)
 
 Observe an artist from audio/video inventory → background MusicBrainz search (three artists per
@@ -658,6 +663,15 @@ Production LAN access uses http://192.168.0.8:3434. Windows rule Vidarr-LAN-3434
 3434 at that address only from LocalSubnet on Private networks. Keep the firewall enabled; remove
 that named rule to undo this change. HTTP on the host is verified separately from access on another
 computer, which requires a real client check. Guest Wi-Fi/client isolation can still block access.
+
+2026-11-07 recovery: the current scoped rule is `Vidarr-LAN-3434-Private` (Ethernet only).
+Docker now assigns a random loopback port; a desktop-user TCP listener discovers that port and
+serves the established LAN URL. It starts at user logon and retries discovery after Docker returns.
+An explicit publish request was rewritten by Docker and rejected before starting a replacement.
+Recovery preserved the existing container, image, mounts, configuration and all 6,480 saved
+enrichment journals. Batch 2 is complete and batch 3 resumed and advanced. Validation still requires
+host health/UI, exact data preservation, resumed progress and a separate real LAN-client check.
+See deployment.md for installation, the Private/LocalSubnet firewall scope and removal steps.
 
 Verification: Node 22 server/web production builds and 71 focused artist identity, background matching, observation, Library navigation and Discover API tests passed. The loaded host required 60-second test/hook limits for the final run; initial short-limit timeouts were rerun successfully.
 

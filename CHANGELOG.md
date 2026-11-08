@@ -4,6 +4,19 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### LAN access restoration (2026-11-07)
+
+- Restore the local instance at `http://192.168.0.8:3434` through a per-user Windows TCP listener that discovers Docker's current loopback port and starts at logon.
+- Limit inbound access to the Ethernet local subnet on Private networks. Preserve all 6,480 saved enrichment journals, configuration and playlists; batch 2 is complete and batch 3 resumes and advances.
+- Add Node 22 checks for binary forwarding, half-close, changed ports, failed-target refresh without replay, and unavailable Docker recovery. No application image or database schema changes.
+
+### Final local rollout and publication boundary (2026-11-06)
+
+- Verify the final cascade-budget image, 85 focused checks, preserved app data/14 playlists and resumed enrichment journals; retain a fresh integrity-checked private recovery bundle.
+- Complete the requested Yo La Tengo reset: remove 284 selected videos, their catalog entries and 193 owned sidecars, preserving the artist and the separate Wilco collaboration.
+- Remove superseded Vidarr containers/image tags and identified build cache after verification; keep the current local release and configuration/media volumes.
+- Keep all further work local until the user explicitly requests publication, including local-only commits and local-instance deployments.
+
 ### Large deletion cascade recovery (2026-11-06)
 
 - Bound MV/Live completion transactions to two minutes after a production catalog cascade took 37.6 seconds. Keep the ten-second lock wait, thirty-second intent timeout, normal deletion delay and all ownership/playback/retry checks.

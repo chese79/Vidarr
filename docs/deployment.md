@@ -724,3 +724,70 @@ Current native DTO diagnostics are retained privately. The MTV plugin XML and al
 options files retain modification times preceding this deployment, and this update does not write
 native global configuration. Item metadata changes and the requested media deletions remain separate
 from global settings verification.
+
+## Final cascade correction and local publication boundary — 2026-11-06
+
+The final local instance runs `vidarr-enrichment-speed-20261106:final`, image
+`sha256:785ad3f9c8574a64450fb51c387b7287fbaf7cb6d7b5597bb2de2a1b324b1cbd`, from
+`20a9b4a`. The completion budget is now two minutes after the observed 37.6-second catalog
+cascade. Node 22 compilation, all 85 focused checks and the exact-image cache restart smoke test
+pass. The fresh consistent database bundle at
+`/config/operator-recovery/enrichment-cascade-final-20261106/` passes SQLite integrity verification.
+
+The user-requested collection reset verifies 284 selected video files absent, all original selected
+catalog entries removed, 193 owned sidecars removed and the canonical artist retained. No registered
+Yo La Tengo Live recording was found. The mixed Wilco/Yo La Tengo collaboration was outside the
+primary-artist selection and remains. Private exact-file plans and completion records stay under
+`/config/operator-recovery/yo-la-tengo-20261106/`.
+
+After final replacement, all 1,205 saved item journals match the fresh snapshot, including all 1,189
+from the original predeployment baseline. Batch 2 resumes at cursor 4812 and advances to 4814
+(1,207 checked, 263 updated at verification); batch 3 stays queued. Existing provider failures and
+review decisions remain. This is resumed work, not full-library enrichment completion. Configuration,
+connectors, 14 playlists and unrelated catalog IDs pass application-data preservation checks.
+The aggregate native-DTO fingerprint limitation recorded above still applies.
+
+Only the current Vidarr container and image tag remain. Cleanup removes the superseded release
+and maintenance/rollback containers without removing volumes. Ownership-filtered cache cleanup
+reports 5.794 GB in the first pass and 3.527 MB after the final build. Unrelated services and private
+recovery backups remain.
+
+From the user's subsequent instruction, all further changes stay local until an explicit request
+to publish. Local edits, tests, commits, merges and existing local-instance deployment remain allowed;
+Git pushes, package/image uploads and external deployments require that explicit instruction.
+Earlier code/rollout commits were already pushed before this boundary. The final documentation and
+standing publication instructions are committed locally only.
+
+## Windows LAN restoration — 2026-11-07
+
+This host's Docker environment rewrites an explicit `192.168.0.8:3434:3434` publish
+request into a random loopback port, even in the created container's HostConfig. Port validation
+rejected that candidate before startup and restored the original healthy container. Do not repeatedly
+recreate it to recover networking. The current image, environment and four mounts remain unchanged.
+
+The Windows desktop user's TCP listener now binds `192.168.0.8:3434` and discovers only the
+`127.0.0.1` port for container `vidarr`, context `desktop-linux`, using Docker inspection.
+Discovery is cached for three seconds; a failed upstream connection refreshes once before any
+request bytes are sent. It forwards HTTP and WebSocket bytes without logging credentials.
+Docker restarts therefore do not require a hard-coded replacement port. If Docker is unavailable,
+connections close; later connections try discovery again. If the Ethernet address is not ready,
+the listener retries binding. The machine must retain `192.168.0.8` on its Private Ethernet network.
+
+Source and tests are in `scripts/windows/vidarr-lan-proxy.mjs` and its `.test.mjs` companion.
+Run the tests with Node 22 (direct execution also runs node:test without spawning child workers).
+Install as the desktop user with `scripts/windows/install-vidarr-lan-proxy.ps1 -NodePath <verified-node22.exe>`.
+It copies the runtime and source to `%LOCALAPPDATA%\Vidarr\LanAccess` and creates
+`Vidarr LAN Access.vbs` in the user's Startup folder. It starts hidden now and at user logon;
+it does not run before logon or as SYSTEM. Stop only that installed proxy process before updating it.
+Run `scripts/windows/configure-vidarr-lan-firewall.ps1` in an elevated PowerShell for the scoped
+`Vidarr-LAN-3434-Private` inbound rule: TCP 3434, local address 192.168.0.8, Ethernet,
+Private profile, LocalSubnet sources. Keep the firewall enabled. To undo, stop the matching proxy,
+remove its Startup entry and installed folder, and remove that named firewall rule.
+
+The consistent private backup under `/config/operator-recovery/lan-restore-20261107/` passes
+SQLite quick_check on Linux storage. Preservation verification matches all 6,480 pre-restoration
+item journal hashes, settings, connector configuration and playlists. Batch 2 is completed (3,997
+processed, 480 updated); batch 3 resumed from cursor 6101 and advances to 6148 (2,519 processed).
+Host checks return HTTP 200 for both LAN health and UI; the listener binds the intended address.
+A fresh second-computer test remains separate from these host-side checks. Temporary failed-candidate
+and audit containers can be removed after these checks without volume-removal flags.
