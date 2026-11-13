@@ -4,6 +4,13 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Playlist management links and faster artist actions (2026-11-12)
+
+- Add Manage video links from saved playlists to the exact artist-library video, focusing its existing Live/Concert and deletion controls. Live entries open their recording or artist Live page; missing IDs never produce guessed links.
+- Scope artist summary statistics before aggregation and add catalog-link indexes; preserve alphabet navigation, alias credits and duplicate-name counts.
+- Acknowledge monitoring before background source checks, save bulk flags in one transaction, show saved flags before refresh completes and cancel obsolete summary requests.
+- Validate 74 server and 24 UI checks plus Node 22 production builds. Deploy locally with exact preservation of 12,282 enrichment journals, configuration and 17 playlists; resume the same enrichment batch.
+
 ### Responsiveness and automatic artist acceptance (2026-11-07)
 
 - Reserve a bounded reader pool for active web requests, including artist summary/review and Live/Queue pagination, so background work cannot consume the browsing pool. Expire detached request context; preserve transaction connection/rollback behavior and diagnostic redaction.

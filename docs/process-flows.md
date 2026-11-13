@@ -726,3 +726,27 @@ Local import/deletion uses conservative sidecar ownership; delayed MV/Live delet
 older plans before any removal. Failed decoding cannot establish motion, and torrent import waits
 for an explicit completed state and complete progress. Required stages remain unchanged. See
 [the correction record](code-review-fixes-2026-11-06.md).
+
+## Playlist video management (2026-11-12)
+
+Each saved music-video playlist entry offers Manage video → open `/artist/:id#video-:id`
+→ wait for artist data → scroll to and focus the exact video row → use existing Live/Concert
+classification or deletion controls. IDs distinguish videos with the same title. Opening a link
+changes no membership, flags or files; deletion warnings, five-minute delay, active-playback
+protection and retry checks remain. Reviewed Live parts open their recording page, while legacy
+classified videos without a part open the artist's Live library. Entries lacking an artist ID
+omit the music-video link rather than guessing by name.
+
+## Faster artist searches and saved actions (2026-11-12)
+
+Apply search, genre and base artist filters before video statistics; apply the selected letter
+before statistics for the page. The alphabet rail still reflects base filters independent of the
+selected letter or count refinements. Additive indexes cover library-video catalog links and
+artist/catalog lookups. Preserve alias credits and duplicate-name unmatched counts.
+
+Monitoring one artist saves the flag and admits source collection as pending before returning.
+The existing bounded collector completes provider checks in the background; persisted inventory
+status and errors show progress and retry outcomes. The flag acknowledgment does not claim a
+completed source scan. Bulk monitoring uses one chunked transaction, preserving per-ID missing
+results and rolling back flags if the transaction fails. The UI updates saved flags immediately,
+refreshes summaries without blocking action completion, and cancels superseded summary requests.

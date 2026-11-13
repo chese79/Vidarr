@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { useCatalogMode } from '../components/CatalogMode';
+import { CatalogLink, useCatalogMode } from '../components/CatalogMode';
 import { matchesCatalog } from '../catalogMode';
 import VideoThumb from '../components/VideoThumb';
 import type { DeletePlaylistResult, LibraryConnector, Playlist, UpdatePlaylist } from '@vidarr/shared-types';
@@ -530,6 +530,15 @@ function PlaylistCard({ playlistId, onDeleted }: {
                 </span>
               </div>
               <div className="video-actions">
+                {item.recordingPart ? (
+                  <CatalogLink catalog="live" to={`/live/recording/${item.recordingPart.recording.id}`}
+                    aria-label={`Manage ${item.recordingPart.recording.title} recording`}>Manage recording</CatalogLink>
+                ) : item.musicVideo && item.musicVideoId && item.musicVideo.artist.id && item.musicVideo.catalogKind !== 'liveClassified' ? (
+                  <CatalogLink catalog="musicVideos" to={`/artist/${item.musicVideo.artist.id}#video-${item.musicVideoId}`}
+                    aria-label={`Manage ${item.musicVideo.title} in artist library`}>Manage video</CatalogLink>
+                ) : item.musicVideo?.artist.id && item.musicVideo.catalogKind === 'liveClassified' ? (
+                  <CatalogLink catalog="live" to={`/artist/${item.musicVideo.artist.id}/live`}>Open artist Live library</CatalogLink>
+                ) : null}
                 {isStatic && <>
                   <ActionButton
                     className="secondary"

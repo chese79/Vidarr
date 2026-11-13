@@ -67,7 +67,9 @@ export default function App() {
   const mode = liveEnabled ? selectedMode : 'musicVideos';
   useEffect(() => { try { localStorage.setItem(CATALOG_MODE_KEY, selectedMode); } catch { /* Session selection still works when storage is unavailable. */ } }, [selectedMode]);
   const unfiltered = isUnfilteredScreen(location.pathname);
-  useEffect(() => { scrollContentTo(0); }, [location.pathname]);
+  useEffect(() => {
+    if (!/^#video-[1-9]\d*$/.test(location.hash)) scrollContentTo(0);
+  }, [location.pathname, location.hash]);
   return (
     <CatalogModeContext.Provider value={{ mode, setMode, liveEnabled }}>
     <div className={`app-shell${!unfiltered && mode === 'live' ? ' catalog-live' : !unfiltered && mode === 'both' ? ' catalog-both' : ''}`}>

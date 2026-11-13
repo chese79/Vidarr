@@ -9,7 +9,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { genreFilterOptions } from '../genreOptions';
-import type { ArtistSummary, VideoOwnership } from '@vidarr/shared-types';
+import type { ArtistSummary, ArtistSummaryList, VideoOwnership } from '@vidarr/shared-types';
 
 const RAIL_LETTERS = ['#', ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))];
 const PAGE_SIZE = 25;
@@ -338,7 +338,7 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
   const summary = useQuery({
     queryKey: ['artistSummary', search, genre, monitored, musicbrainzStatus, letter, hasMissing, completeness, minLocalVideos, minPlayCount, page, hideWithoutVideos],
     refetchInterval: 5000,
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.artists.summary({
         hideWithoutVideos,
         search: search || undefined,
@@ -352,7 +352,7 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
         minPlayCount: minPlayCount ? Number(minPlayCount) : undefined,
         page,
         pageSize: PAGE_SIZE,
-      }),
+      }, signal),
   });
 
   const items = summary.data?.items ?? [];
@@ -397,12 +397,22 @@ export default function LibraryPage({ live = false }: { live?: boolean }) {
   const monitorOne = useMutation({
     mutationFn: ({ id, monitored: value }: { id: number; monitored: boolean }) =>
       api.artists.update(id, { monitored: value }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artistSummary'] }),
+    onSuccess: (result, { id }) => {
+      queryClient.setQueriesData<ArtistSummaryList>({ queryKey: ['artistSummary'] }, current => current ? {
+        ...current, items: current.items.map(artist => artist.id === id ? { ...artist, monitored: result.monitored,
+          videoInventoryStatus: result.videoInventoryStatus ?? artist.videoInventoryStatus } : artist),
+      } : current);
+      void queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
+    },
   });
 
   const bulkMonitor = useMutation({
     mutationFn: (value: boolean) => api.artists.bulkMonitor([...selectedIds], value),
     onSuccess: (result, value) => {
+      const changed = new Set(result.succeeded);
+      queryClient.setQueriesData<ArtistSummaryList>({ queryKey: ['artistSummary'] }, current => current ? {
+        ...current, items: current.items.map(artist => changed.has(artist.id) ? { ...artist, monitored: value } : artist),
+      } : current);
       queryClient.invalidateQueries({ queryKey: ['artistSummary'] });
       setBulkMessage(
         result.failed.length

@@ -27,6 +27,19 @@ interface CollectionOptions {
 const collections = new Map<number, Promise<ArtistVideoCollectionResult>>();
 const collectionQueue = new BoundedWorkQueue(2);
 
+export async function queueArtistVideoInventory(artistId: number): Promise<string> {
+  if (collections.has(artistId)) {
+    return (await prisma.artist.findUniqueOrThrow({ where: { id: artistId }, select: { videoInventoryStatus: true } })).videoInventoryStatus;
+  }
+  const saved = await prisma.artist.updateMany({
+    where: { id: artistId, musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: { not: null } },
+    data: { videoInventoryStatus: 'pending', videoInventoryAttemptedAt: null, videoInventoryError: null },
+  });
+  if (!saved.count) throw new Error('Confirm the MusicBrainz artist before collecting sources.');
+  void collectArtistVideoInventory(artistId).catch(error => logActivity('warn', 'artist-video-inventory:queued', error));
+  return 'pending';
+}
+
 export function collectArtistVideoInventory(artistId: number, options: CollectionOptions = {}): Promise<ArtistVideoCollectionResult> {
   const existing = collections.get(artistId);
   if (existing) return existing;

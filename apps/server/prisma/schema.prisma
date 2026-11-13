@@ -133,6 +133,7 @@ model MusicVideo {
   acquisitionSources AcquisitionSource[]
 
   @@unique([artistId, normalizedTitle])
+  @@index([artistId, catalogKind])
 }
 
 model ArtistSource {
@@ -509,6 +510,7 @@ model LibraryVideo {
 
   @@unique([connectorId, externalId])
   @@index([normalizedArtistName, normalizedTitle])
+  @@index([musicVideoId])
 }
 
 model Playlist {

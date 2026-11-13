@@ -100,6 +100,22 @@ describe('artist routes', () => {
     expect((await get('hideWithoutVideos=invalid')).statusCode).toBe(400);
   });
 
+  it('scopes searches without losing matched aliases or doubling same-name unmatched inventory', async () => {
+    const selected=await createArtist(rootFolderId,qualityProfileId,{name:'Scoped Artist'});
+    const other=await createArtist(rootFolderId,qualityProfileId,{name:'Other Artist'});
+    const video=await createMusicVideo(selected.id,{title:'Linked Song'});
+    await createMusicVideo(other.id,{title:'Unrelated Song'});
+    const connector=await createLibraryConnector();
+    await createLibraryVideo(connector.id,{musicVideoId:video.id,normalizedArtistName:'different credit',matchConfidence:null});
+    const response=(await app.inject({url:'/api/v1/artist/summary?search=Scoped&hideWithoutVideos=false',headers:authHeaders()})).json();
+    expect(response.items).toHaveLength(1);expect(response.items[0]).toMatchObject({id:selected.id,knownVideoCount:1,availableVideoCount:1});
+    const duplicates=[];
+    for(let i=0;i<2;i++)duplicates.push(await createArtist(rootFolderId,qualityProfileId,{name:'Duplicate Artist'}));
+    await createLibraryVideo(connector.id,{externalId:'unmatched-duplicate',musicVideoId:null,normalizedArtistName:'duplicate artist'});
+    const sameName=(await app.inject({url:'/api/v1/artist/summary?search=Duplicate&hideWithoutVideos=false',headers:authHeaders()})).json();
+    expect(sameName.items).toHaveLength(2);expect(sameName.items.map((row:{unmatchedVideoCount:number})=>row.unmatchedVideoCount)).toEqual([1,1]);
+  });
+
   it('paginates and searches unmatched artist observations', async () => {
     const first = await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Alpha' });
     await createUnconfirmedArtist(rootFolderId, qualityProfileId, { name: 'Review Beta' });
@@ -774,6 +790,23 @@ describe('artist routes', () => {
   });
 
   describe('POST /api/v1/artist/bulk-monitor', () => {
+    it('handles selections beyond SQLite parameter limits and preserves duplicate/missing outcomes', async () => {
+      const artist=await createArtist(rootFolderId,qualityProfileId,{monitored:false});
+      const missing=Array.from({length:1005},(_,i)=>100000+i);
+      const response=await app.inject({method:'POST',url:'/api/v1/artist/bulk-monitor',headers:authHeaders(),payload:{ids:[artist.id,artist.id,...missing],monitored:true}});
+      expect(response.statusCode).toBe(200);expect(response.json().succeeded).toEqual([artist.id,artist.id]);expect(response.json().failed).toHaveLength(missing.length);
+      expect((await prisma.artist.findUniqueOrThrow({where:{id:artist.id}})).monitored).toBe(true);
+    });
+
+    it('leaves all monitoring unchanged when the save transaction fails', async () => {
+      const artist=await createArtist(rootFolderId,qualityProfileId,{monitored:false});
+      const transaction=vi.spyOn(prisma,'$transaction').mockRejectedValueOnce(Error('Temporary database failure'));
+      try{
+        const response=await app.inject({method:'POST',url:'/api/v1/artist/bulk-monitor',headers:authHeaders(),payload:{ids:[artist.id],monitored:true}});
+        expect(response.json()).toMatchObject({succeeded:[],failed:[{id:artist.id}]});
+        expect((await prisma.artist.findUniqueOrThrow({where:{id:artist.id}})).monitored).toBe(false);
+      }finally{transaction.mockRestore();}
+    });
     it('monitors every id in the list', async () => {
       const a = await createArtist(rootFolderId, qualityProfileId, { name: 'A', monitored: false });
       const b = await createArtist(rootFolderId, qualityProfileId, { name: 'B', monitored: false });

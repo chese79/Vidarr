@@ -258,6 +258,7 @@ describe('playlist routes', () => {
       const playlist = list.json().find((p: { id: number }) => p.id === playlistId);
       expect(playlist.items).toHaveLength(1);
       expect(playlist.items[0].musicVideoId).toBe(videoId);
+      expect(playlist.items[0].musicVideo.artist.id).toBe(artistId);
     });
 
     it('rejects adding the same video twice with 409', async () => {

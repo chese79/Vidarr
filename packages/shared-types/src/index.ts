@@ -813,7 +813,7 @@ export const PlaylistItemSchema = z.object({
     title: z.string(),
     thumbnailUrl: z.string().nullable(),
     hasFile: z.boolean(),
-    artist: z.object({ name: z.string() }),
+    artist: z.object({ id: z.number().int().optional(), name: z.string() }),
   }).nullable(),
 });
 export type PlaylistItem = z.infer<typeof PlaylistItemSchema>;

@@ -21,7 +21,7 @@ import { computeVideoStatus, effectivePlayCount } from '../pipeline/videoStatus.
 import { matchLibraryVideo, type CanonicalVideo } from '../pipeline/reconciliation.js';
 import { autoSearchAndGrab, previewBacklogSearch, runBacklogSearch } from '../pipeline/autoSearch.js';
 import { confirmArtistIdentity, discoverArtistIdentityCandidates } from '../pipeline/artistIdentity.js';
-import { collectArtistVideoInventory } from '../pipeline/artistVideoInventory.js';
+import { collectArtistVideoInventory, queueArtistVideoInventory } from '../pipeline/artistVideoInventory.js';
 import { lookupMusicBrainzArtist, searchMusicBrainzArtists } from '../providers/metadata/musicbrainz.js';
 import { validateNewArtist } from '../pipeline/newArtistValidation.js';
 
@@ -368,12 +368,26 @@ export async function artistRoutes(app: FastifyInstance) {
       ELSE a."name" END)`;
 
     const filteredCte = Prisma.sql`
-      WITH library_stats AS (
+      WITH base_artists AS MATERIALIZED (
+        SELECT a."id", a."addedAt", a."videoInventoryStatus", a."videoInventoryError",
+          a."name", a."sortName", a."genre", a."monitored", a."musicbrainzMatchStatus",
+          a."musicbrainzMatchConfidence", a."posterUrl",
+          CASE WHEN UPPER(SUBSTR(${librarySortName}, 1, 1)) BETWEEN 'A' AND 'Z'
+            THEN UPPER(SUBSTR(${librarySortName}, 1, 1)) ELSE '#' END AS "letter"
+        FROM "Artist" a WHERE ${baseWhere}
+      ),
+      selected_artists AS MATERIALIZED (
+        SELECT * FROM base_artists WHERE ${query.letter ? Prisma.sql`"letter" = ${query.letter.toUpperCase()}` : Prisma.sql`1=1`}
+      ),
+      library_stats AS (
         SELECT lv."musicVideoId", MAX(lv."playCount") AS "playCount"
         FROM "LibraryVideo" lv
         JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
         WHERE lv."musicVideoId" IS NOT NULL AND lv."available" = 1
           AND lv."matchConfidence" IS NULL AND lc."enabled" = 1
+          AND lv."musicVideoId" IN (
+            SELECT mv."id" FROM "MusicVideo" mv JOIN selected_artists a ON a."id" = mv."artistId"
+          )
         GROUP BY lv."musicVideoId"
       ),
       queue_stats AS (
@@ -390,6 +404,7 @@ export async function artistRoutes(app: FastifyInstance) {
           CASE WHEN qs."musicVideoId" IS NOT NULL THEN 1 ELSE 0 END AS "isDownloading",
           COALESCE(f."playCount", ls."playCount") AS "playCount"
         FROM "MusicVideo" mv
+        JOIN selected_artists selected ON selected."id" = mv."artistId"
         LEFT JOIN library_stats ls ON ls."musicVideoId" = mv."id"
         LEFT JOIN queue_stats qs ON qs."musicVideoId" = mv."id"
         LEFT JOIN "MusicVideoFile" f ON f."musicVideoId" = mv."id"
@@ -417,6 +432,7 @@ export async function artistRoutes(app: FastifyInstance) {
         FROM "LibraryVideo" lv JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
         WHERE lc."enabled" = 1 AND lv."available" = 1
           AND (lv."musicVideoId" IS NULL OR lv."matchConfidence" IS NOT NULL)
+          AND lv."normalizedArtistName" IN (SELECT LOWER(TRIM("name")) FROM selected_artists)
         GROUP BY lv."normalizedArtistName"
       ),
       filtered AS MATERIALIZED (
@@ -443,15 +459,10 @@ export async function artistRoutes(app: FastifyInstance) {
           COALESCE(s."supplementary", 0) AS "supplementaryVideoCount",
           COALESCE(s."inventory", 0) AS "inventoryVideoCount",
           CASE WHEN COALESCE(s."playCountKnownN", 0) > 0 THEN s."playCountSum" ELSE NULL END AS "aggregatePlayCount",
-          CASE
-            WHEN UPPER(SUBSTR(${librarySortName}, 1, 1)) BETWEEN 'A' AND 'Z'
-            THEN UPPER(SUBSTR(${librarySortName}, 1, 1))
-            ELSE '#'
-          END AS "letter"
-        FROM "Artist" a
+          a."letter" AS "letter"
+        FROM selected_artists a
         LEFT JOIN artist_stats s ON s."artistId" = a."id"
         LEFT JOIN unmatched_stats u ON u."normalizedArtistName" = LOWER(TRIM(a."name"))
-        WHERE ${baseWhere}
       )
     `;
 
@@ -466,8 +477,14 @@ export async function artistRoutes(app: FastifyInstance) {
         FROM (SELECT COUNT(*) AS "total" FROM filtered WHERE ${refineWhere}) totals
         CROSS JOIN (
           SELECT json_group_array("letter") AS "availableLetters" FROM (
-            SELECT DISTINCT "letter" FROM filtered
-            WHERE ${query.hideWithoutVideos === 'true' ? videoPresence : Prisma.sql`1=1`}
+            SELECT DISTINCT a."letter" FROM base_artists a
+            WHERE ${query.hideWithoutVideos === 'true' ? Prisma.sql`
+              EXISTS (SELECT 1 FROM "MusicVideo" mv WHERE mv."artistId" = a."id" AND mv."catalogKind" <> 'liveClassified')
+              OR EXISTS (
+                SELECT 1 FROM "LibraryVideo" lv JOIN "LibraryConnector" lc ON lc."id" = lv."connectorId"
+                WHERE lv."normalizedArtistName" = LOWER(TRIM(a."name")) AND lv."available" = 1 AND lc."enabled" = 1
+                  AND (lv."musicVideoId" IS NULL OR lv."matchConfidence" IS NOT NULL)
+              )` : Prisma.sql`1=1`}
           )
         ) letters
         LEFT JOIN (
@@ -592,19 +609,24 @@ export async function artistRoutes(app: FastifyInstance) {
   // someone else mid-selection) shouldn't block updating the rest.
   app.post('/api/v1/artist/bulk-monitor', async (req) => {
     const body = BulkMonitorArtistsBodySchema.parse(req.body);
-    const succeeded: number[] = [];
-    const failed: { id: number; error: string }[] = [];
-
-    for (const id of body.ids) {
-      try {
-        await prisma.artist.update({ where: { id }, data: { monitored: body.monitored } });
-        succeeded.push(id);
-      } catch (err) {
-        failed.push({ id, error: (err as Error).message });
-      }
+    // One commit for the selected flags. Stale IDs still have per-ID outcomes;
+    // no artist catalog/provider request belongs on this acknowledgment path.
+    try {
+      return await prisma.$transaction(async tx => {
+        const existing = new Set<number>();
+        const unique = [...new Set(body.ids)];
+        for (let offset = 0; offset < unique.length; offset += 400) {
+          const ids = unique.slice(offset, offset + 400);
+          for (const row of await tx.artist.findMany({ where: { id: { in: ids } }, select: { id: true } })) existing.add(row.id);
+          await tx.artist.updateMany({ where: { id: { in: ids } }, data: { monitored: body.monitored } });
+        }
+        return { succeeded: body.ids.filter(id => existing.has(id)),
+          failed: body.ids.filter(id => !existing.has(id)).map(id => ({ id, error: 'Artist not found' })) };
+      }, { maxWait: 10_000, timeout: 30_000 });
+    } catch (err) {
+      app.log.warn({ err }, 'Bulk artist monitoring rolled back');
+      return { succeeded: [], failed: body.ids.map(id => ({ id, error: 'Could not save monitoring changes; no artists were changed.' })) };
     }
-
-    return { succeeded, failed };
   });
 
   app.post('/api/v1/artist/bulk-musicbrainz-discover', async (req) => {
@@ -927,20 +949,23 @@ export async function artistRoutes(app: FastifyInstance) {
       updated = await prisma.artist.findUniqueOrThrow({ where: { id } });
     }
 
-    // Turning monitoring on (re-)establishes the artist's full video list from
-    // IMVDb immediately, rather than waiting for the next scheduled refresh.
+    // Save the action promptly; the existing durable source flow performs the
+    // provider checks and exposes completion/failure through artist progress.
     let videosAdded: number | undefined;
     let metadataRefreshError: string | undefined;
+    let sourceCollectionQueued: boolean | undefined;
     if (body.monitored === true && !before.monitored && updated.imvdbArtistId) {
       try {
-        videosAdded = (await refreshArtistMetadata(id)).videosAdded;
+        const status = await queueArtistVideoInventory(id);
+        sourceCollectionQueued = true;
+        updated = { ...updated, videoInventoryStatus: status };
       } catch (err) {
         metadataRefreshError = (err as Error).message;
         await logActivity('warn', 'metadata-refresh:manual', err);
       }
     }
 
-    return { ...updated, videosAdded, metadataRefreshError };
+    return { ...updated, videosAdded, metadataRefreshError, sourceCollectionQueued };
   });
 
   app.delete('/api/v1/artist/:id', async (req, reply) => {

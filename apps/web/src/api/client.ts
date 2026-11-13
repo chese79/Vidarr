@@ -241,7 +241,7 @@ export const api = {
     create: (data: CreateArtist) =>
       request<Artist>('/artist', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: number, data: UpdateArtist) =>
-      request<Artist & { videosAdded?: number; metadataRefreshError?: string }>(`/artist/${id}`, {
+      request<Artist & { videosAdded?: number; metadataRefreshError?: string; sourceCollectionQueued?: boolean; videoInventoryStatus?: string }>(`/artist/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
@@ -276,7 +276,7 @@ export const api = {
     collectVideoInventory: (id: number) => request<{
       official: number; approvedOther: number; pendingYoutube: number; pendingLocal: number; errors: string[];
     }>(`/artist/${id}/video-inventory/collect`, { method: 'POST' }),
-    summary: (params: ArtistSummaryParams = {}) => {
+    summary: (params: ArtistSummaryParams = {}, signal?: AbortSignal) => {
       const qs = new URLSearchParams();
       if (params.hideWithoutVideos !== undefined) qs.set('hideWithoutVideos', String(params.hideWithoutVideos));
       if (params.search) qs.set('search', params.search);
@@ -292,7 +292,7 @@ export const api = {
       if (params.page !== undefined) qs.set('page', String(params.page));
       if (params.pageSize !== undefined) qs.set('pageSize', String(params.pageSize));
       const query = qs.toString();
-      return request<ArtistSummaryList>(`/artist/summary${query ? `?${query}` : ''}`);
+      return request<ArtistSummaryList>(`/artist/summary${query ? `?${query}` : ''}`, { signal });
     },
     bulkMonitor: (ids: number[], monitored: boolean) =>
       request<BulkMonitorArtistsResult>('/artist/bulk-monitor', {

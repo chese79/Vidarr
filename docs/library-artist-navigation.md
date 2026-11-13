@@ -65,3 +65,22 @@ summary-query timings were under one second each once startup/build work settled
 Private fingerprints, container state and reports are retained under the ignored MTV-plugin
 `.artifacts` directory. To roll back, stop the replacement, rename it aside, restore the retained
 container's `vidarr` name and start it; retain the shared configuration/media mounts throughout.
+
+## Search, actions and playlist navigation (2026-11-12)
+
+Artist summary statistics are scoped to base-filtered artists and the selected letter before
+aggregation. The alphabet rail independently checks base artist presence; count refinements do
+not shrink it. MusicVideo(artistId,catalogKind) and LibraryVideo(musicVideoId) indexes are additive
+Prisma migrations. Unmatched names use a set predicate so duplicate artist names cannot multiply
+counts. Superseded browser summary requests are aborted.
+
+Single monitoring acknowledges its saved flag and persisted pending source check before provider
+work. The bounded collector retains errors and retry state; bulk updates commit in one chunked
+transaction. Saved flags update locally before background summary refresh completes.
+
+Playlist Manage video links include artist and video IDs and open the existing artist controls.
+The artist row is focused once after data arrives and highlighted by the URL fragment. Polling
+does not repeatedly move focus. A new navigation can target another video; same-title entries
+remain distinct. Live entries use their recording page, or the Live artist library for legacy
+classified entries. Missing identity data does not produce guessed links. The additive optional
+artist ID in the playlist item contract preserves legacy payload compatibility.

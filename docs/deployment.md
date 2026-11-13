@@ -863,3 +863,48 @@ removed without volume-removal or forced image flags. Description-filtered Vidar
 cleanup reclaims 26.99 MB. Current-release/shared layers, configuration/media volumes and unrelated
 services remain. Final LAN health/UI checks pass at `http://192.168.0.8:3434`. All changes remain
 local; no Git push, image upload or external deployment is performed.
+
+## Playlist video controls and artist-action responsiveness — 2026-11-12
+
+Local release `vidarr-search-actions-20261112:release` includes per-entry Manage video links to
+stable artist/video IDs. The target row scrolls into view and receives focus once after data
+loads; page-level scroll resets and polling do not override it. Existing classification and
+scheduled-deletion workflows remain the only mutation paths. Live parts open their recording
+page; classified legacy entries open their artist Live library. Legacy payloads lacking artist
+IDs omit guessed links.
+
+Artist summary work is filtered before video aggregation, with additive indexes for catalog
+links and artist/category lookups. Single monitoring acknowledges persisted pending source work
+before provider calls, bulk monitoring uses one transaction, and the UI acknowledges saved flags
+without awaiting summary refresh. Superseded summary requests are aborted. Broad unfiltered
+queries remain sensitive to the Windows-mounted database's storage latency.
+
+Node 22 Docker verification passed 74 server checks and 24 UI checks, plus both production builds.
+The UI regression covers navigation through App, same-title video IDs, delayed artist loading,
+focus retention during refresh, Live recording routes and missing-ID compatibility. The playlist
+API regression verifies the artist ID. Benchmarks on a disposable verified database copy measured
+filtered searches/letters at 0.1–1.0 seconds and 1,000 flag updates at 0.31 seconds; broad queries
+still took 2.3–5.4 seconds. An older-release migration CLI also passed against that copy with the
+additive indexes applied, preserving rollback compatibility.
+
+The rollout paused batch 5, stopped only Vidarr, copied the consistent database and passed SQLite
+quick_check on a Linux copy. The replacement retains the exact four mounts, environment and LAN
+proxy. Health at `http://192.168.0.8:3434` and exact preservation of all 12,282 saved enrichment
+journals, settings, connectors and 17 playlists passed before the same batch resumed at cursor
+3911 / 300 processed. Completed/cancelled runs remain unchanged. The private recovery bundle is
+under `/config/operator-recovery/search-actions-20261112`; no media or configuration volumes were
+removed, and nothing was published externally.
+
+Post-start independent verification matched every frozen journal hash, retained all saved IDs
+and confirmed batch 5 advanced to cursor 3913 / 302 processed. The served frontend bundle is
+`index-DQxtOWW1.js`; a real saved playlist entry was verified against its exact artist-library
+video. The first cold artist-detail probe exceeded 30 seconds during backup verification; the
+same target passed on retry after that competing disk read finished. Settled live timings were
+73–432 ms for artist searches/Y navigation, 2.86 seconds for Rock and 1.04 seconds unfiltered.
+Broad pages and cold detail loading remain storage-sensitive; this release does not migrate the
+Windows configuration volume or claim to eliminate all disk latency.
+
+After health, preservation and advancement checks, remove the superseded rollback/helper
+containers and old Vidarr image tags without deleting volumes or forcing shared layers. Keep the
+current release and private verified recovery bundles. Cache cleanup is restricted to build
+records whose descriptions identify Vidarr; unrelated services and their images/cache remain.

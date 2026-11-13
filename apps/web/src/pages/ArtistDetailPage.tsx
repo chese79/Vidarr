@@ -294,6 +294,17 @@ export default function ArtistDetailPage() {
     queryFn: () => api.artists.get(artistId),
     refetchInterval: 5000,
   });
+  const focusedVideo = useRef<string | null>(null);
+  useEffect(() => {
+    const target = `${location.key}:${location.hash}`;
+    if (!/^#video-[1-9]\d*$/.test(location.hash) || focusedVideo.current === target) return;
+    if (videoSearch) { setVideoSearch(''); return; }
+    const row = document.getElementById(location.hash.slice(1));
+    if (!row) return; // Data may still be loading.
+    row.scrollIntoView({ block: 'center' });
+    row.focus({ preventScroll: true });
+    focusedVideo.current = target;
+  }, [location.key, location.hash, artist.data, videoSearch]);
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.settings.get });
   const flagLiveConcert = useMutation({
     mutationFn: ({ id, isLiveConcert }: { id: number; isLiveConcert: boolean }) => api.musicVideos.update(id, { isLiveConcert }),
@@ -358,8 +369,14 @@ export default function ArtistDetailPage() {
   const updateArtist = useMutation({
     mutationFn: (monitored: boolean) => api.artists.update(artistId, { monitored }),
     onSuccess: (result) => {
+      queryClient.setQueryData<Awaited<ReturnType<typeof api.artists.get>>>(['artist', artistId], current => current ? {
+        ...current, monitored: result.monitored,
+      } : current);
       queryClient.invalidateQueries({ queryKey: ['artist', artistId] });
-      if (result.metadataRefreshError) {
+      if (result.sourceCollectionQueued) {
+        void queryClient.invalidateQueries({ queryKey: ['artist-video-inventory', artistId] });
+        setMonitorMessage('Monitoring saved. Video source check continues in the background; progress and any failures appear below.');
+      } else if (result.metadataRefreshError) {
         setMonitorMessage(`Video list refresh failed: ${result.metadataRefreshError}`);
       } else {
         setMonitorMessage(
@@ -640,7 +657,7 @@ export default function ArtistDetailPage() {
       {visibleVideos.length ? (
         <div className="video-list">
           {visibleVideos.map((mv) => (
-            <div className="video-row" key={mv.id}>
+            <div className="video-row" key={mv.id} id={`video-${mv.id}`} tabIndex={-1} aria-label={`${mv.title} video actions`}>
               {!mv.hasFile && (
                 <input
                   type="checkbox"
