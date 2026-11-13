@@ -750,3 +750,16 @@ status and errors show progress and retry outcomes. The flag acknowledgment does
 completed source scan. Bulk monitoring uses one chunked transaction, preserving per-ID missing
 results and rolling back flags if the transaction fails. The UI updates saved flags immediately,
 refreshes summaries without blocking action completion, and cancels superseded summary requests.
+
+## LAN forwarding without Docker lookup delays (2026-11-12)
+
+For the first connection, resolve and validate Vidarr's loopback mapping → connect before forwarding
+any bytes. Reuse a working cached mapping immediately. After three seconds, refresh it in the
+background with one shared lookup; a background failure retains the working mapping and backs off
+for three seconds. A failed TCP connection forces a new/shared discovery and retries before sending
+bytes. Failed initial/forced discovery still closes the request and stays retryable. This preserves
+binary streaming and half-close behavior without making healthy requests wait for Docker inspection.
+Updating the installed per-user proxy restarts only that verified forwarding process, not Vidarr,
+Jellyfin, enrichment or the firewall configuration.
+Initial and forced Docker discovery allow thirty seconds; direct measurement exceeded the old
+ten-second limit. Healthy cached connections still return immediately during that bounded lookup.

@@ -4,6 +4,12 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### LAN connection latency (2026-11-12)
+
+- Reuse the working Vidarr loopback port immediately while refreshing Docker discovery in the background. Preserve forced discovery on failed connections, retry backoff and forwarding without replay.
+- Allow thirty seconds for initial/recovery Docker discovery after observing the CLI exceed the old ten-second timeout.
+- Verify seven Node 22 proxy checks and syntax; update only the per-user LAN forwarder without restarting Vidarr or enrichment.
+
 ### Playlist management links and faster artist actions (2026-11-12)
 
 - Add Manage video links from saved playlists to the exact artist-library video, focusing its existing Live/Concert and deletion controls. Live entries open their recording or artist Live page; missing IDs never produce guessed links.

@@ -908,3 +908,27 @@ After health, preservation and advancement checks, remove the superseded rollbac
 containers and old Vidarr image tags without deleting volumes or forcing shared layers. Keep the
 current release and private verified recovery bundles. Cache cleanup is restricted to build
 records whose descriptions identify Vidarr; unrelated services and their images/cache remain.
+
+## LAN discovery latency follow-up — 2026-11-12
+
+A final LAN health request took 9.96 seconds even though container health was good. The Windows
+proxy previously blocked every new connection after its three-second cache expiry on Docker CLI
+inspection. It now returns a working cached loopback mapping immediately and refreshes in the
+background with one shared lookup. Initial discovery and failed-connect recovery still await
+validated Docker mapping, and bytes are never replayed after forwarding starts. Failed background
+lookups retain the usable mapping and wait three seconds before another automatic attempt.
+
+Seven Node 22 checks and the script syntax check passed, covering slow shared discovery, background
+failure/backoff, initial failure recovery, loopback validation, binary/half-close forwarding and
+failed-target refresh without replay. Only the verified installed per-user forwarding process is
+restarted for this change; the production image, mounts, firewall and enrichment batch remain.
+
+The installed Docker CLI subsequently needed 11.05 seconds for discovery, exceeding the previous
+ten-second deadline and explaining an initial forwarding disconnect. The discovery deadline is
+now thirty seconds. First connections and recovery can wait for that bounded lookup; working
+cached connections do not. This changes no application data or firewall scope.
+
+Installed-source hashes match the tested forwarder. Three separate LAN health connections,
+spaced four seconds apart, returned HTTP 200 in 8,956 ms (initial discovery), 330 ms and 161 ms.
+The last two cross the mapping refresh interval without blocking on Docker discovery. The same
+production container and running enrichment batch were retained throughout this proxy-only update.

@@ -13,15 +13,29 @@ export function parsePort(output) {
   return port;
 }
 
-export function dockerResolver(docker) {
+export function cachedPortResolver(inspect, now = Date.now) {
   let cached, expires = 0, pending;
-  return async (refresh = false) => {
-    if (!refresh && cached && Date.now() < expires) return cached;
-    if (!pending) pending = exec(docker, ['--context', 'desktop-linux', 'inspect', '--format', '{{json .NetworkSettings.Ports}}', 'vidarr'], { timeout: 10000, windowsHide: true, maxBuffer: 65536 })
-      .then(({ stdout }) => { cached = parsePort(stdout); expires = Date.now() + 3000; return cached; })
+  const lookup = () => {
+    if (!pending) pending = Promise.resolve().then(inspect)
+      .then(port => { cached = port; expires = now() + 3000; return cached; })
+      .catch(error => { expires = now() + 3000; throw error; })
       .finally(() => { pending = undefined; });
     return pending;
   };
+  return (refresh = false) => {
+    if (refresh || !cached) return lookup();
+    // A working connection must not wait for the Docker CLI. A refused
+    // connection still forces discovery before any client bytes are sent.
+    if (now() >= expires) void lookup().catch(() => {});
+    return Promise.resolve(cached);
+  };
+}
+
+export function dockerResolver(docker) {
+  return cachedPortResolver(async () => {
+    const { stdout } = await exec(docker, ['--context', 'desktop-linux', 'inspect', '--format', '{{json .NetworkSettings.Ports}}', 'vidarr'], { timeout: 30000, windowsHide: true, maxBuffer: 65536 });
+    return parsePort(stdout);
+  });
 }
 
 export function createProxy(resolve) {

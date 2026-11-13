@@ -2,7 +2,46 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import { once } from 'node:events';
-import { parsePort, createProxy } from './vidarr-lan-proxy.mjs';
+import { parsePort, createProxy, cachedPortResolver } from './vidarr-lan-proxy.mjs';
+
+test('working cached targets do not wait for slow discovery, while forced recovery does', async () => {
+  let now = 0, calls = 0, release;
+  const resolve = cachedPortResolver(() => { calls++; return calls === 1 ? 62001 : new Promise(yes => { release = yes; }); }, () => now);
+  assert.equal(await resolve(), 62001);
+  now = 3001;
+  assert.equal(await resolve(), 62001);
+  assert.equal(await resolve(), 62001);
+  assert.equal(calls, 2);
+  let recovered = false;
+  const forced = resolve(true).then(port => { recovered = true; return port; });
+  await Promise.resolve();
+  assert.equal(recovered, false);
+  release(62002);
+  assert.equal(await forced, 62002);
+  assert.equal(await resolve(), 62002);
+  assert.equal(calls, 2);
+});
+
+test('failed background discovery retains a working port and backs off; forced failures remain visible', async () => {
+  let now = 0, calls = 0;
+  const resolve = cachedPortResolver(async () => { if (++calls === 1) return 62001; throw Error('Docker unavailable'); }, () => now);
+  assert.equal(await resolve(), 62001);
+  now = 3001;
+  assert.equal(await resolve(), 62001);
+  await new Promise(yes => setImmediate(yes));
+  assert.equal(await resolve(), 62001);
+  assert.equal(calls, 2);
+  await assert.rejects(resolve(true), /Docker unavailable/);
+  assert.equal(calls, 3);
+});
+
+test('initial discovery failures remain retryable without inventing a target', async () => {
+  let available = false;
+  const resolve = cachedPortResolver(async () => { if (!available) throw Error('Docker offline'); return 62003; });
+  await assert.rejects(resolve(), /Docker offline/);
+  available = true;
+  assert.equal(await resolve(), 62003);
+});
 
 test('only accepts a valid loopback binding', () => {
   assert.equal(parsePort('{"3434/tcp":[{"HostIp":"127.0.0.1","HostPort":"63931"}]}'), 63931);
