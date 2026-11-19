@@ -746,12 +746,50 @@ export const ScheduledTaskSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   intervalMs: z.number().int(),
+  scheduleType: z.enum(['interval', 'daily']).default('interval'),
+  timeOfDay: z.string().nullable().default(null),
+  timeZone: z.string().default('America/Chicago'),
+  windowStart: z.string().nullable().default(null),
+  windowEnd: z.string().nullable().default(null),
+  continuePending: z.boolean().default(true),
+  supportsContinuation: z.boolean().optional(),
+  enabled: z.boolean().default(true),
   lastRunAt: z.string().nullable(),
+  running: z.boolean().optional(),
   nextRunAt: z.string().nullable(),
   lastResult: z.string().nullable(),
   lastError: z.string().nullable(),
 });
 export type ScheduledTask = z.infer<typeof ScheduledTaskSchema>;
+
+const TaskTimeZoneSchema = z.string().max(100).refine(value => {
+  try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
+}, 'Enter a valid IANA time zone, such as America/Chicago');
+const TaskClockSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const taskWindowFields = { windowStart: TaskClockSchema.nullable().default(null), windowEnd: TaskClockSchema.nullable().default(null), continuePending: z.boolean().default(true) };
+export const UpdateTaskScheduleSchema = z.discriminatedUnion('scheduleType', [
+  z.object({ scheduleType: z.literal('interval'), intervalMs: z.number().int().min(1000).max(2_147_483_647), timeZone: TaskTimeZoneSchema.default('America/Chicago'), enabled: z.boolean(), ...taskWindowFields }).strict(),
+  z.object({ scheduleType: z.literal('daily'), timeOfDay: TaskClockSchema, timeZone: TaskTimeZoneSchema, enabled: z.boolean(), ...taskWindowFields }).strict(),
+]).superRefine((value, ctx) => {
+  if (!!value.windowStart !== !!value.windowEnd || value.windowStart && value.windowStart === value.windowEnd) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose distinct start and end times for the automatic-run window' });
+  } else if (value.scheduleType === 'daily' && value.windowStart && value.windowEnd) {
+    const inside = value.windowStart < value.windowEnd ? value.timeOfDay >= value.windowStart && value.timeOfDay < value.windowEnd
+      : value.timeOfDay >= value.windowStart || value.timeOfDay < value.windowEnd;
+    if (!inside) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'The daily run time must be inside its automatic-run window' });
+  }
+});
+export type UpdateTaskSchedule = z.infer<typeof UpdateTaskScheduleSchema>;
+
+export const NowPlayingSchema = z.object({
+  enabled: z.boolean(), stale: z.boolean(),
+  items: z.array(z.object({
+    id: z.number().int(), connectorName: z.string(), title: z.string(), artistName: z.string().nullable(),
+    userName: z.string().nullable(), deviceName: z.string().nullable(), playing: z.boolean(), lastSeenAt: z.string(),
+    musicVideoId: z.number().int().nullable(), artistId: z.number().int().nullable(), catalogKind: z.string().nullable(), recordingId: z.number().int().nullable(),
+  })),
+});
+export type NowPlaying = z.infer<typeof NowPlayingSchema>;
 
 export const ActivityLogEntrySchema = z.object({
   id: z.number().int(),

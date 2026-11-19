@@ -158,6 +158,29 @@ export const jellyfinProvider: LibraryConnectorProvider = {
     }
     return result;
   },
+  async fetchActiveVideoSessions(config) {
+    if (!config.videoLibraryId) return [];
+    const sessions = await jellyfinGet(config, '/Sessions');
+    if (!Array.isArray(sessions)) throw Error('Jellyfin returned invalid playback sessions');
+    return sessions.filter((session: any) => typeof session.Id === 'string' && typeof session.UserId === 'string'
+      && session.Id.length > 0 && typeof session.NowPlayingItem?.Id === 'string' && session.NowPlayingItem.Id.length > 0
+      && ['MusicVideo', 'Video'].includes(session.NowPlayingItem.Type))
+      .map((session: any) => ({ sessionId: `${session.Id}:${session.PlaySessionId ?? ''}`, userId: session.UserId, externalId: session.NowPlayingItem.Id,
+        positionSeconds: Number(session.PlayState?.PositionTicks ?? 0) / 10_000_000,
+        durationSeconds: Number(session.NowPlayingItem.RunTimeTicks ?? 0) / 10_000_000,
+        playing: session.PlayState?.IsPaused !== true, title: session.NowPlayingItem.Name,
+        artistName: session.NowPlayingItem.Artists?.[0], userName: session.UserName, deviceName: session.DeviceName ?? session.Client }));
+  },
+  async fetchItemPlayCount(config, externalId) {
+    if (!config.userId || !config.videoLibraryId || !externalId) throw Error('Select a Jellyfin user, video library and item before synchronizing playback');
+    const item = await jellyfinGet(config, `/Users/${encodeURIComponent(config.userId)}/Items/${encodeURIComponent(externalId)}`);
+    const identity = (value: unknown) => typeof value === 'string' ? value.replace(/-/g, '').toLowerCase() : '';
+    if (identity(item?.Id) !== identity(externalId) || !['MusicVideo', 'Video'].includes(item?.Type)) throw Error('Jellyfin returned a different video identity');
+    const count = item.UserData?.PlayCount;
+    if (count == null) return null;
+    if (!Number.isSafeInteger(count) || count < 0 || count > 2_147_483_647) throw Error('Jellyfin returned an invalid native play count');
+    return count;
+  },
   async testConnection(config): Promise<LibraryConnectorTestResult> {
     try {
       await jellyfinGet(config, '/System/Info');

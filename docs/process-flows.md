@@ -763,3 +763,27 @@ Updating the installed per-user proxy restarts only that verified forwarding pro
 Jellyfin, enrichment or the firewall configuration.
 Initial and forced Docker discovery allow thirty seconds; direct measurement exceeded the old
 ten-second limit. Healthy cached connections still return immediately during that bounded lookup.
+
+## Editable task timing and overnight maintenance (2026-11-19)
+
+Open System / Tasks → Edit schedule → choose interval or daily time, zone and optional window
+→ validate all fields → save and replace the live timer → show the persisted next deadline.
+Library Sync defaults to 03:00 America/Chicago; heavier automatic work defaults to 02:00–10:00.
+Playback/progress/delivery/deletion checks stay all day. Run Now is an explicit override;
+automatic continuations remain inside the window, and active work finishes safely. Keep working
+controls follow-up batches for supported workers. Pending work and run history survive restart.
+
+Scheduled Library Sync shares the manual connector pipeline and its validation, observation,
+identity, inventory, enrichment and recommendation outcomes. Sync flags exclude overlapping
+runs; one failed connector does not stop the others. Video-only configurations scan the selected
+video source. See [task scheduling and playback](task-scheduling-playback.md).
+
+## Current playback and one-video count refresh (2026-11-19)
+
+Read active Jellyfin sessions → verify known selected-library copies → persist the current video
+→ expose Now Playing and its exact Manage video link → retain existing classification/deletion
+review and safety stages. On stop/next/repeat, queue the previous server ID → read its native count
+for the selected profile → update only the matching inventory and confirmed caches → retire or
+retry that item. No library scan is triggered by playback completion. Failed snapshots do not
+establish completion; unknown counts stay unknown. Persistent retries and stale-state labels
+expose recovery. Qualification counters/webhooks remain retired; Last.fm is independent.

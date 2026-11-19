@@ -47,6 +47,8 @@ import type {
   IndexerSearchResult,
   QueueRefreshResult,
   ScheduledTask,
+  UpdateTaskSchedule,
+  NowPlaying,
   HistoryEntry,
   CalendarItem,
   UpdateArtist,
@@ -554,6 +556,8 @@ export const api = {
   },
   system: {
     tasks: () => request<ScheduledTask[]>('/system/task'),
+    nowPlaying: () => request<NowPlaying>('/system/now-playing'),
+    updateTask: (name: string, schedule: UpdateTaskSchedule) => request<ScheduledTask>(`/system/task/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify(schedule) }),
     runTask: (name: string) =>
       request<{ ok: boolean }>(`/system/task/${encodeURIComponent(name)}/run`, { method: 'POST' }),
     regenerateLibraryMetadata: () =>

@@ -7,6 +7,7 @@ import { matchLibraryVideoIdentities, type CanonicalVideo, type MatchConfidence 
 import { artistNameHint } from './artistObservation.js';
 import { observedArtistName, videoIdentities, type VideoIdentity } from './videoIdentity.js';
 import { serverDeliveryPathMatches } from './deliveryPath.js';
+import { syncCachedFilePlayCounts } from './playCountSync.js';
 
 type CanonicalArtist = { id: number; name: string; musicbrainzMatchStatus: string };
 
@@ -36,6 +37,13 @@ export interface VideoSyncResult {
 // Artist", so each video's real artist and title are worked out first (see
 // videoIdentity.ts) and used for matching and for the artist records this creates.
 export async function syncConnectorVideos(connector: LibraryConnector, ctx: VideoSyncContext = {}): Promise<VideoSyncResult> {
+  const claim = await prisma.libraryConnector.updateMany({ where: { id: connector.id, videoSyncRunning: false }, data: { videoSyncRunning: true } });
+  if (!claim.count) throw Error('A video inventory scan is already running');
+  try { return await syncVideoSnapshot(connector, ctx); }
+  finally { await prisma.libraryConnector.updateMany({ where: { id: connector.id }, data: { videoSyncRunning: false } }); }
+}
+
+async function syncVideoSnapshot(connector: LibraryConnector, ctx: VideoSyncContext): Promise<VideoSyncResult> {
   const id = connector.id;
   const defaults = ctx.defaults ?? await Promise.all([
     prisma.rootFolder.findFirst({ orderBy: { id: 'asc' } }),
@@ -138,7 +146,7 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
     const existingMatches = await prisma.libraryVideo.findMany({
       where: { connectorId: id },
       select: {
-        externalId: true, title: true, artistName: true, releaseYear: true, durationSeconds: true, path: true,
+        externalId: true, libraryId: true, title: true, artistName: true, releaseYear: true, durationSeconds: true, path: true,
         playCount: true, hasThumbnail: true, normalizedArtistName: true, normalizedTitle: true,
         musicVideoId: true, matchConfidence: true, rejectedMusicVideoId: true,
       },
@@ -182,6 +190,7 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       // round trip apiece (about a minute for a few thousand videos), so rows that
       // have not changed are only re-marked available, in bulk.
       const unchanged = existing !== undefined
+        && existing.libraryId === connector.videoLibraryId
         && existing.title === video.title
         && existing.artistName === video.artistName
         && existing.releaseYear === (video.releaseYear ?? null)
@@ -220,6 +229,7 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       ...planned.filter((p) => !p.unchanged).map(({ video, normalizedArtistName, normalizedTitle, match }) => prisma.libraryVideo.upsert({
         where: { connectorId_externalId: { connectorId: id, externalId: video.externalId } },
         update: {
+          libraryId: connector.videoLibraryId,
           title: video.title,
           normalizedTitle,
           artistName: video.artistName,
@@ -235,6 +245,7 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
           matchConfidence: match.matchConfidence,
         },
         create: {
+          libraryId: connector.videoLibraryId,
           connectorId: id,
           externalId: video.externalId,
           title: video.title,
@@ -277,6 +288,9 @@ export async function syncConnectorVideos(connector: LibraryConnector, ctx: Vide
       });
     }
   }
-  if (videos.length > 0) await enrichAfterScan(connector.id);
+  if (videos.length > 0) {
+    await syncCachedFilePlayCounts(connector.id);
+    await enrichAfterScan(connector.id);
+  }
   return { videoCount: videos.length, matched };
 }

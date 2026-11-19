@@ -324,6 +324,14 @@ model ScheduledTask {
   id           Int       @id @default(autoincrement())
   name         String    @unique
   intervalMs   Int
+  scheduleType String    @default("interval")
+  timeOfDay    String?
+  timeZone     String    @default("America/Chicago")
+  enabled      Boolean   @default(true)
+  nextRunAt    DateTime?
+  windowStart  String?
+  windowEnd    String?
+  continuePending Boolean @default(true)
   lastRunAt    DateTime?
   lastResult   String? // "success" | "failed"
   lastError    String?
@@ -374,6 +382,8 @@ model DeletedVideoRecord {
 }
 
 model LibraryConnector {
+  playbackObservations PlaybackObservation[]
+  playCountRefreshes PlayCountRefresh[]
   metadataEnrichmentRuns MetadataEnrichmentRun[]
   recordingCopies RecordingServerCopy[]
   id             Int       @id @default(autoincrement())
@@ -392,6 +402,7 @@ model LibraryConnector {
   lastSyncStatus String? // "success" | "failed"
   lastSyncError  String?
   syncRunning    Boolean    @default(false)
+  videoSyncRunning Boolean  @default(false)
   syncProcessed  Int        @default(0)
   syncTotal      Int?
 
@@ -478,6 +489,7 @@ model LibraryRecording {
 // deliberately separate from MusicVideoFile: availability in a media server
 // does not prove Vidarr owns or can access the underlying local file.
 model LibraryVideo {
+  libraryId            String?
   recordingId Int?
   recording Recording? @relation(fields: [recordingId], references: [id], onDelete: SetNull)
   id                   Int              @id @default(autoincrement())
@@ -511,6 +523,42 @@ model LibraryVideo {
   @@unique([connectorId, externalId])
   @@index([normalizedArtistName, normalizedTitle])
   @@index([musicVideoId])
+}
+
+// Server-native playback state only. It never manufactures or increments a play.
+model PlaybackObservation {
+  id Int @id @default(autoincrement())
+  connectorId Int
+  connector LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  scope String
+  sessionId String
+  userId String
+  externalId String
+  title String
+  artistName String?
+  userName String?
+  deviceName String?
+  positionSeconds Float
+  playing Boolean
+  lastSeenAt DateTime
+  @@unique([connectorId, sessionId])
+  @@index([lastSeenAt])
+}
+
+model PlayCountRefresh {
+  id Int @id @default(autoincrement())
+  connectorId Int
+  connector LibraryConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  scope String
+  externalId String
+  userId String
+  baselineCount Int?
+  lastCount Int?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError String?
+  @@unique([connectorId, externalId, userId])
+  @@index([nextAttemptAt])
 }
 
 model Playlist {

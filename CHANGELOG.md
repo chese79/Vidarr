@@ -4,6 +4,15 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Scheduled maintenance and playback visibility (2026-11-19)
+
+- Add daily Library Sync at 03:00 America/Chicago and 02:00–10:00 defaults for heavier background tasks. Keep playback/progress/delivery/deletion checks running all day.
+- Make every active task's interval/daily timing, time zone, automatic window and enabled state editable. Persist next deadlines, apply changes live, prevent overlap and recover interrupted runs; retain Run Now and bounded pending-work controls.
+- Share the complete manual/scheduled connector flow, support video-only libraries, preserve empty-scan data and refresh file-count caches from confirmed native inventory.
+- Add Now Playing with player/user, pause and stale status, plus exact artist/video or Live management links. Refresh one video's native Jellyfin count on stop/next/repeat, with durable retries and selected-profile scope; keep qualification counters retired.
+- Add migrations for schedules, library provenance and playback observations/retries. Exclude unrelated local worktrees from Docker build context.
+- Verify 125 server and 22 UI checks and production builds. Deploy locally with configuration, playlists and all 18,853 enrichment journals preserved; resume run 6 at cursor 6,520. Complete the prior 6,512-record library scan and catch up native play counts.
+
 ### LAN connection latency (2026-11-12)
 
 - Reuse the working Vidarr loopback port immediately while refreshing Docker discovery in the background. Preserve forced discovery on failed connections, retry backoff and forwarding without replay.

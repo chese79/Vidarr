@@ -932,3 +932,47 @@ Installed-source hashes match the tested forwarder. Three separate LAN health co
 spaced four seconds apart, returned HTTP 200 in 8,956 ms (initial discovery), 330 ms and 161 ms.
 The last two cross the mapping refresh interval without blocking on Docker discovery. The same
 production container and running enrichment batch were retained throughout this proxy-only update.
+
+## Scheduled maintenance and playback visibility — 2026-11-19
+
+The local release `vidarr-scheduled-playback-20261119:release` adds two additive Prisma
+migrations for editable schedules, selected-library inventory scope, persistent playback
+observations and pending native-count reads. See [task scheduling and playback](task-scheduling-playback.md)
+for timing, recovery and operational limitations. Only Vidarr is recreated; the native
+Jellyfin server and its players require no restart. Preserve the original four mounts,
+environment and LAN forwarder when replacing the container.
+
+Before this release, the deployed full library scan completed successfully at
+2026-11-19 06:41:32 UTC (00:41 Central), processing 2,520 artists and 3,992 videos.
+The separate selected-profile native-count catch-up updated 70 inventory rows and
+681 local count-cache rows, changing the recorded aggregate from 318 to 392.
+It copied server facts without modifying Jellyfin play history.
+
+The Node 22 Docker verification passed 125 server checks and 22 UI checks, followed
+by both production builds. Playback integration checks use real HTTP calls against
+a local stand-in; no test fabricates watches in production. The private recovery
+bundle is kept under `/config/operator-recovery/scheduled-playback-20261119` and
+must pass SQLite integrity and journal-preservation checks before cleanup.
+
+The first candidate omitted the updated shared-types runtime output and failed
+startup. The corrected image includes it, passed an isolated runtime-export check
+and serves bundle `index-BZZB6y6C.js`. The ordinary repository Dockerfile already
+copies shared-types output; the correction was to the private incremental release
+recipe. Live API checks confirmed Library Sync next runs at 03:00 Central, heavier
+tasks wait until 02:00 Central, and Playback Monitor succeeds all day. Now Playing
+reported a fresh empty feed because no eligible video was playing; no real completion
+event was manufactured for verification.
+
+The deployment retained the exact environment, four mount identities, configuration,
+ordered playlists and 18,853 enrichment journals. Run 6 resumed at cursor 6,520
+(2,885 processed, 13 updated), with its next automatic work subject to the new
+maintenance window. The independent recovery check verifies frozen journal hashes,
+current journal IDs and nonregressing run progress. Keep the private verified bundle
+after removing superseded release containers/images and explicitly identified Vidarr cache.
+
+Final verification passed SQLite quick_check and all 18,853 frozen journal hashes;
+the live database retained every saved ID and run 6 remained running at its original
+cursor. Removed this release's rollback, failed candidate and recovery helpers and
+the superseded production image. The intermediate image manifests were already absent.
+Scoped Vidarr build-cache cleanup reclaimed 295.1 MB. No volumes, media, unrelated
+services or concurrently owned review containers/images were removed.
