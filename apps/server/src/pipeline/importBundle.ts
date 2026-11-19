@@ -1,3 +1,4 @@
+import { prepareImportDirectory, assertImportBundleOwnership, type ImportOwner } from '../media/importDestination.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { placeFile, type TransferMode } from './transfer.js';
@@ -8,8 +9,9 @@ import { ownsSidecar } from '../media/sidecarOwnership.js';
 // directory contents, symlinks, downloader control files, or another video.
 const SIDECAR = /\.(nfo|json|xml|jpg|jpeg|png|webp|srt|vtt|ass|ssa|sub|idx|txt)$/i;
 
-export async function stageImportBundle(source: string, destination: string, mode: TransferMode, metadata: LibraryMetadata) {
-  await fs.mkdir(path.dirname(destination), { recursive: true });
+export async function stageImportBundle(source: string, destination: string, mode: TransferMode, metadata: LibraryMetadata, options?: { root: string; owner: ImportOwner; managedPath?: string }) {
+  if (options) await prepareImportDirectory(options.root, destination);
+  else await fs.mkdir(path.dirname(destination), { recursive: true });
   const staging = await fs.mkdtemp(path.join(path.dirname(destination), '.vidarr-import-'));
   const sourceBase = path.basename(source, path.extname(source));
   const destinationBase = path.basename(destination, path.extname(destination));
@@ -43,8 +45,18 @@ export async function stageImportBundle(source: string, destination: string, mod
       sources.push(companion);
     }
     await writeLibraryMetadata(stagedVideo, metadata, { preserveExisting: true });
-    for (const entry of await fs.readdir(staging, { withFileTypes: true })) {
-      if (!entry.isFile()) continue;
+    const bundleEntries = (await fs.readdir(staging, { withFileTypes: true })).filter(entry => entry.isFile());
+    if (options) {
+      await prepareImportDirectory(options.root, destination);
+      await assertImportBundleOwnership(destination, bundleEntries.map(entry => path.join(path.dirname(destination), entry.name)), options.owner, options.managedPath);
+      for (const entry of bundleEntries) {
+        const target = path.join(path.dirname(destination), entry.name);
+        const exists = await fs.lstat(target).then(() => true, error => { if (error.code === 'ENOENT') return false; throw error; });
+        const sameStem = options.managedPath && path.join(path.dirname(options.managedPath), path.basename(options.managedPath, path.extname(options.managedPath))) === path.join(path.dirname(destination), destinationBase);
+        if (exists && !sameStem && path.resolve(source) !== path.resolve(destination)) throw new Error('Untracked import bundle destination exists; retained for review');
+      }
+    }
+    for (const entry of bundleEntries) {
       const target = path.join(path.dirname(destination), entry.name);
       const backup = path.join(staging, `${entry.name}.backup`);
       let hasBackup = false;

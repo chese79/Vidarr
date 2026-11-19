@@ -86,12 +86,7 @@ export async function generatePlaylistWithSync(
       remotePlaylistId: result.remotePlaylistId, matchedCount: result.matchedCount, unmatchedTitles: result.unmatchedTitles };
   } catch (error) {
     publication = { connectorId, status: 'failed', remotePlaylistId: null, matchedCount: 0, unmatchedTitles: [], error: (error as Error).message };
-    // Keep failures visible after reload even when validation failed before Push's own catch.
-    if (connectorId) await prisma.playlistSync.upsert({
-      where: { playlistId_connectorId: { playlistId: generated.playlistId, connectorId } },
-      update: { lastPushStatus: 'failed', lastPushError: publication.error, lastPushedAt: new Date() },
-      create: { playlistId: generated.playlistId, connectorId, lastPushStatus: 'failed', lastPushError: publication.error, lastPushedAt: new Date() },
-    }).catch(recordError => logActivity('warn', 'playlist:publication', recordError).catch(() => {}));
+
   }
   return { ...generated, sync, publication };
 }

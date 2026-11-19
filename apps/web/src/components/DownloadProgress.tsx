@@ -6,18 +6,18 @@ import { downloadStage } from './downloadStage';
 
 export default function DownloadProgress() {
   const client = useQueryClient();
-  const lastError = useRef(client.getQueryState(['queue'])?.error);
-  const queue = useQuery({ queryKey: ['queue'], queryFn: api.queue.list, refetchInterval: 3000 });
+  const lastError = useRef(client.getQueryState(['queue', 'summary'])?.error);
+  const queue = useQuery({ queryKey: ['queue', 'summary'], queryFn: api.queue.summary, refetchInterval: 3000 });
   if (queue.error) lastError.current = queue.error;
   if (queue.isSuccess) lastError.current = null;
-  const active = queue.data?.filter(item => ['downloading', 'importing'].includes(item.status)) ?? [];
-  const waiting = queue.data?.filter(item => item.status === 'queued').length ?? 0;
-  const unresolved = queue.data?.filter(item => item.status === 'submissionUnknown').length ?? 0;
+  const active = queue.data?.items ?? [];
+  const waiting = queue.data?.waiting ?? 0;
+  const unresolved = queue.data?.unresolved ?? 0;
   const unavailable = Boolean(lastError.current);
   const loading = queue.isPending && !unavailable;
   if (!active.length && !waiting && !unresolved && !loading && !unavailable) return null;
   return <section className="download-progress" aria-label="Active downloads">
-    <Link to="/queue">Downloads · {active.filter(item => item.status === 'downloading').length} transferring · {active.filter(item => item.status === 'importing').length} processing</Link>
+    <Link to="/queue">Downloads · {queue.data?.transferring ?? 0} transferring · {queue.data?.processing ?? 0} processing</Link>
     {loading && <small role="status">Loading download updates…</small>}
     {active.map(item => {
       const progress = Math.max(0, Math.min(1, item.progress));

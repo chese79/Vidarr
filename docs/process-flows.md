@@ -763,3 +763,16 @@ Updating the installed per-user proxy restarts only that verified forwarding pro
 Jellyfin, enrichment or the firewall configuration.
 Initial and forced Docker discovery allow thirty seconds; direct measurement exceeded the old
 ten-second limit. Healthy cached connections still return immediately during that bounded lookup.
+
+
+## Review safety and bounded queue browsing (2026-11-19)
+
+Automatic indexer acquisition: search → verify exact artist/song and compatible music-video content → hold uncertainty in History for manual source review, or reserve/download → validate → stage the complete bundle → check physical root and every destination owner → commit ownership → notify server → confirm exact delivery. An allowed quality alone never authorizes a result. Failed preflight/placement keeps the original download and old metadata for recovery.
+
+Artist removal: reject while any video has waiting, active, processing or uncertain-submission work → finish/reconcile that work → retry removal. The check and deletion share the writer reservation. No running external job is silently forgotten.
+
+Playlist publication: serialize push/unpublish/rebind/delete for the playlist → validate the binding and playable items → reuse/create its remote identity → save the outcome. Later concurrent requests see the saved identity. Existing deliberate keep-remote and offline-delete reporting remain unchanged.
+
+Connector synchronization: process only configured audio/video stages (Subsonic retains its artist endpoint) → reconcile observations/inventory and native play counts → expose review/failed outcomes. An unselected audio library does not block a selected video library.
+
+Queue browsing: sidebar reads bounded active rows plus counts → Queue opens the ordered paged active list → moves operate on global waiting order → complete/failed history stays below. Authentication outages retain credentials and offer retry; only a rejected credential requires sign-in. See [review corrections](code-review-fixes-2026-11-19.md).

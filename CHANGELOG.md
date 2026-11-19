@@ -4,6 +4,14 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+### Full review corrections and simpler shared workflows (2026-11-19)
+
+- Fix all ten reproduced findings: indexer identity admission, physical import containment, active artist deletion, bundle ownership, normalized unmatched counts, Live native count refresh, video-only connector sync, concurrent playlist publication, transient authentication failures and Base32 magnet handles.
+- Share import planning, play-count policy and playlist publication recovery; extract artist summaries and focused source/editor UI components. Index reconciliation once per scan.
+- Bound sidebar polling to active rows/counts and page the waiting queue while preserving legacy clients and global reorder actions.
+- Repair cancellation-aware and asynchronous-navigation tests; consolidate fixture cleanup and require Node 22 server/web tests and production builds before Docker publication.
+- Preserve review, validation, rollback, media ownership and separate server-delivery confirmation. See [review corrections](docs/code-review-fixes-2026-11-19.md).
+
 ### LAN connection latency (2026-11-12)
 
 - Reuse the working Vidarr loopback port immediately while refreshing Docker discovery in the background. Preserve forced discovery on failed connections, retry backoff and forwarding without replay.

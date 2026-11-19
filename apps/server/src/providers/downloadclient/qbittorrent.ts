@@ -1,3 +1,4 @@
+import { magnetInfoHash } from './magnet.js';
 import type { DownloadClient } from '@prisma/client';
 import type { DownloadClientProvider, DownloadStatus, GrabHandle } from './types.js';
 import { withRetry } from '../../pipeline/retry.js';
@@ -26,7 +27,6 @@ async function login(client: DownloadClient): Promise<string> {
   });
 }
 
-const MAGNET_HASH = /urn:btih:([a-fA-F0-9]{40}|[A-Z2-7]{32})/;
 
 const STATES_DOWNLOADING = new Set([
   'downloading',
@@ -51,11 +51,10 @@ export const qbittorrentProvider: DownloadClientProvider = {
   },
 
   async addDownload(client, downloadUrl, category): Promise<GrabHandle> {
-    const match = MAGNET_HASH.exec(downloadUrl);
-    if (!match) {
+    const hash = magnetInfoHash(downloadUrl);
+    if (!hash) {
       throw new Error('Only magnet links are currently supported for qBittorrent grabs.');
     }
-    const hash = match[1].toLowerCase();
     const cookie = await login(client);
 
     const form = new FormData();

@@ -1,3 +1,4 @@
+import { prepareImportDirectory } from '../media/importDestination.js';
 import { storageIdentity } from '../media/storageIdentity.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -104,8 +105,7 @@ export async function importRecordingDownload(item: DownloadQueueItem) {
     if (slot?.legacyMusicVideoFileId && !slot.path) throw new LiveError('Resolve the legacy file ownership conflict before importing this part');
     const destination = path.join(rootPath, `Recording ${recording.id}`, `Part ${position}${path.extname(source).toLowerCase()}`);
     if (!isPathWithinRoot(rootPath, destination)) throw new LiveError('Destination escaped its root');
-    await fs.mkdir(path.dirname(destination), { recursive: true });
-    if (!isPathWithinRoot(rootPath, await fs.realpath(path.dirname(destination)))) throw new LiveError('Destination directory escaped through a symlink');
+    await prepareImportDirectory(rootPath, destination);
     if (await fs.lstat(destination).then(() => true, () => false)) throw new LiveError('Unregistered destination exists; retain both files for recovery');
     if (await liveScanExcluded([`sha256:${sha256}`])) throw new LiveError('This exact recording was excluded from future imports');
     if (files.length === 1) {
@@ -123,7 +123,7 @@ export async function importRecordingDownload(item: DownloadQueueItem) {
       }
     }
     const artistName = [...new Set(recording.performances.map(link => link.performance.artist.name))].join(', ');
-    const bundle = await stageImportBundle(source, destination, 'copy', { artistName, title: recording.title, year: null, director: null, thumbnailUrl: null });
+    const bundle = await stageImportBundle(source, destination, 'copy', { artistName, title: recording.title, year: null, director: null, thumbnailUrl: null }, { root: rootPath, owner: { recordingId: recording.id } });
     try {
       await prisma.$transaction(async tx => {
         const data = { rootFolderId: root.id, path: destination, available: true, sizeBytes: BigInt(stat.size), storageIdentity: await storageIdentity(rootPath, true), sha256, durationSeconds: probe.duration, importedQueueId: item.id };

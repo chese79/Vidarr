@@ -1,3 +1,4 @@
+import { reviewIndexerIdentity } from '../catalog/acquisitionIdentity.js';
 import { ACTIVE_DOWNLOAD_STATUSES } from '../media/lifecycle.js';
 import { prisma, logActivity } from '../db/client.js';
 import { searchAllIndexers } from './search.js';
@@ -194,9 +195,15 @@ export async function autoSearchAndGrab(
   }
 
   const results = await searchAllIndexers(`${musicVideo.artist.name} ${musicVideo.title}`);
-  const eligible = results.filter((r) => allowedQualities.has(r.quality));
+  const eligible = [] as typeof results;
+  for (const result of results.filter(result => allowedQualities.has(result.quality))) {
+    const review = reviewIndexerIdentity(result.title, musicVideo.artist.name, musicVideo.title);
+    if (review.accepted) eligible.push(result);
+    else await prisma.history.create({ data: { musicVideoId, eventType: 'candidateHeldForReview',
+      data: JSON.stringify({ source: 'indexer', title: result.title, reason: review.reason }) } });
+  }
   if (!eligible.length) {
-    return { musicVideoId, grabbed: false, reason: 'No results in an allowed quality' };
+    return { musicVideoId, grabbed: false, reason: 'No identity-verified result in an allowed quality; review search results' };
   }
 
   const best = eligible.reduce((a, b) => {

@@ -30,10 +30,10 @@ export async function reconcileRecordingDelivery() {
         const same = matches.length === 1 ? matches[0] : undefined;
         // Server-only parts deliberately have no local path. Recover their exact
         // retained server identity independently of the local delivery matcher.
-        if (Boolean(same) !== copy.available) {
+        if (Boolean(same) !== copy.available || same && same.playCount !== copy.playCount) {
           const changed = await prisma.recordingServerCopy.updateMany({ where: { id: copy.id, part: { recording: { catalogType: 'live', deletionState: null } } },
             data: { available: Boolean(same), ...(same ? { confirmedAt: new Date(), playCount: same.playCount } : {}) } });
-          if (same) confirmed += changed.count;
+          if (same && !copy.available) confirmed += changed.count;
         }
       }
       let afterId = 0;

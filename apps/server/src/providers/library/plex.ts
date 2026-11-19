@@ -128,6 +128,7 @@ export const plexProvider: LibraryConnectorProvider = {
   },
 
   async fetchArtists(config): Promise<FetchedLibraryArtist[]> {
+    if (!config.musicLibraryId && config.videoLibraryId) return []; // Valid video-only connector: no audio stage.
     if (!config.musicLibraryId) {
       throw new Error('Plex connector has no music library id; run Test first.');
     }

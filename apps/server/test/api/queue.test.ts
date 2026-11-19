@@ -50,6 +50,28 @@ describe('queue routes', () => {
       sourceType: 'indexer', sourceRef: 'magnet:?xt=urn:btih:' + 'a'.repeat(40), status: 'submissionUnknown' } });
   }
 
+  it('bounds sidebar polling and pages the active queue without historical failures', async () => {
+    const unknown = await unknownSubmission();
+    const { artistId } = await prisma.musicVideo.findUniqueOrThrow({ where: { id: unknown.musicVideoId! } });
+    await prisma.musicVideo.createMany({ data: Array.from({ length: 62 }, (_, index) => ({ artistId, title: `Queue ${index}`, normalizedTitle: `queue ${index}` })) });
+    const videos = await prisma.musicVideo.findMany({ where: { artistId, id: { not: unknown.musicVideoId! } }, orderBy: { id: 'asc' } });
+    await prisma.downloadQueueItem.createMany({ data: videos.map((video, index) => ({ musicVideoId: video.id,
+      sourceType: 'youtube', sourceRef: `queue-${index}`, status: index < 60 ? 'queued' : index === 60 ? 'downloading' : 'failed' })) });
+    const summary = (await app.inject({ url: '/api/v1/queue/summary', headers: authHeaders() })).json();
+    expect(summary).toMatchObject({ waiting: 60, unresolved: 1, transferring: 1, processing: 0 });
+    expect(summary.items).toHaveLength(1);
+    expect(summary.items[0]).not.toHaveProperty('sourceRef');
+    const first = (await app.inject({ url: '/api/v1/queue/active?page=1', headers: authHeaders() })).json();
+    const second = (await app.inject({ url: '/api/v1/queue/active?page=2', headers: authHeaders() })).json();
+    const firstWaiting = await prisma.downloadQueueItem.findFirstOrThrow({ where: { sourceRef: 'queue-0' } });
+    const lastWaiting = await prisma.downloadQueueItem.findFirstOrThrow({ where: { sourceRef: 'queue-59' } });
+    expect(first.firstWaitingId).toBe(firstWaiting.id); expect(second.firstWaitingId).toBe(firstWaiting.id);
+    expect(first.lastWaitingId).toBe(lastWaiting.id); expect(second.lastWaitingId).toBe(lastWaiting.id);
+    expect(first.total).toBe(62); expect(first.items).toHaveLength(50); expect(second.items).toHaveLength(12);
+    expect(new Set([...first.items, ...second.items].map((item: { id: number }) => item.id)).size).toBe(62);
+    expect(first.items.every((item: { status: string }) => item.status !== 'failed')).toBe(true);
+  });
+
   it('persists waiting order, keeps new requests at the end and rejects active/stale moves', async () => {
     const active = await unknownSubmission();
     const artistId = (await prisma.musicVideo.findUniqueOrThrow({ where: { id: active.musicVideoId } })).artistId;

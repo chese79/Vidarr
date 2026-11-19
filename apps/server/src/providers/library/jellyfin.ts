@@ -175,6 +175,7 @@ export const jellyfinProvider: LibraryConnectorProvider = {
   },
 
   async fetchArtists(config): Promise<FetchedLibraryArtist[]> {
+    if (!config.musicLibraryId && config.videoLibraryId) return []; // Valid video-only connector: no audio stage.
     if (!config.userId) {
       throw new Error('Jellyfin connector has no resolved user id; run Test first.');
     }

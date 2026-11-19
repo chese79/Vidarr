@@ -1,3 +1,4 @@
+import { magnetInfoHash } from '../providers/downloadclient/magnet.js';
 import { liveConfiguration } from '../live/policy.js';
 import { assertRecordingEligible } from '../live/acquisition.js';
 import fs from 'node:fs/promises';
@@ -79,7 +80,7 @@ export async function queueRoutes(app: FastifyInstance) {
     if (body.action === 'attach') {
       if (!item.downloadClient) return reply.code(409).send({ error: 'Download client is missing; restore its configuration first.' });
       // A magnet exposes a stable handle, so reject a different torrent even if it exists.
-      const expectedHash = /xt=urn:btih:([a-f0-9]{40})/i.exec(item.sourceRef)?.[1];
+      const expectedHash = magnetInfoHash(item.sourceRef);
       if (item.downloadClient.implementation === 'qBittorrent' && expectedHash && expectedHash.toLowerCase() !== body.externalRef.toLowerCase()) {
         return reply.code(409).send({ error: 'Torrent hash does not match this requested video download.' });
       }
@@ -103,6 +104,38 @@ export async function queueRoutes(app: FastifyInstance) {
     if (!updated) return reply.code(409).send({ error: 'Queue item changed; refresh before reconciling.' });
     wakeDownloadQueue();
     return { ok: true, action: body.action };
+  });
+  // Bounded polling contracts; the legacy list remains for older clients.
+  app.get('/api/v1/queue/summary', async () => {
+    const [counts, items] = await Promise.all([
+      readPrisma.downloadQueueItem.groupBy({ by: ['status'], where: { status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } }, _count: true }),
+      readPrisma.downloadQueueItem.findMany({ where: { status: { in: ['downloading', 'importing'] } }, orderBy: { id: 'asc' }, take: 50,
+        select: { id: true, status: true, phase: true, progress: true,
+          musicVideo: { select: { title: true, artist: { select: { name: true } } } }, recording: { select: { title: true } } } }),
+    ]);
+    const count = (status: string) => counts.find(row => row.status === status)?._count ?? 0;
+    return { items, waiting: count('queued'), unresolved: count('submissionUnknown'), transferring: count('downloading'), processing: count('importing') };
+  });
+  app.get('/api/v1/queue/active', async req => {
+    const { page, pageSize } = z.object({ page: z.coerce.number().int().min(1).max(1000000).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(50) }).parse(req.query);
+    const where = { status: { in: [...ACTIVE_DOWNLOAD_STATUSES] } };
+    const [total, items, bounds] = await Promise.all([
+      readPrisma.downloadQueueItem.count({ where }),
+      readPrisma.$queryRaw<Array<{ id: number }>>(Prisma.sql`SELECT "id" FROM "DownloadQueueItem"
+        WHERE "status" IN (${Prisma.join(ACTIVE_DOWNLOAD_STATUSES)})
+        ORDER BY CASE WHEN "status" = 'queued' THEN 1 ELSE 0 END, "queuePosition", "addedAt", "id"
+        LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`),
+      readPrisma.$queryRaw<Array<{ firstWaitingId: number | null; lastWaitingId: number | null }>>(Prisma.sql`SELECT
+        (SELECT "id" FROM "DownloadQueueItem" WHERE "status" = 'queued' ORDER BY "queuePosition", "addedAt", "id" LIMIT 1) AS "firstWaitingId",
+        (SELECT "id" FROM "DownloadQueueItem" WHERE "status" = 'queued' ORDER BY "queuePosition" DESC, "addedAt" DESC, "id" DESC LIMIT 1) AS "lastWaitingId"`),
+    ]);
+    const rows = await readPrisma.downloadQueueItem.findMany({ where: { id: { in: items.map(item => item.id) } },
+      include: { recording: { include: { performances: { include: { performance: { include: { artist: true } } } } } }, musicVideo: { include: { artist: true } } } });
+    const byId = new Map(rows.map(row => [row.id, row]));
+    return { total, page, pageSize, ...bounds[0], items: items.flatMap(item => {
+      const row = byId.get(item.id); return row ? [{ ...row, stageTimings: row.stageTimings ? readDownloadTimings(row.stageTimings) : null }] : [];
+    }) };
   });
   app.get('/api/v1/queue', async (req) => {
     const { activeOnly } = z.object({ activeOnly: z.enum(['true', 'false']).optional() }).parse(req.query);

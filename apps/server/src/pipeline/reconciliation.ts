@@ -33,6 +33,20 @@ export interface MatchResult {
   matchConfidence: MatchConfidence | null;
 }
 
+export interface CanonicalVideoIndex { byArtist: ReadonlyMap<string, CanonicalVideo[]> }
+export function indexCanonicalVideos(videos: CanonicalVideo[]): CanonicalVideoIndex {
+  const byArtist = new Map<string, CanonicalVideo[]>();
+  for (const video of videos) {
+    const bucket = byArtist.get(video.normalizedArtistName) ?? [];
+    bucket.push(video); byArtist.set(video.normalizedArtistName, bucket);
+  }
+  return { byArtist };
+}
+type CanonicalVideos = CanonicalVideo[] | CanonicalVideoIndex;
+function videosForArtist(videos: CanonicalVideos, name: string): CanonicalVideo[] {
+  return Array.isArray(videos) ? videos.filter(video => video.normalizedArtistName === name) : videos.byArtist.get(name) ?? [];
+}
+
 const PROBABLE_THRESHOLD = 0.5;
 const AMBIGUOUS_THRESHOLD = 0.3;
 
@@ -63,11 +77,12 @@ export function tokenSimilarity(a: string, b: string): number {
 // immediately re-proposed.
 export function matchLibraryVideo(
   candidate: MatchCandidate,
-  canonicalVideos: CanonicalVideo[],
+  canonicalVideos: CanonicalVideos,
   previous: PreviousMatch | null,
   rejectedMusicVideoId: number | null,
 ): MatchResult {
-  const exact = canonicalVideos.filter(
+  const artistVideos = videosForArtist(canonicalVideos, candidate.normalizedArtistName);
+  const exact = artistVideos.filter(
     (v) =>
       v.normalizedArtistName === candidate.normalizedArtistName &&
       v.normalizedTitle === candidate.normalizedTitle &&
@@ -80,7 +95,7 @@ export function matchLibraryVideo(
     return { musicVideoId: exact[0].id, matchConfidence: 'ambiguous' };
   }
 
-  const sameArtist = canonicalVideos.filter(
+  const sameArtist = artistVideos.filter(
     (v) => v.normalizedArtistName === candidate.normalizedArtistName && v.id !== rejectedMusicVideoId,
   );
   let best: { video: CanonicalVideo; score: number } | null = null;
@@ -117,7 +132,7 @@ export function matchLibraryVideo(
 // better identity can replace an older, weaker match but a miss never erases one.
 export function matchLibraryVideoIdentities(
   candidates: MatchCandidate[],
-  canonicalVideos: CanonicalVideo[],
+  canonicalVideos: CanonicalVideos,
   previous: PreviousMatch | null,
   rejectedMusicVideoId: number | null,
 ): MatchResult {

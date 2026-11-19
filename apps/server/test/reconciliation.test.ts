@@ -141,3 +141,20 @@ describe('matchLibraryVideo', () => {
     expect(result).toEqual({ musicVideoId: 2, matchConfidence: 'probable' });
   });
 });
+
+import { indexCanonicalVideos } from '../src/pipeline/reconciliation.js';
+it('indexed reconciliation preserves exact, fuzzy, rejected and previous-match behavior', () => {
+  const videos = [
+    { id: 1, normalizedArtistName: 'artist', normalizedTitle: 'the song', releaseYear: 2000 },
+    { id: 2, normalizedArtistName: 'other', normalizedTitle: 'the song', releaseYear: 2000 },
+    { id: 3, normalizedArtistName: 'artist', normalizedTitle: 'another song', releaseYear: 2001 },
+  ];
+  for (const title of ['the song', 'the song remastered', 'unrelated']) {
+    for (const rejected of [null, 1]) {
+      const candidate = { normalizedArtistName: 'artist', normalizedTitle: title, releaseYear: 2000 };
+      const previous = { musicVideoId: 3, matchConfidence: null };
+      expect(matchLibraryVideo(candidate, indexCanonicalVideos(videos), previous, rejected))
+        .toEqual(matchLibraryVideo(candidate, videos, previous, rejected));
+    }
+  }
+});
