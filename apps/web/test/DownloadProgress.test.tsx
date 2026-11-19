@@ -4,6 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import DownloadProgress from '../src/components/DownloadProgress';
 
+function seedQueue(client: QueryClient, rows: any[]) {
+  client.setQueryData(['queue', 'summary'], { items: rows.filter(row => ['downloading', 'importing'].includes(row.status)),
+    waiting: rows.filter(row => row.status === 'queued').length, unresolved: rows.filter(row => row.status === 'submissionUnknown').length,
+    transferring: rows.filter(row => row.status === 'downloading').length, processing: rows.filter(row => row.status === 'importing').length });
+}
+
 it('shows a loading indicator instead of disappearing before the first queue response', () => {
   const client = new QueryClient();
   const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
@@ -12,14 +18,14 @@ it('shows a loading indicator instead of disappearing before the first queue res
 
 it('shows unavailable updates when the first queue request fails', async () => {
   const client = new QueryClient();
-  await client.prefetchQuery({ queryKey: ['queue'], queryFn: async () => { throw new Error('offline'); }, retry: false });
+  await client.prefetchQuery({ queryKey: ['queue', 'summary'], queryFn: async () => { throw new Error('offline'); }, retry: false });
   const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
   expect(html).toContain('Download updates unavailable');
 });
 
 it('shows active progress and waiting count while excluding failed downloads', () => {
   const client = new QueryClient();
-  client.setQueryData(['queue'], [
+  seedQueue(client, [
     { id: 1, status: 'downloading', progress: .45, musicVideo: { title: 'Song', artist: { name: 'Artist' } } },
     { id: 2, status: 'queued', progress: 0 }, { id: 3, status: 'failed', progress: .2 },
   ]);
@@ -31,7 +37,7 @@ it('shows active progress and waiting count while excluding failed downloads', (
 
 it('keeps unresolved submissions visible even when no transfer is active', () => {
   const client = new QueryClient();
-  client.setQueryData(['queue'], [{ id: 1, status: 'submissionUnknown', progress: 0 }]);
+  seedQueue(client, [{ id: 1, status: 'submissionUnknown', progress: 0 }]);
   const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><DownloadProgress /></MemoryRouter></QueryClientProvider>);
   expect(html).toContain('1 submission need reconciliation');
   expect(html).toContain('href="/queue"');
@@ -39,7 +45,7 @@ it('keeps unresolved submissions visible even when no transfer is active', () =>
 
 it('separates processing work from transfers and shows validation waits without claiming 100% completion', () => {
   const client = new QueryClient();
-  client.setQueryData(['queue'], [
+  seedQueue(client, [
     { id: 1, status: 'importing', phase: 'waitingValidation', progress: 1, musicVideo: { title: 'Ready', artist: { name: 'Artist' } } },
     { id: 2, status: 'downloading', phase: 'merging', progress: 1, musicVideo: { title: 'Next', artist: { name: 'Artist' } } },
   ]);

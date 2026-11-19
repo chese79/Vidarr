@@ -71,7 +71,7 @@ it('retains the artist index and list in Live mode without music-video exclusion
   expect(host.querySelector('[aria-label="Jump to a letter"]')).not.toBeNull();
   expect(host.querySelector('.artist-list')?.textContent).toContain('Adele');
   expect((host.querySelector('[aria-label="Search artists"]') as HTMLInputElement).value).toBe('Adele');
-  expect(api.artists.summary).toHaveBeenCalledWith(expect.objectContaining({ hideWithoutVideos: false, hasMissing: undefined, minPlayCount: undefined, letter: 'A' }));
+  expect(api.artists.summary).toHaveBeenCalledWith(expect.objectContaining({ hideWithoutVideos: false, hasMissing: undefined, minPlayCount: undefined, letter: 'A' }), expect.any(AbortSignal));
   expect(host.textContent).not.toContain('Search all eligible');
   expect(host.textContent).not.toContain('Search missing');
   expect(api.live.performances).not.toHaveBeenCalled();

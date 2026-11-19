@@ -108,6 +108,12 @@ export interface QueueItem {
   musicVideo: { title: string; artist: { id: number; name: string } } | null;
 }
 
+export interface QueueProgress {
+  items: { id: number; status: string; phase: string | null; progress: number;
+    musicVideo: { title: string; artist: { name: string } } | null; recording: { title: string } | null }[];
+  waiting: number; unresolved: number; transferring: number; processing: number;
+}
+
 const API_KEY_STORAGE_KEY = 'vidarr_api_key';
 
 export function getStoredApiKey(): string | null {
@@ -550,6 +556,8 @@ export const api = {
     reconcile: (id: number, body: { action: 'attach'; externalRef: string; verified: true } | { action: 'notSubmitted'; verified: true }) =>
       request<{ ok: boolean }>(`/queue/${id}/reconcile`, { method: 'POST', body: JSON.stringify(body) }),
     list: () => request<QueueItem[]>('/queue?activeOnly=true'),
+    page: (page = 1) => request<{ items: QueueItem[]; total: number; page: number; pageSize: number; firstWaitingId: number | null; lastWaitingId: number | null }>(`/queue/active?page=${page}`),
+    summary: () => request<QueueProgress>('/queue/summary'),
     results: (section: 'completed' | 'failures', page = 1, pageSize = 50) =>
       request<{ total: number; page: number; pageSize: number; items: HistoryEntry[] }>(`/queue/${section}?page=${page}&pageSize=${pageSize}`),
     refresh: () => request<QueueRefreshResult>('/queue/refresh', { method: 'POST' }),

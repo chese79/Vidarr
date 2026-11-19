@@ -12,7 +12,7 @@ import { generatePlaylistWithSync, regenerateSmartPlaylistWithSync } from '../pi
 import { PlaylistEditError, reorderPlaylistItems, reorderPlaylistItemIds, updatePlaylist } from '../pipeline/playlistEdit.js';
 import {
   pushPlaylist,
-  removeRemoteCopies,
+  deletePublishedPlaylist,
   republishChangedSmartPlaylist,
   unpublishPlaylist,
 } from '../pipeline/playlistPush.js';
@@ -134,10 +134,8 @@ export async function playlistRoutes(app: FastifyInstance) {
   app.delete('/api/v1/playlist/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
     const keepRemote = (req.query as { keepRemote?: string }).keepRemote === 'true';
-    const playlist = await prisma.playlist.findUnique({ where: { id }, select: { id: true } });
-    if (!playlist) return reply.code(404).send({ error: 'Playlist not found' });
-    const result = keepRemote ? { removedRemote: 0, failedRemote: [] } : await removeRemoteCopies(id);
-    await prisma.playlist.delete({ where: { id } });
+    const result = await deletePublishedPlaylist(id, keepRemote);
+    if (!result) return reply.code(404).send({ error: 'Playlist not found' });
     return result;
   });
 

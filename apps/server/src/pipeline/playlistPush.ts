@@ -1,7 +1,23 @@
+import { withPlaylistPublication } from './playlistPublicationLock.js';
 import { prisma } from '../db/client.js';
 import { getLibraryConnectorProvider } from '../providers/library/index.js';
 
 export async function pushPlaylist(playlistId: number, connectorId: number) {
+  return withPlaylistPublication(playlistId, async () => {
+    try { return await pushPlaylistUnlocked(playlistId, connectorId); }
+    catch (error) {
+      // A deleted playlist/connector cannot own failure bookkeeping.
+      if (await prisma.playlist.count({ where: { id: playlistId } }) && await prisma.libraryConnector.count({ where: { id: connectorId } })) {
+        await prisma.playlistSync.upsert({ where: { playlistId_connectorId: { playlistId, connectorId } },
+          update: { lastPushedAt: new Date(), lastPushStatus: 'failed', lastPushError: (error as Error).message },
+          create: { playlistId, connectorId, lastPushedAt: new Date(), lastPushStatus: 'failed', lastPushError: (error as Error).message } });
+      }
+      throw error;
+    }
+  });
+}
+
+async function pushPlaylistUnlocked(playlistId: number, connectorId: number) {
   const playlist = await prisma.playlist.findUnique({
     where: { id: playlistId },
     // `id` as a tie-break keeps the pushed order deterministic even if two
@@ -28,43 +44,33 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
       && item.recordingPart.serverCopies.some(copy => copy.connectorId === connectorId && copy.libraryId === connector.videoLibraryId && copy.available)
       && (!item.songId || item.fullRecordingFallback)));
   if (playlist.items.some(item => item.songId && !item.fullRecordingFallback)) throw new Error('This server cannot publish bounded song segments. Explicitly choose the whole recording or an existing clip before Push.');
-  try {
-    if (existingSync?.remotePlaylistId && playable.length !== playlist.items.length) {
-      throw new Error(`Keeping the existing playlist: ${playlist.items.length - playable.length} item(s) are not confirmed available in this playback library`);
-    }
-    if (playable.length === 0) {
-      throw new Error('This playlist has no videos available in that playback library to push');
-    }
-    const providerResult = await provider.pushPlaylist(connector, {
-      name: playlist.name,
-      items: playable.map(item => item.musicVideo ? ({
-        artistName: item.musicVideo.artist.name, title: item.musicVideo.title,
-        externalId: item.musicVideo.libraryVideos.find(video => video.connectorId === connectorId && video.available && video.matchConfidence === null)?.externalId,
-      }) : ({ artistName: 'Live', title: item.recordingPart!.recording.title,
-        externalId: item.recordingPart!.serverCopies.find(copy => copy.connectorId === connectorId && copy.libraryId === connector.videoLibraryId && copy.available)!.externalId })),
-      existingRemoteId: existingSync?.remotePlaylistId ?? null,
-    });
-    // Report items excluded before provider lookup as well as provider-side misses.
-    const result = { ...providerResult, unmatchedTitles: [
-      ...playlist.items.filter(item => !playable.includes(item))
-        .map(item => item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Unavailable recording'),
-      ...providerResult.unmatchedTitles,
-    ] };
-    await prisma.playlistSync.upsert({
-      where: { playlistId_connectorId: { playlistId, connectorId } },
-      update: { remotePlaylistId: result.remotePlaylistId, lastPushedAt: new Date(), lastPushStatus: result.unmatchedTitles.length ? 'partial' : 'success', lastPushError: null, unmatchedCount: result.unmatchedTitles.length },
-      create: { playlistId, connectorId, remotePlaylistId: result.remotePlaylistId, lastPushedAt: new Date(), lastPushStatus: result.unmatchedTitles.length ? 'partial' : 'success', unmatchedCount: result.unmatchedTitles.length },
-    });
-    return { ok: true, ...result };
-  } catch (err) {
-    const message = (err as Error).message;
-    await prisma.playlistSync.upsert({
-      where: { playlistId_connectorId: { playlistId, connectorId } },
-      update: { lastPushedAt: new Date(), lastPushStatus: 'failed', lastPushError: message },
-      create: { playlistId, connectorId, lastPushedAt: new Date(), lastPushStatus: 'failed', lastPushError: message },
-    });
-    throw err;
+  if (existingSync?.remotePlaylistId && playable.length !== playlist.items.length) {
+    throw new Error(`Keeping the existing playlist: ${playlist.items.length - playable.length} item(s) are not confirmed available in this playback library`);
   }
+  if (playable.length === 0) {
+    throw new Error('This playlist has no videos available in that playback library to push');
+  }
+  const providerResult = await provider.pushPlaylist(connector, {
+    name: playlist.name,
+    items: playable.map(item => item.musicVideo ? ({
+      artistName: item.musicVideo.artist.name, title: item.musicVideo.title,
+      externalId: item.musicVideo.libraryVideos.find(video => video.connectorId === connectorId && video.available && video.matchConfidence === null)?.externalId,
+    }) : ({ artistName: 'Live', title: item.recordingPart!.recording.title,
+      externalId: item.recordingPart!.serverCopies.find(copy => copy.connectorId === connectorId && copy.libraryId === connector.videoLibraryId && copy.available)!.externalId })),
+    existingRemoteId: existingSync?.remotePlaylistId ?? null,
+  });
+  // Report items excluded before provider lookup as well as provider-side misses.
+  const result = { ...providerResult, unmatchedTitles: [
+    ...playlist.items.filter(item => !playable.includes(item))
+      .map(item => item.musicVideo?.title ?? item.recordingPart?.recording.title ?? 'Unavailable recording'),
+    ...providerResult.unmatchedTitles,
+  ] };
+  await prisma.playlistSync.upsert({
+    where: { playlistId_connectorId: { playlistId, connectorId } },
+    update: { remotePlaylistId: result.remotePlaylistId, lastPushedAt: new Date(), lastPushStatus: result.unmatchedTitles.length ? 'partial' : 'success', lastPushError: null, unmatchedCount: result.unmatchedTitles.length },
+    create: { playlistId, connectorId, remotePlaylistId: result.remotePlaylistId, lastPushedAt: new Date(), lastPushStatus: result.unmatchedTitles.length ? 'partial' : 'success', unmatchedCount: result.unmatchedTitles.length },
+  });
+  return { ok: true, ...result };
 }
 
 // Removes the copy of a playlist this app published to one connector, then
@@ -72,6 +78,10 @@ export async function pushPlaylist(playlistId: number, connectorId: number) {
 // removed once it succeeds, so a failure (server offline) leaves the link in
 // place and the user can simply retry — never an orphan we've lost track of.
 export async function unpublishPlaylist(playlistId: number, connectorId: number): Promise<boolean> {
+  return withPlaylistPublication(playlistId, () => unpublishPlaylistUnlocked(playlistId, connectorId));
+}
+
+async function unpublishPlaylistUnlocked(playlistId: number, connectorId: number): Promise<boolean> {
   const sync = await prisma.playlistSync.findUnique({
     where: { playlistId_connectorId: { playlistId, connectorId } },
     include: { connector: true },
@@ -93,6 +103,10 @@ export async function removeRemoteCopies(playlistId: number): Promise<{
   removedRemote: number;
   failedRemote: { connectorName: string; error: string }[];
 }> {
+  return withPlaylistPublication(playlistId, () => removeRemoteCopiesUnlocked(playlistId));
+}
+
+async function removeRemoteCopiesUnlocked(playlistId: number) {
   const syncs = await prisma.playlistSync.findMany({
     where: { playlistId, remotePlaylistId: { not: null } },
     include: { connector: { select: { name: true } } },
@@ -101,7 +115,7 @@ export async function removeRemoteCopies(playlistId: number): Promise<{
   const failedRemote: { connectorName: string; error: string }[] = [];
   for (const sync of syncs) {
     try {
-      await unpublishPlaylist(playlistId, sync.connectorId);
+      await unpublishPlaylistUnlocked(playlistId, sync.connectorId);
       removedRemote++;
     } catch (err) {
       failedRemote.push({ connectorName: sync.connector.name, error: (err as Error).message });
@@ -118,12 +132,16 @@ export async function republishChangedSmartPlaylist(playlistId: number, changed:
   });
   let pushed = 0;
   for (const sync of syncs) {
-    try { await pushPlaylist(playlistId, sync.connectorId); pushed++; } catch (err) {
-      await prisma.playlistSync.update({
-        where: { playlistId_connectorId: { playlistId, connectorId: sync.connectorId } },
-        data: { lastPushStatus: 'failed', lastPushError: (err as Error).message, lastPushedAt: new Date() },
-      });
-    }
+    try { await pushPlaylist(playlistId, sync.connectorId); pushed++; } catch { /* push records the failure; other connectors may still succeed. */ }
   }
   return pushed;
+}
+
+export async function deletePublishedPlaylist(playlistId: number, keepRemote: boolean) {
+  return withPlaylistPublication(playlistId, async () => {
+    if (!await prisma.playlist.findUnique({ where: { id: playlistId }, select: { id: true } })) return null;
+    const result = keepRemote ? { removedRemote: 0, failedRemote: [] } : await removeRemoteCopiesUnlocked(playlistId);
+    await prisma.playlist.delete({ where: { id: playlistId } });
+    return result;
+  });
 }

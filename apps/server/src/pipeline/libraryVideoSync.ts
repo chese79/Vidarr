@@ -1,3 +1,4 @@
+import { indexCanonicalVideos } from './reconciliation.js';
 import { enrichAfterScan } from './metadataEnrichment.js';
 import type { LibraryConnector, QualityProfile, RootFolder } from '@prisma/client';
 import { prisma } from '../db/client.js';
@@ -138,6 +139,8 @@ async function syncVideoSnapshot(connector: LibraryConnector, ctx: VideoSyncCont
       releaseYear: video.releaseYear,
       durationSeconds: video.durationSeconds,
     }));
+    const canonicalIndex = indexCanonicalVideos(canonicalVideos);
+    const canonicalById = new Map(canonicalVideos.map(video => [video.id, video]));
     // A prior sync's match must never be silently dropped just because
     // *this* sync's search misses (an artist/video rename upstream, for
     // instance) — see matchLibraryVideo's "previous" fallback. Also
@@ -171,7 +174,7 @@ async function syncVideoSnapshot(connector: LibraryConnector, ctx: VideoSyncCont
       }));
       const match = matchLibraryVideoIdentities(
         candidates,
-        canonicalVideos,
+        canonicalIndex,
         existing
           ? { musicVideoId: existing.musicVideoId, matchConfidence: existing.matchConfidence as MatchConfidence | null }
           : null,
@@ -180,7 +183,7 @@ async function syncVideoSnapshot(connector: LibraryConnector, ctx: VideoSyncCont
       // An exact fallback may come from the server title rather than the filename.
       // Store that winning identity so inventory filters agree with the matched catalog.
       if (match.musicVideoId != null && match.matchConfidence === null) {
-        const winner = canonicalVideos.find((candidate) => candidate.id === match.musicVideoId);
+        const winner = canonicalById.get(match.musicVideoId);
         if (winner) {
           normalizedArtistName = winner.normalizedArtistName;
           normalizedTitle = winner.normalizedTitle;

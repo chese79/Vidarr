@@ -1,0 +1,31 @@
+import { expect, it, vi } from 'vitest';
+import { prisma } from '../src/db/client.js';
+import { resetDb, createRootFolder, createQuality, createQualityProfile, createArtist, createMusicVideo } from './support/db.js';
+import { autoSearchAndGrab } from '../src/pipeline/autoSearch.js';
+import { grabFromIndexer } from '../src/pipeline/grab.js';
+import { searchAllIndexers } from '../src/pipeline/search.js';
+vi.mock('../src/pipeline/grab.js', () => ({ queueDirectVideo: vi.fn(), grabFromIndexer: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../src/pipeline/search.js', () => ({ searchAllIndexers: vi.fn() }));
+it('holds unrelated indexer content even when its quality is allowed', async () => {
+    await resetDb();
+    const root = await createRootFolder(), quality = await createQuality(), profile = await createQualityProfile(quality.id);
+    await prisma.qualityProfileItem.create({ data: { qualityProfileId: profile.id, qualityId: quality.id, allowed: true } });
+    const artist = await createArtist(root.id, profile.id, { name: 'Expected Artist' });
+    await prisma.artist.update({ where: { id: artist.id }, data: { musicbrainzMatchStatus: 'confirmed', musicbrainzArtistId: '00000000-0000-4000-8000-000000000001' } });
+    const video = await createMusicVideo(artist.id, { title: 'Expected Song' });
+    const client = await prisma.downloadClient.create({ data: { name: 'Fixture', implementation: 'SABnzbd', host: 'fixture.invalid', port: 8080 } });
+    vi.mocked(searchAllIndexers).mockResolvedValue([{ indexerId: 1, indexerName: 'Fixture', title: 'Different Artist - Unrelated Full Live Concert 1080p', quality: '1080p', downloadUrl: 'https://fixture.invalid/wrong-video', seeders: 20, sizeBytes: 50000, publishDate: null }]);
+    expect((await autoSearchAndGrab(video.id)).grabbed).toBe(false);
+    expect(grabFromIndexer).not.toHaveBeenCalled();
+    expect(await prisma.history.count({ where: { musicVideoId: video.id, eventType: 'candidateHeldForReview' } })).toBe(1);
+    vi.mocked(searchAllIndexers).mockResolvedValue([{ indexerId: 1, indexerName: 'Fixture', title: 'Expected Artist - Expected Song (Official Video) 1080p', quality: '1080p', downloadUrl: 'https://fixture.invalid/correct-video', seeders: 1, sizeBytes: 50000, publishDate: null }]);
+    expect((await autoSearchAndGrab(video.id)).grabbed).toBe(true);
+    expect(grabFromIndexer).toHaveBeenCalledWith(video.id, client.id, 'https://fixture.invalid/correct-video', '1080p', false);
+}, 30000);
+import { reviewIndexerIdentity } from '../src/catalog/acquisitionIdentity.js';
+it('accepts exact artist/song indexer identities and retains ambiguous versions for review', () => {
+    expect(reviewIndexerIdentity('AC/DC - Thunderstruck (Official Music Video) 1080p', 'AC/DC', 'Thunderstruck').accepted).toBe(true);
+    expect(reviewIndexerIdentity('AC DC - Thunderstruck Live 1080p', 'AC/DC', 'Thunderstruck').accepted).toBe(false);
+    expect(reviewIndexerIdentity('Other Artist - Thunderstruck 1080p', 'AC/DC', 'Thunderstruck').accepted).toBe(false);
+    expect(reviewIndexerIdentity('AC DC - Thunderstruck Remix 1080p', 'AC/DC', 'Thunderstruck').accepted).toBe(false);
+});

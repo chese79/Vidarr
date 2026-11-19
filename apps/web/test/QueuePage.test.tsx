@@ -5,6 +5,12 @@ import { MemoryRouter } from 'react-router-dom';
 import QueuePage from '../src/pages/QueuePage';
 import { QueueResultsPage } from '../src/components/QueueResults';
 
+function seedQueue(client: QueryClient, items: any[], extra: Partial<{ total: number; firstWaitingId: number; lastWaitingId: number }> = {}) {
+  const waiting = items.filter(item => item.status === 'queued');
+  client.setQueryData(['queue', 'page', 1], { items, total: items.length, page: 1, pageSize: 50,
+    firstWaitingId: waiting[0]?.id ?? null, lastWaitingId: waiting[waiting.length - 1]?.id ?? null, ...extra });
+}
+
 function result(id: number, eventType: string) {
   return { id, musicVideoId: id, eventType, date: '2026-10-10T10:00:00Z',
     data: JSON.stringify({ quality: '1080p', error: 'Private video' }),
@@ -13,7 +19,7 @@ function result(id: number, eventType: string) {
 
 it('exposes ordering controls only for waiting downloads and disables boundary moves', () => {
   const client = new QueryClient();
-  client.setQueryData(['queue'], ['downloading', 'queued', 'queued', 'importing'].map((status, index) => ({
+  seedQueue(client, ['downloading', 'queued', 'queued', 'importing'].map((status, index) => ({
     id: index + 1, status, progress: 0, musicVideo: { title: `Video ${index}`, artist: { id: 1, name: 'Artist' } },
   })));
   const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><QueuePage /></MemoryRouter></QueryClientProvider>);
@@ -25,7 +31,7 @@ it('exposes ordering controls only for waiting downloads and disables boundary m
 
 it('separates failed entries from active work and places completed results before failures', () => {
   const client = new QueryClient();
-  client.setQueryData(['queue'], [
+  seedQueue(client, [
     { id: 1, status: 'downloading', progress: .5, musicVideo: { title: 'Active video', artist: { name: 'Artist' } } },
     { id: 2, status: 'failed', progress: 0, musicVideo: { title: 'Failed queue row', artist: { name: 'Artist' } } },
   ]);
@@ -48,7 +54,7 @@ it('provides pagination beyond the first 50 retained results', () => {
 
 it('provides guarded reconciliation for uncertain submissions and separates import from server readiness', () => {
   const client = new QueryClient();
-  client.setQueryData(['queue'], [{ id: 9, status: 'submissionUnknown', progress: 0,
+  seedQueue(client, [{ id: 9, status: 'submissionUnknown', progress: 0,
     musicVideo: { title: 'Uncertain', artist: { id: 1, name: 'Artist' } } }]);
   client.setQueryData(['queueResults', 'completed', 1, 3], { total: 2, items: [
     { ...result(1, 'downloadFolderImported'), deliveryStatus: 'awaitingServerCataloging' },
@@ -58,4 +64,15 @@ it('provides guarded reconciliation for uncertain submissions and separates impo
   expect(html).toContain('Resolve submission'); expect(html).toContain('client&#x27;s queue and history');
   expect(html).toMatch(/<button disabled="">Link existing job/);
   expect(html).toContain('awaiting server cataloging'); expect(html).toContain('Ready to play on target server');
+});
+
+it('uses global waiting boundaries rather than disabling moves at each page edge', () => {
+  const client = new QueryClient();
+  seedQueue(client, [{ id: 51, status: 'queued', progress: 0, musicVideo: { title: 'Middle', artist: { name: 'Artist' } } }],
+    { total: 100, firstWaitingId: 1, lastWaitingId: 100 });
+  const html = renderToStaticMarkup(<QueryClientProvider client={client}><MemoryRouter><QueuePage /></MemoryRouter></QueryClientProvider>);
+  expect(html).toContain('<button>Move to top</button>');
+  expect(html).toContain('<button>Move to bottom</button>');
+  expect(html).toContain('aria-label="Queue pages"');
+  expect(html).toContain('Page 1 of 2');
 });

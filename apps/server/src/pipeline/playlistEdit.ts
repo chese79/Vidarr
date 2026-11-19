@@ -1,3 +1,4 @@
+import { withPlaylistPublication } from './playlistPublicationLock.js';
 import { randomInt } from 'node:crypto';
 import type { UpdatePlaylist } from '@vidarr/shared-types';
 import { prisma } from '../db/client.js';
@@ -20,6 +21,10 @@ export async function updatePlaylist(
   id: number,
   body: UpdatePlaylist,
 ): Promise<{ regenerated: { matchedCount: number; changed: boolean } | null }> {
+  return withPlaylistPublication(id, () => updatePlaylistUnlocked(id, body));
+}
+
+async function updatePlaylistUnlocked(id: number, body: UpdatePlaylist): Promise<{ regenerated: { matchedCount: number; changed: boolean } | null }> {
   const playlist = await prisma.playlist.findUnique({
     where: { id },
     include: {

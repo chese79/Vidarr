@@ -1,3 +1,4 @@
+import { effectivePlayCount } from '../catalog/playCounts.js';
 import { prisma } from '../db/client.js';
 import { MatchMode, PlaylistFiltersSchema } from '@vidarr/shared-types';
 import { normalizeTitle } from './normalize.js';
@@ -98,8 +99,7 @@ async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'an
   if (filters.minPlayCount !== undefined) {
     const min = filters.minPlayCount;
     checks.push((v) => {
-      const counts = v.libraryVideos.map(item => item.playCount).filter((count): count is number => count != null);
-      const count = (targetConnectorId ? null : v.file?.playCount) ?? (counts.length ? Math.max(...counts) : null);
+      const count = effectivePlayCount(targetConnectorId ? null : v.file, v.libraryVideos);
       return count != null && count >= min;
     });
   }
@@ -118,11 +118,9 @@ async function matchingVideoIds(filters: PlaylistFilters, matchMode: 'all' | 'an
     ? candidates.filter((v) => (matchMode === 'all' ? checks.every((c) => c(v)) : checks.some((c) => c(v))))
     : candidates;
 
-  const eligible = filters.onlyUnwatched ? matched.filter((v) => {
-    const counts = v.libraryVideos.map((item) => item.playCount).filter((count): count is number => count !== null);
-    if (!targetConnectorId && v.file?.playCount != null) counts.push(v.file.playCount);
-    return counts.length > 0 && counts.every((count) => count === 0);
-  }) : matched;
+  const eligible = filters.onlyUnwatched
+    ? matched.filter(video => effectivePlayCount(targetConnectorId ? null : video.file, video.libraryVideos) === 0)
+    : matched;
   return eligible.map((video) => video.id);
 }
 

@@ -1,5 +1,5 @@
 import { ActionButton } from '../components/ButtonFeedback';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { downloadStage, formatDownloadTimings } from '../components/downloadStage';
@@ -36,11 +36,12 @@ export default function QueuePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const queue = useQuery({ queryKey: ['queue'], queryFn: api.queue.list, refetchInterval: 3000 });
-  const active = queue.data?.filter(item => item.status !== 'failed')
+  const queue = useQuery({ queryKey: ['queue', 'page', page], queryFn: () => api.queue.page(page), refetchInterval: 3000 });
+  useEffect(() => { if (queue.data) setPage(value => Math.min(value, Math.max(1, Math.ceil(queue.data!.total / 50)))); }, [queue.data?.total]);
+  const active = queue.data?.items.filter(item => item.status !== 'failed')
     .sort((a, b) => Number(a.status === 'queued') - Number(b.status === 'queued')) ?? [];
-  const waiting = active.filter(item => item.status === 'queued');
   async function move(id: number, direction: 'up' | 'down' | 'top' | 'bottom') {
     setMoving(true);
     try { await api.queue.move(id, direction); setSummary('Queue order updated.'); }
@@ -110,10 +111,10 @@ export default function QueuePage() {
                   setSummary(message); queryClient.invalidateQueries({ queryKey: ['queue'] }); queryClient.invalidateQueries({ queryKey: ['queueResults'] });
                 }} /> : <Link to={!item.musicVideoId && item.recordingId ? `/live/recording/${item.recordingId}` : `/artist/${item.musicVideo?.artist.id}`}>Video details</Link>}</td>
                 <td>{item.status === 'queued' && <div className="form-row">
-                  <ActionButton disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'top')}>Move to top</ActionButton>
-                  <ActionButton disabled={moving || waiting[0]?.id === item.id} onClick={() => move(item.id, 'up')}>Move up</ActionButton>
-                  <ActionButton disabled={moving || waiting[waiting.length - 1]?.id === item.id} onClick={() => move(item.id, 'down')}>Move down</ActionButton>
-                  <ActionButton disabled={moving || waiting[waiting.length - 1]?.id === item.id} onClick={() => move(item.id, 'bottom')}>Move to bottom</ActionButton>
+                  <ActionButton disabled={moving || item.id === queue.data?.firstWaitingId} onClick={() => move(item.id, 'top')}>Move to top</ActionButton>
+                  <ActionButton disabled={moving || item.id === queue.data?.firstWaitingId} onClick={() => move(item.id, 'up')}>Move up</ActionButton>
+                  <ActionButton disabled={moving || item.id === queue.data?.lastWaitingId} onClick={() => move(item.id, 'down')}>Move down</ActionButton>
+                  <ActionButton disabled={moving || item.id === queue.data?.lastWaitingId} onClick={() => move(item.id, 'bottom')}>Move to bottom</ActionButton>
                 </div>}</td>
               </tr>
             ))}
@@ -122,6 +123,11 @@ export default function QueuePage() {
       ) : (
         <p className="empty-state">Queue is empty.</p>
       )}
+      {(page > 1 || (queue.data?.total ?? 0) > 50) && <nav aria-label="Queue pages">
+        <button disabled={page === 1} onClick={() => setPage(value => value - 1)}>Previous</button>
+        <span>Page {page} of {Math.ceil((queue.data?.total ?? 0) / 50)}</span>
+        <button disabled={page * 50 >= (queue.data?.total ?? 0)} onClick={() => setPage(value => value + 1)}>Next</button>
+      </nav>}
       <RecentQueueResults section="completed" />
       <RecentQueueResults section="failures" />
     </div>

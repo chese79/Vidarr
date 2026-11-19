@@ -16,6 +16,8 @@
     "build": "npm run build --workspace packages/shared-types && npm run build --workspace apps/server && npm run build --workspace apps/web",
     "test": "npm run build --workspace packages/shared-types && npm run test --workspace apps/server",
     "prisma:generate": "npm run prisma:generate --workspace apps/server",
-    "prisma:migrate": "npm run prisma:migrate --workspace apps/server"
+    "prisma:migrate": "npm run prisma:migrate --workspace apps/server",
+    "test:web": "npm run test --workspace @vidarr/web",
+    "verify": "npm run test && npm run test:web && npm run build"
   }
 }

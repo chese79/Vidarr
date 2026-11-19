@@ -30,10 +30,10 @@ vi.mock('../../src/providers/library/index.js', async (original) => {
 // A stand-in Jellyfin server: records every request, hands out playlist ids,
 // answers per-item lookups (the "verify the reconciled id" step of a push), and
 // can be told to fail deletes or report an item/playlist as already gone.
+let nextPlaylistId = 1;
 function stubJellyfin(options: { deleteStatus?: number; missingItems?: string[] } = {}) {
   const requests: string[] = [];
   const created: { Ids: string[]; Name: string }[] = [];
-  let nextId = 1;
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string, init: { method?: string; body?: string } = {}) => {
     const method = init.method ?? 'GET';
     requests.push(`${method} ${url}`);
@@ -60,7 +60,7 @@ function stubJellyfin(options: { deleteStatus?: number; missingItems?: string[] 
     }
     if (url.endsWith('/Playlists') && method === 'POST') {
       created.push(JSON.parse(init.body ?? '{}'));
-      return reply(200, { Id: `playlist-${nextId++}` });
+      return reply(200, { Id: `playlist-${nextPlaylistId++}` });
     }
     if (url.includes('/Items/playlist-') && method === 'DELETE') {
       return options.deleteStatus ? reply(options.deleteStatus) : reply(204);
@@ -120,6 +120,9 @@ describe('playlist editing', () => {
     const profile = await createQualityProfile(quality.id);
     artistId = (await createArtist(rootFolder.id, profile.id)).id;
     connectorId = await makeConnector('Jellyfin A');
+    nextPlaylistId = 1;
+    // Every generation publishes: keep even rule-only cases off the real network.
+    stubJellyfin();
   });
 
   describe('PATCH /playlist/:id', () => {
@@ -305,7 +308,9 @@ describe('playlist editing', () => {
         const id = created.json().playlistId as number;
         expect(await order(id)).toEqual([onA.id]);
 
-        await call('PATCH', `/playlist/${id}`, { targetConnectorId: other });
+        // Generation publishes automatically. Preserve the required unpublish stage before rebinding.
+        expect((await call('DELETE', `/playlist/${id}/push/${connectorId}`)).statusCode).toBe(204);
+        expect((await call('PATCH', `/playlist/${id}`, { targetConnectorId: other })).statusCode).toBe(200);
 
         expect(await order(id)).toEqual([onB.id]);
       });

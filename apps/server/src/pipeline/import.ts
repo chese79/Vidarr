@@ -1,3 +1,5 @@
+import { checkLocalPath } from './deleteVideo.js';
+import { assertExclusiveLocalFiles } from '../media/localFileOwnership.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { prisma, logActivity } from '../db/client.js';
@@ -72,7 +74,7 @@ export async function importDownloadedFile(
   const replacement = await stageImportBundle(sourcePath, destPath, transferMode, {
     artistName: musicVideo.artist.name, title: musicVideo.title,
     year: musicVideo.releaseYear, director: musicVideo.director, thumbnailUrl: musicVideo.thumbnailUrl,
-  });
+  }, { root: rootPath, owner: { musicVideoId }, managedPath: existingFile?.path });
   let stat: Awaited<ReturnType<typeof fs.stat>>;
   try {
     stat = await fs.stat(destPath);
@@ -120,9 +122,13 @@ export async function importDownloadedFile(
   // the replacement is fully recorded, and never delete a path outside the
   // configured root if an older record points elsewhere.
   if (existingFile && existingFile.path !== destPath && isPathWithinRoot(rootPath, existingFile.path)) {
-    await fs.unlink(existingFile.path).catch(async (err: NodeJS.ErrnoException) => {
-      if (err.code !== 'ENOENT') await logActivity('warn', 'old-video-cleanup', err).catch(() => {});
-    });
+    try {
+      await checkLocalPath(existingFile.path);
+      await assertExclusiveLocalFiles([existingFile.path], { musicVideoId });
+      await fs.unlink(existingFile.path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') await logActivity('warn', 'old-video-cleanup', error).catch(() => {});
+    }
   }
 
   if (rootFolder.targetConnector?.enabled && rootFolder.targetConnector.videoLibraryId) {

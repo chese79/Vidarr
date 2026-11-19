@@ -33,6 +33,10 @@ it('opens the exact playlist video after artist data arrives and leaves its mana
       id, title: 'Song', hasFile: true, monitored: false, libraryVideos: [], acquisitionSources: [], status: { ownership: 'local', acquisition: null },
     })) };
     await act(async () => { client.setQueryData(['artist', 7], artist); });
+    await vi.waitFor(async () => {
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+      expect(host.querySelector('#video-9')).not.toBeNull();
+    });
     const target = host.querySelector('#video-9')!;
     expect(document.activeElement).toBe(target);
     expect(target.textContent).toContain('Flag as Live/Concert');

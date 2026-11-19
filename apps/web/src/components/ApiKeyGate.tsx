@@ -36,13 +36,24 @@ export default function ApiKeyGate({ children }: { children: React.ReactNode }) 
     try {
       const res = await fetch('/api/v1/artist', { headers: { 'X-Api-Key': key } });
       if (res.ok) {
+        setStatusUnavailable(false);
         setAuthorized(true);
         setError(null);
         return true;
       }
+      if (res.status !== 401) {
+        setStatusUnavailable(true);
+        setAuthorized(false);
+        setError('Server unavailable. Please retry.');
+        return false;
+      }
+      setStatusUnavailable(false);
       setError('Incorrect API key.');
     } catch {
-      setError('Could not reach the server.');
+      setStatusUnavailable(true);
+      setAuthorized(false);
+      setError('Could not reach the server. Please retry.');
+      return false;
     }
 
     clearStoredApiKey();

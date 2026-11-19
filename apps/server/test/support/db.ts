@@ -5,61 +5,60 @@ import { prisma } from '../../src/db/client.js';
 // beforeEach in any DB-backed test file so tests don't see each other's rows
 // (tests share one on-disk SQLite file — see vitest.config.ts).
 export async function resetDb(): Promise<void> {
-  await prisma.metadataEnrichmentItem.deleteMany();
-  await prisma.metadataEnrichmentRun.deleteMany();
-  await prisma.liveDiscoveryItem.deleteMany();
-  await prisma.playlistItem.deleteMany();
-  await prisma.liveSongViewing.deleteMany();
-  await prisma.livePlaybackObservation.deleteMany();
-  await prisma.liveViewing.deleteMany();
-  await prisma.recordingCoverage.deleteMany();
-  await prisma.recordingServerCopy.deleteMany();
-  await prisma.recordingPart.deleteMany();
-  await prisma.recordingSource.deleteMany();
-  await prisma.liveCredit.deleteMany();
-  await prisma.liveMonitoringRule.deleteMany();
-  await prisma.liveSearchJournal.deleteMany();
-  await prisma.liveRequestBudget.deleteMany();
-  await prisma.liveExclusion.deleteMany();
-  await prisma.liveConfiguration.deleteMany();
-  await prisma.history.deleteMany();
-  await prisma.downloadQueueItem.deleteMany();
-  await prisma.recordingPerformance.deleteMany();
-  await prisma.recording.deleteMany();
-  await prisma.liveSongPerformance.deleteMany();
-  await prisma.livePerformance.deleteMany();
-  await prisma.liveOccasion.deleteMany();
-  await prisma.qualifiedPlayback.deleteMany();
-  await prisma.deletedVideoRecord.deleteMany();
-  await prisma.lastFmPlayback.deleteMany();
-  await prisma.lastFmAccount.deleteMany();
-  await prisma.videoReviewCandidate.deleteMany();
-  await prisma.recommendationSourceHit.deleteMany();
-  await prisma.recommendation.deleteMany();
-  await prisma.recommendationProviderConfig.deleteMany();
-  await prisma.playlistSync.deleteMany();
-  await prisma.playlistItem.deleteMany();
-  await prisma.playlist.deleteMany();
-  await prisma.libraryVideo.deleteMany();
-  await prisma.libraryRecording.deleteMany();
-  await prisma.libraryArtist.deleteMany();
-  await prisma.libraryConnector.deleteMany();
-  await prisma.history.deleteMany();
-  await prisma.downloadQueueItem.deleteMany();
-  await prisma.musicVideoFile.deleteMany();
-  await prisma.musicVideo.deleteMany();
-  await prisma.youtubeSource.deleteMany();
-  await prisma.artistGenre.deleteMany();
-  await prisma.artist.deleteMany();
-  await prisma.qualityProfileItem.deleteMany();
-  await prisma.qualityProfile.deleteMany();
-  await prisma.quality.deleteMany();
-  await prisma.rootFolder.deleteMany();
-  await prisma.indexer.deleteMany();
-  await prisma.downloadClient.deleteMany();
-  await prisma.activityLog.deleteMany();
-  await prisma.scheduledTask.deleteMany();
-  await prisma.settings.deleteMany();
+  await prisma.$transaction([
+    prisma.metadataEnrichmentItem.deleteMany(),
+    prisma.metadataEnrichmentRun.deleteMany(),
+    prisma.liveDiscoveryItem.deleteMany(),
+    prisma.playlistItem.deleteMany(),
+    prisma.liveSongViewing.deleteMany(),
+    prisma.livePlaybackObservation.deleteMany(),
+    prisma.liveViewing.deleteMany(),
+    prisma.recordingCoverage.deleteMany(),
+    prisma.recordingServerCopy.deleteMany(),
+    prisma.recordingPart.deleteMany(),
+    prisma.recordingSource.deleteMany(),
+    prisma.liveCredit.deleteMany(),
+    prisma.liveMonitoringRule.deleteMany(),
+    prisma.liveSearchJournal.deleteMany(),
+    prisma.liveRequestBudget.deleteMany(),
+    prisma.liveExclusion.deleteMany(),
+    prisma.liveConfiguration.deleteMany(),
+    prisma.history.deleteMany(),
+    prisma.downloadQueueItem.deleteMany(),
+    prisma.recordingPerformance.deleteMany(),
+    prisma.recording.deleteMany(),
+    prisma.liveSongPerformance.deleteMany(),
+    prisma.livePerformance.deleteMany(),
+    prisma.liveOccasion.deleteMany(),
+    prisma.qualifiedPlayback.deleteMany(),
+    prisma.deletedVideoRecord.deleteMany(),
+    prisma.lastFmPlayback.deleteMany(),
+    prisma.lastFmAccount.deleteMany(),
+    prisma.videoReviewCandidate.deleteMany(),
+    prisma.recommendationSourceHit.deleteMany(),
+    prisma.recommendation.deleteMany(),
+    prisma.recommendationProviderConfig.deleteMany(),
+    prisma.playlistSync.deleteMany(),
+    prisma.playlist.deleteMany(),
+    prisma.libraryVideo.deleteMany(),
+    prisma.libraryRecording.deleteMany(),
+    prisma.libraryArtist.deleteMany(),
+    prisma.libraryConnector.deleteMany(),
+    prisma.musicVideoFile.deleteMany(),
+    prisma.musicVideo.deleteMany(),
+    prisma.youtubeSource.deleteMany(),
+    prisma.artistGenre.deleteMany(),
+    prisma.artist.deleteMany(),
+    prisma.qualityProfileItem.deleteMany(),
+    prisma.qualityProfile.deleteMany(),
+    prisma.quality.deleteMany(),
+    prisma.rootFolder.deleteMany(),
+    prisma.indexer.deleteMany(),
+    prisma.downloadClient.deleteMany(),
+    prisma.activityLog.deleteMany(),
+    prisma.scheduledTask.deleteMany(),
+    prisma.settings.deleteMany(),
+  ]);
 }
 
 export async function createRootFolder(overrides: Partial<{ path: string }> = {}) {
