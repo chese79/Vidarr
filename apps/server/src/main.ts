@@ -7,11 +7,13 @@ import { startScheduler } from './scheduler/index.js';
 import { prisma } from './db/client.js';
 import { resumeDownloadQueue } from './pipeline/grab.js';
 import { recoverInterruptedVideoDeletions } from './pipeline/deleteVideo.js';
+import { recoverInterruptedLibrarySyncs } from './pipeline/librarySync.js';
 
 const app = await buildApp();
 
 await ensureApiKey();
 await ensureDefaultData();
+await recoverInterruptedLibrarySyncs();
 // Source backfill and user actions write concurrently. WAL lets readers keep
 // serving artist pages while a writer commits, avoiding rollback-journal
 // lock timeouts during long discovery runs.

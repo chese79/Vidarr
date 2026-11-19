@@ -10,7 +10,17 @@ under **Unreleased** in the same commit as the change.
 - Share import planning, play-count policy and playlist publication recovery; extract artist summaries and focused source/editor UI components. Index reconciliation once per scan.
 - Bound sidebar polling to active rows/counts and page the waiting queue while preserving legacy clients and global reorder actions.
 - Repair cancellation-aware and asynchronous-navigation tests; consolidate fixture cleanup and require Node 22 server/web tests and production builds before Docker publication.
+- Validate 1,065 server cases through the full suite and focused compatibility reruns, all 112 web checks, and Node 22 production builds. Retain the current scheduling/playback release.
 - Preserve review, validation, rollback, media ownership and separate server-delivery confirmation. See [review corrections](docs/code-review-fixes-2026-11-19.md).
+
+### Scheduled maintenance and playback visibility (2026-11-19)
+
+- Add daily Library Sync at 03:00 America/Chicago and 02:00–10:00 defaults for heavier background tasks. Keep playback/progress/delivery/deletion checks running all day.
+- Make every active task's interval/daily timing, time zone, automatic window and enabled state editable. Persist next deadlines, apply changes live, prevent overlap and recover interrupted runs; retain Run Now and bounded pending-work controls.
+- Share the complete manual/scheduled connector flow, support video-only libraries, preserve empty-scan data and refresh file-count caches from confirmed native inventory.
+- Add Now Playing with player/user, pause and stale status, plus exact artist/video or Live management links. Refresh one video's native Jellyfin count on stop/next/repeat, with durable retries and selected-profile scope; keep qualification counters retired.
+- Add migrations for schedules, library provenance and playback observations/retries. Exclude unrelated local worktrees from Docker build context.
+- Verify 125 server and 22 UI checks and production builds. Deploy locally with configuration, playlists and all 18,853 enrichment journals preserved; resume run 6 at cursor 6,520. Complete the prior 6,512-record library scan and catch up native play counts.
 
 ### LAN connection latency (2026-11-12)
 

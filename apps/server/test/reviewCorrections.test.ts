@@ -94,6 +94,7 @@ it('tracks a Base32 magnet using its hexadecimal qBittorrent identifier', async 
     const handle = await qbittorrentProvider.addDownload(client, 'magnet:?xt=urn:btih:' + 'A'.repeat(32), 'vidarr');
     expect(handle.externalRef).toBe('0'.repeat(40));
     expect((await qbittorrentProvider.getStatus(client, handle.externalRef, 'vidarr')).status).toBe('completed');
+    expect((await qbittorrentProvider.getStatus(client, 'a'.repeat(32), 'vidarr')).status).toBe('completed');
 });
 it('syncs a video-only connector without requesting an audio library', async () => {
     const fetchArtists = vi.fn(jellyfinProvider.fetchArtists), fetchVideos = vi.fn().mockResolvedValue([]);
@@ -102,7 +103,9 @@ it('syncs a video-only connector without requesting an audio library', async () 
     try {
         const result = await app.inject({ method: 'POST', url: `/api/v1/libraryconnector/${connectorId}/sync`, headers: authHeaders() });
         expect(result.statusCode).toBe(200);
-        expect(fetchArtists).toHaveBeenCalledOnce();
+        expect(fetchArtists).not.toHaveBeenCalled();
+          const configured = await prisma.libraryConnector.findUniqueOrThrow({ where: { id: connectorId } });
+          await expect(jellyfinProvider.fetchArtists(configured)).resolves.toEqual([]);
         expect(fetchVideos).toHaveBeenCalled();
     }
     finally {
@@ -139,4 +142,11 @@ it.each([['AC/DC', 'ac dc'], ['Beyoncé', 'beyonce']])('retains normalized inven
     finally {
         await app.close();
     }
+});
+
+import { normalizeTorrentHash } from '../src/providers/downloadclient/magnet.js';
+it('decodes nonzero Base32 and preserves hexadecimal torrent identities', () => {
+  expect(normalizeTorrentHash('7'.repeat(32))).toBe('f'.repeat(40));
+  expect(normalizeTorrentHash('F'.repeat(40))).toBe('f'.repeat(40));
+  expect(normalizeTorrentHash('invalid')).toBeNull();
 });

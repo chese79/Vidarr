@@ -72,6 +72,18 @@ describe('queue routes', () => {
     expect(first.items.every((item: { status: string }) => item.status !== 'failed')).toBe(true);
   });
 
+  it('normalizes operator-provided Base32 handles before verification and persistence', async () => {
+    const item = await unknownSubmission();
+    await prisma.downloadQueueItem.update({ where: { id: item.id }, data: { sourceRef: 'magnet:?xt=urn:btih:' + 'A'.repeat(32) } });
+    const getStatus = vi.fn().mockResolvedValue({ status: 'downloading', progress: 0.2 });
+    vi.mocked(getDownloadClientProvider).mockReturnValue({ getStatus } as any);
+    const result = await app.inject({ method: 'POST', url: `/api/v1/queue/${item.id}/reconcile`, headers: authHeaders(),
+      payload: { action: 'attach', externalRef: 'a'.repeat(32), verified: true } });
+    expect(result.statusCode).toBe(200);
+    expect(getStatus.mock.calls[0][1]).toBe('0'.repeat(40));
+    expect((await prisma.downloadQueueItem.findUniqueOrThrow({ where: { id: item.id } })).sourceRef).toBe('0'.repeat(40));
+  });
+
   it('persists waiting order, keeps new requests at the end and rejects active/stale moves', async () => {
     const active = await unknownSubmission();
     const artistId = (await prisma.musicVideo.findUniqueOrThrow({ where: { id: active.musicVideoId } })).artistId;

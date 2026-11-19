@@ -2,7 +2,7 @@
 
 This release implements the ten reproduced findings from the full Vidarr review of
 `13b6c96`. It preserves identity validation, review, acquisition eligibility, import,
-server delivery confirmation and existing data. No database migration is needed.
+server delivery confirmation and existing data. These fixes need no additional migration. The combined release retains the already deployed scheduler/playback migrations and features from `fd1fd05`.
 
 | Finding | Implemented outcome | Regression coverage |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ server delivery confirmation and existing data. No database migration is needed.
 | Video-only full sync fails | Skip the unselected audio stage; retain selected video scans and Subsonic artist discovery | `reviewCorrections.test.ts` |
 | Concurrent first playlist publication | Serialize push, unpublish, rebind and local deletion by playlist; retain/reuse the remote identity and centralize failure bookkeeping | `reviewCorrections.test.ts`, playlist tests |
 | Server outage discards credentials | Keep the saved key on network/5xx errors, show an unavailable/retry message, clear only explicit 401 rejection | `ApiKeyAvailability.test.tsx` |
-| Base32 magnet tracking fails | Decode a 32-character Base32 SHA-1 to the 40-character hexadecimal job identifier; share parsing with queue reconciliation | `reviewCorrections.test.ts`, qBittorrent tests |
+| Base32 magnet tracking fails | Decode a 32-character Base32 SHA-1 to the 40-character hexadecimal job identifier; normalize legacy saved handles on status reads and operator handles during queue reconciliation | `reviewCorrections.test.ts`, qBittorrent tests |
 
 ## Shared boundaries
 
@@ -34,4 +34,7 @@ The sidebar polls `/api/v1/queue/summary`: at most 50 transfer/processing rows, 
 
 `npm run verify` runs server tests, web tests and both production builds. CI runs this under Node 22 before the Docker image publication job can start. Database fixture cleanup is one child-first transaction with duplicate deletes removed. Shared SQLite tests remain sequential to avoid cross-test races.
 
-The stale artist-workflow mock assertion accepts the cancellation signal. The playlist navigation test waits for React Query's asynchronous observer render before asserting focus. See the changelog and deployment record for final verification and rollout evidence.
+The playlist-edit fixture always uses a fake server, and library rebinding explicitly unpublishes the automatically generated remote copy first. The stale artist-workflow mock assertion accepts the cancellation signal. The playlist navigation test waits for React Query's asynchronous observer render before asserting focus. See the changelog and deployment record for final verification and rollout evidence.
+
+
+Integrated verification: the 1,063-case server run passed 1,062 cases and exposed one obsolete provider-invocation expectation after the shared sync service began skipping audio earlier. That fixture was corrected; the affected group passed all 33 cases, including two additional legacy-handle checks. This covers 1,065 distinct server cases. All 112 web cases and both production builds passed under Node 22. The combined Docker image builds successfully. Existing nonblocking Vite deprecation/bundle-size warnings remain.

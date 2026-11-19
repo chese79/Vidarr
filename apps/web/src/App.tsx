@@ -26,6 +26,7 @@ import HistoryPage from './pages/HistoryPage';
 import SystemTasksPage from './pages/SystemTasksPage';
 import GenresPage from './pages/GenresPage';
 import DownloadProgress from './components/DownloadProgress';
+import NowPlayingPanel from './components/NowPlayingPanel';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api/client';
@@ -100,6 +101,7 @@ export default function App() {
       </aside>
       <main className="content" id="main-content">
         <div className="global-catalog-bar"><CatalogModeSwitch /><HideEmptyArtists /></div>
+        <NowPlayingPanel />
         <Routes>
           <Route path="/metadata-enrichment" element={<MetadataEnrichmentPage />} />
           <Route path="/" element={<CatalogLibrary />} />

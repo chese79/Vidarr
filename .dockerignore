@@ -8,6 +8,7 @@ future/mtv-overlay
 **/dist
 **/build
 .git
+.worktrees
 docs
 *.md
 apps/server/prisma/dev.db

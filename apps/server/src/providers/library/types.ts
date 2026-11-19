@@ -50,6 +50,8 @@ export interface LibraryPlaybackSession {
   playing: boolean;
   artistName?: string;
   title?: string;
+  userName?: string;
+  deviceName?: string;
 }
 
 export interface PlaylistPushItem {
@@ -80,6 +82,9 @@ export interface LibraryConnectorProvider {
   isVideoInUse?(config: LibraryConnector, externalId: string): Promise<boolean>;
   deleteVideo?(config: LibraryConnector, item: { externalId: string; expectedPath: string }): Promise<void>;
   fetchPlaybackSessions?(config: LibraryConnector): Promise<LibraryPlaybackSession[]>;
+  // Lightweight session snapshot; the caller verifies known inventory scope.
+  fetchActiveVideoSessions?(config: LibraryConnector): Promise<LibraryPlaybackSession[]>;
+  fetchItemPlayCount?(config: LibraryConnector, externalId: string): Promise<number | null>;
   testConnection(config: LibraryConnector): Promise<LibraryConnectorTestResult>;
   fetchArtists(config: LibraryConnector): Promise<FetchedLibraryArtist[]>;
   fetchVideos?(config: LibraryConnector): Promise<FetchedLibraryVideo[]>;

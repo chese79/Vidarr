@@ -518,3 +518,16 @@ No acquisition, catalog acceptance or original-video modification is implied. Se
 [metadata enrichment](metadata-enrichment.md).
 
 Artist matching policy update (2026-11-07): the user authorizes automatic confirmation of the highest-ranked Vidarr match score of at least 82%, after validating the MusicBrainz ID. A close runner-up no longer requires a confirmation click. Saved qualifying suggestions, including legacy ambiguous observations, are processed without a new search. Lower scores and conflicting existing catalog ownership retain review; provider failures retry without discarding evidence. Acceptance starts source collection for the canonical artist in both MV and Live, including when linking an observation to an existing owner. Individual source videos retain their separate review requirements. See process-flows.md for cadence and recovery.
+
+## Scheduled maintenance and current playback (2026-11-19)
+
+Library Sync runs daily at 03:00 America/Chicago by default. Most heavy background work is limited
+to 02:00–10:00; playback, progress, delivery and deletion checks retain all-day defaults. Every
+active system task exposes interval/daily timing, time zone, an optional automatic window and
+an enabled switch. Saved schedules take effect immediately and persist across restart. Run Now
+is an explicit override; active work finishes safely while pending work waits for its next window.
+
+A lightweight Jellyfin Playback Monitor supplies Now Playing and an exact management link to the
+artist/video or accepted Live recording. Playback transitions refresh the previous video's native
+server count by ID, independently of full library scans and Last.fm. Counts remain server facts;
+no client/session event itself creates a play. See [task scheduling and playback](task-scheduling-playback.md).

@@ -24,10 +24,14 @@ import { backfillArtistVideoInventories } from '../pipeline/artistVideoBackfill.
 import { backfillArtistGenres } from '../pipeline/artistGenres.js';
 import { pollLastFmPlayback } from '../pipeline/lastfmScrobbling.js';
 import { processPendingVideoDeletions } from '../pipeline/deleteVideo.js';
+import { syncAllLibraries } from '../pipeline/librarySync.js';
+import { pollPlaybackMonitor } from '../pipeline/playbackMonitor.js';
 
 export interface ScheduledJob {
   name: string;
   defaultIntervalMs: number;
+  defaultSchedule?: { scheduleType: 'daily'; timeOfDay: string; timeZone: string };
+  defaultWindow?: { windowStart: string; windowEnd: string };
   run: () => Promise<string>;
   // Optional: after a run, whether more work remains and the job should run
   // again straight away (production only) instead of waiting out its interval.
@@ -66,6 +70,10 @@ async function pollAllYoutubeSources(): Promise<string> {
 // seconds, not calendar schedules) — plain setInterval, no cron-string library
 // needed. See docs/plan.md's scheduler section.
 export const JOBS: ScheduledJob[] = [
+  { name: 'Playback Monitor', defaultIntervalMs: 15_000, run: pollPlaybackMonitor },
+  { name: 'Library Sync', defaultIntervalMs: 86_400_000,
+    defaultSchedule: { scheduleType: 'daily', timeOfDay: '03:00', timeZone: 'America/Chicago' },
+    defaultWindow: { windowStart: '02:00', windowEnd: '10:00' }, run: syncAllLibraries },
   { name: 'Artist Identity Suggestions', defaultIntervalMs: 15000, run: backfillArtistIdentitySuggestions },
   { name: 'Music Video Metadata Enrichment', defaultIntervalMs: 15000, run: runMetadataEnrichment, rerun: metadataEnrichmentPending },
   { name: 'Existing Artist Source Discovery', defaultIntervalMs: 60000, run: runExistingArtistDiscovery, rerun: existingArtistDiscoveryPending },
@@ -181,3 +189,10 @@ export const JOBS: ScheduledJob[] = [
     },
   },
 ];
+
+const overnightTasks = new Set(['Artist Identity Suggestions', 'Music Video Metadata Enrichment',
+  'Existing Artist Source Discovery', 'Live Starting Inventory', 'Live Candidate Matching',
+  'Live Event Metadata', 'Live Discovery', 'Artist Genre Backfill', 'Artist Video Inventory Backfill',
+  'Smart Playlist Regeneration', 'YouTube Channel Poll', 'Missing/Wanted Backlog Search',
+  'IMVDb Metadata Refresh', 'Quality Upgrade Search', 'Log Cleanup']);
+for (const job of JOBS) if (overnightTasks.has(job.name)) job.defaultWindow = { windowStart: '02:00', windowEnd: '10:00' };

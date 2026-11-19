@@ -1,4 +1,4 @@
-import { magnetInfoHash } from './magnet.js';
+import { magnetInfoHash, normalizeTorrentHash } from './magnet.js';
 import type { DownloadClient } from '@prisma/client';
 import type { DownloadClientProvider, DownloadStatus, GrabHandle } from './types.js';
 import { withRetry } from '../../pipeline/retry.js';
@@ -72,6 +72,7 @@ export const qbittorrentProvider: DownloadClientProvider = {
   },
 
   async getStatus(client, externalRef): Promise<DownloadStatus> {
+    externalRef = normalizeTorrentHash(externalRef) ?? externalRef; // Recover handles saved before Base32 normalization.
     const torrents = await withRetry(async () => {
       const cookie = await login(client);
       const res = await fetch(`${baseUrl(client)}/api/v2/torrents/info?hashes=${externalRef}`, {

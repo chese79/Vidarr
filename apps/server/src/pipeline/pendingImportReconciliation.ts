@@ -47,12 +47,12 @@ export async function reconcilePendingImports(): Promise<{ checked: number; conf
         await prisma.$transaction([
           prisma.libraryVideo.upsert({
             where: { connectorId_externalId: { connectorId: connector.id, externalId: match.externalId } },
-            update: { musicVideoId: video.id, matchConfidence: null, available: true, lastSyncedAt: now,
+            update: { libraryId: connector.videoLibraryId, musicVideoId: video.id, matchConfidence: null, available: true, lastSyncedAt: now,
               title: match.title, normalizedTitle: normalizeTitle(match.title), artistName: match.artistName,
               normalizedArtistName: normalizeTitle(match.artistName), releaseYear: match.releaseYear ?? null,
               durationSeconds: match.durationSeconds ?? null, path: match.path ?? null,
               playCount: match.playCount ?? null, hasThumbnail: match.hasThumbnail ?? false },
-            create: { connectorId: connector.id, externalId: match.externalId, musicVideoId: video.id,
+            create: { libraryId: connector.videoLibraryId, connectorId: connector.id, externalId: match.externalId, musicVideoId: video.id,
               title: match.title, normalizedTitle: normalizeTitle(match.title), artistName: match.artistName,
               normalizedArtistName: normalizeTitle(match.artistName), releaseYear: match.releaseYear ?? null,
               durationSeconds: match.durationSeconds ?? null, path: match.path ?? null,

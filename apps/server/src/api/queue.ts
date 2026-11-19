@@ -1,4 +1,4 @@
-import { magnetInfoHash } from '../providers/downloadclient/magnet.js';
+import { magnetInfoHash, normalizeTorrentHash } from '../providers/downloadclient/magnet.js';
 import { liveConfiguration } from '../live/policy.js';
 import { assertRecordingEligible } from '../live/acquisition.js';
 import fs from 'node:fs/promises';
@@ -76,24 +76,26 @@ export async function queueRoutes(app: FastifyInstance) {
     if (item.status !== 'submissionUnknown' || item.sourceType !== 'indexer' || isDownloadRunnerActive(id)) {
       return reply.code(409).send({ error: 'Only an unresolved external submission can be reconciled after its submission attempt finishes.' });
     }
+    let externalRef = body.action === 'attach' ? body.externalRef : '';
+    if (item.downloadClient?.implementation === 'qBittorrent') externalRef = normalizeTorrentHash(externalRef) ?? externalRef;
     let progress = 0;
     if (body.action === 'attach') {
       if (!item.downloadClient) return reply.code(409).send({ error: 'Download client is missing; restore its configuration first.' });
       // A magnet exposes a stable handle, so reject a different torrent even if it exists.
-      const expectedHash = magnetInfoHash(item.sourceRef);
-      if (item.downloadClient.implementation === 'qBittorrent' && expectedHash && expectedHash.toLowerCase() !== body.externalRef.toLowerCase()) {
+      const expectedHash = magnetInfoHash(item.sourceRef) ?? normalizeTorrentHash(item.sourceRef);
+      if (item.downloadClient.implementation === 'qBittorrent' && expectedHash && expectedHash.toLowerCase() !== externalRef.toLowerCase()) {
         return reply.code(409).send({ error: 'Torrent hash does not match this requested video download.' });
       }
       try {
         const status = await getDownloadClientProvider(item.downloadClient.implementation)
-          .getStatus(item.downloadClient, body.externalRef, item.downloadClient.category || 'vidarr');
+          .getStatus(item.downloadClient, externalRef, item.downloadClient.category || 'vidarr');
         if (status.status === 'failed') return reply.code(409).send({ error: 'That job is missing or failed in the client. Verify the correct job before linking it.' });
         progress = status.progress;
       } catch (error) { return reply.code(502).send({ error: redactMessage(error) }); }
     }
     const updated = await prisma.$transaction(async tx => {
       const result = await tx.downloadQueueItem.updateMany({ where: { id, status: 'submissionUnknown' }, data:
-        body.action === 'attach' ? { status: 'downloading', sourceRef: body.externalRef, progress, error: null }
+        body.action === 'attach' ? { status: 'downloading', sourceRef: externalRef, progress, error: null }
           : { status: 'failed', error: 'User verified the job was not submitted to the download client.' } });
       if (result.count) await tx.history.create({ data: { musicVideoId: item.musicVideoId, recordingId: item.recordingId,
         eventType: body.action === 'attach' ? 'downloadSubmissionReconciled' : 'downloadFailed',
