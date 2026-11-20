@@ -11,6 +11,7 @@ under **Unreleased** in the same commit as the change.
 - Bound sidebar polling to active rows/counts and page the waiting queue while preserving legacy clients and global reorder actions.
 - Repair cancellation-aware and asynchronous-navigation tests; consolidate fixture cleanup and require Node 22 server/web tests and production builds before Docker publication.
 - Validate 1,065 server cases through the full suite and focused compatibility reruns, all 112 web checks, and Node 22 production builds. Retain the current scheduling/playback release.
+- Deploy the combined local release healthy; preserve all 17 playlists, 29 task settings and 18,853 enrichment journals, retaining batch 6 and its maintenance window. Keep a verified private database/image recovery bundle.
 - Preserve review, validation, rollback, media ownership and separate server-delivery confirmation. See [review corrections](docs/code-review-fixes-2026-11-19.md).
 
 ### Scheduled maintenance and playback visibility (2026-11-19)

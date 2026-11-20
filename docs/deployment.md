@@ -976,3 +976,41 @@ cursor. Removed this release's rollback, failed candidate and recovery helpers a
 the superseded production image. The intermediate image manifests were already absent.
 Scoped Vidarr build-cache cleanup reclaimed 295.1 MB. No volumes, media, unrelated
 services or concurrently owned review containers/images were removed.
+
+
+## Full review corrections — 2026-11-19
+
+Local main code commit `28255b9` combines all ten review corrections and the shared import,
+identity/count, publication and queue simplifications with the already deployed scheduling and
+playback release `fd1fd05`. The local image is `vidarr-review-fixes-20261119:release`, manifest
+`0720339d561771d5039512d78df6a7f856be765f6c3307750e893fbe402b10c2`.
+Scope is local main and the existing Vidarr instance. The Docker publication workflow now gates
+image uploads on Node 22 server/web verification and both production builds.
+
+Verification covers 1,065 distinct server cases, including the corrected integration fixture and
+33 final queue/import/torrent compatibility checks, plus all 112 web checks. Both production builds
+and the integrated Docker build pass. The served frontend is `index-DY54TqRH.js`. Existing Vite
+warnings are nonblocking. The [correction record](code-review-fixes-2026-11-19.md) distinguishes
+full-suite evidence from targeted follow-up runs.
+
+The rollout paused only active enrichment batch 6, stopped only Vidarr and verified a consistent
+private database/WAL recovery copy with SQLite quick_check. It inherited the exact four mounts,
+environment and loopback port contract. Health passed before configuration, task preferences,
+playlists and every saved enrichment journal were compared against frozen row hashes. Retained:
+17 playlists, 448 playlist items, 8 publication links, 29 task settings, 18,853 enrichment journals,
+3,587 artist IDs, 11,843 music-video IDs, 685 managed-file IDs, 11,856 recording IDs and 11,855 part
+IDs. These are database identities, including observations/compatibility records, rather than
+available-video counts.
+
+Batch 6 retains cursor 6,520, processed 2,885 and high-water ID 12,096. It is running/waiting for
+its saved 02:00–10:00 America/Chicago window, next eligible at 2026-11-20 02:00 CST; deployment did
+not bypass that window or reset its checkpoints. Authenticated smoke checks return HTTP 200 for
+queue summary/pagination, artist summary, schedules and Now Playing. The established LAN health
+URL returns 200 (378 ms from the host). Startup logs contain no error/fatal records. A separate
+physical LAN client was not exercised during this rollout.
+
+The private recovery bundle retains the original database/WAL, a consistent SQLite backup,
+container configuration and the previous image archive, with SHA-256 checksums. Superseded review,
+failed and rollback containers, old image tags and identified review build records were removed
+after health, preservation and resume checks. Current shared layers and all configuration, media
+and staging volumes remain in place; unrelated services and research files were preserved.
