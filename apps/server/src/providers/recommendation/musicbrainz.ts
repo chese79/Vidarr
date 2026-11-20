@@ -1,31 +1,5 @@
 import type { RecommendationProvider, SimilarArtistHit } from './types.js';
-
-const MB_API = 'https://musicbrainz.org/ws/2';
-const USER_AGENT = 'vidarr/0.1.0 (self-hosted music video manager)';
-const MIN_REQUEST_INTERVAL_MS = 1100; // MusicBrainz requires <= 1 req/sec
-
-let lastRequestAt = 0;
-let queue: Promise<void> = Promise.resolve();
-
-function rateLimited<T>(fn: () => Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
-    const wait = Math.max(0, lastRequestAt + MIN_REQUEST_INTERVAL_MS - Date.now());
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    lastRequestAt = Date.now();
-  });
-  queue = run;
-  return run.then(fn);
-}
-
-async function mbGet(path: string): Promise<any> {
-  return rateLimited(async () => {
-    const res = await fetch(`${MB_API}${path}`, {
-      headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
-    });
-    if (!res.ok) throw new Error(`MusicBrainz request failed: ${res.status}`);
-    return res.json();
-  });
-}
+import { musicBrainzRequest as mbGet } from '../metadata/musicBrainzTransport.js';
 
 async function resolveMbid(name: string): Promise<string | null> {
   const body = await mbGet(`/artist/?query=${encodeURIComponent(`artist:${name}`)}&fmt=json`);

@@ -121,6 +121,64 @@ describe('durable enrichment workflow', () => {
     await app.inject({ method: 'POST', url: `/api/v1/metadata-enrichment/${run.id}/control`, headers: authHeaders(), payload: { action: 'retry' } });
     await runMetadataEnrichment(); expect(sent).toHaveLength(2); expect(sent[0]).toEqual(sent[1]);
   });
+  it('retries failed items without rewinding the cursor, resetting counters or changing reviewed items', async () => {
+    const run = await startMetadataEnrichment(connectorId); await runMetadataEnrichment();
+    const item = await prisma.metadataEnrichmentItem.findFirstOrThrow();
+    const reviewed = await prisma.metadataEnrichmentItem.create({ data: { runId: run.id, libraryVideoId: item.libraryVideoId, externalId: 'already-reviewed', title: 'Reviewed', artistName: 'Artist', status: 'review', beforeJson: item.beforeJson, proposalJson: item.proposalJson, changed: true } });
+    await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status: 'failed', error: 'connection lost' } });
+    await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { cursor: 9000, processed: 2, updated: 1, failedCount: 1 } });
+    const response = await app.inject({ method: 'POST', url: `/api/v1/metadata-enrichment/${run.id}/control`, headers: authHeaders(), payload: { action: 'retry' } });
+    expect(response.statusCode).toBe(200); expect(response.json()).toMatchObject({ cursor: 9000, processed: 2, updated: 1, failedCount: 1 });
+    expect(await prisma.metadataEnrichmentItem.findUnique({ where: { id: reviewed.id } })).toEqual(reviewed);
+    expect((await prisma.metadataEnrichmentItem.findUniqueOrThrow({ where: { id: item.id } })).retryAt).not.toBeNull();
+    await runMetadataEnrichment();
+    expect((await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).cursor).toBe(9000);
+    expect((await prisma.metadataEnrichmentItem.findUniqueOrThrow({ where: { id: item.id } })).status).not.toBe('failed');
+    expect(await prisma.metadataEnrichmentItem.findUnique({ where: { id: reviewed.id } })).toEqual(reviewed);
+  });
+  it('persists a transient provider retry and holds the scan without a one-second retry loop', async () => {
+    const run = await startMetadataEnrichment(connectorId);
+    const video = await prisma.libraryVideo.findFirstOrThrow();
+    await prisma.libraryVideo.update({ where: { id: video.id }, data: { title: 'Recovery Fixture Band - Tomorrow', artistName: 'Recovery Fixture Band' } });
+    const original = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: any, options: any) => String(url).startsWith('https://musicbrainz.org/') ? new Response('', { status: 503 }) : original(url, options)));
+    await runMetadataEnrichment();
+    const failed = await prisma.metadataEnrichmentItem.findFirstOrThrow();
+    expect(failed.status).toBe('failed'); expect(failed.retryAt!.getTime()).toBeGreaterThan(Date.now());
+    expect(JSON.parse(failed.proposalJson).retryProviders).toBe(true);
+    clearMusicBrainzCache(); // A restarted process retains the item backoff.
+    const cursor = (await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).cursor;
+    expect(await runMetadataEnrichment()).toContain('cooling down');
+    expect((await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).cursor).toBe(cursor);
+    expect((await prisma.metadataEnrichmentItem.findFirstOrThrow()).attempts).toBe(failed.attempts);
+    await prisma.metadataEnrichmentItem.update({ where: { id: failed.id }, data: { retryAt: new Date(0) } });
+    vi.stubGlobal('fetch', vi.fn(async (url: any, options: any) => String(url).startsWith('https://musicbrainz.org/') ? new Response(JSON.stringify({ artists: [] })) : original(url, options)));
+    await runMetadataEnrichment();
+    const recovered = await prisma.metadataEnrichmentItem.findUniqueOrThrow({ where: { id: failed.id } });
+    expect(recovered.status).not.toBe('failed'); expect(recovered.retryAt).toBeNull(); expect(recovered.attempts).toBe(failed.attempts + 1);
+    expect((await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).cursor).toBe(cursor);
+  });
+  it('stops automatic transient retries after six attempts while retaining the failed outcome', async () => {
+    const run = await startMetadataEnrichment(connectorId);
+    const video = await prisma.libraryVideo.findFirstOrThrow();
+    await prisma.libraryVideo.update({ where: { id: video.id }, data: { title: 'Retry Limit Band - Tomorrow', artistName: 'Retry Limit Band' } });
+    await prisma.metadataEnrichmentItem.create({ data: { runId: run.id, libraryVideoId: video.id, externalId: video.externalId, title: video.title, artistName: video.artistName, status: 'failed', retryAt: new Date(0), attempts: 5, beforeJson: 'null', proposalJson: 'null' } });
+    const original = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url: any, options: any) => String(url).startsWith('https://musicbrainz.org/') ? new Response('', { status: 503 }) : original(url, options)));
+    await runMetadataEnrichment();
+    expect(await prisma.metadataEnrichmentItem.findFirstOrThrow()).toMatchObject({ status: 'failed', attempts: 6, retryAt: null });
+  });
+  it('does not retarget a retry when the inventory row now points to a different server video', async () => {
+    const run = await startMetadataEnrichment(connectorId); await runMetadataEnrichment();
+    const item = await prisma.metadataEnrichmentItem.findFirstOrThrow();
+    await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status: 'failed', retryAt: new Date(0) } });
+    await prisma.libraryVideo.update({ where: { id: item.libraryVideoId }, data: { externalId: 'replacement-video' } });
+    await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { status: 'running', cursor: 9000 } });
+    await runMetadataEnrichment();
+    expect(sent).toHaveLength(1);
+    expect(await prisma.metadataEnrichmentItem.findUniqueOrThrow({ where: { id: item.id } })).toMatchObject({ status: 'failed', retryAt: null });
+    expect((await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).cursor).toBe(9000);
+  });
   it('applies verified album facts despite a director outage and retries only unfinished provider work with a new guarded request', async () => {
     const artistId = '11111111-1111-4111-8111-111111111111', recording = '22222222-2222-4222-8222-222222222222', release = '33333333-3333-4333-8333-333333333333';
     const root = await createRootFolder(); const profile = await createQualityProfile((await createQuality()).id);

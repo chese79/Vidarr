@@ -78,6 +78,6 @@ describe('enrichment MusicBrainz HTTP evidence', () => {
     expect(await enrichmentAlbumEvidence(artist, 'Tomorrow', undefined, undefined, error => errors.push(error))).toEqual([]);
     expect(fetch).toHaveBeenCalledTimes(2); expect(errors).toHaveLength(1);
     await enrichmentAlbumEvidence(artist, 'Tomorrow', undefined, undefined, () => {});
-    expect(fetch).toHaveBeenCalledTimes(3); // Failed lookups are retried on a later attempt.
+    expect(fetch).toHaveBeenCalledTimes(2); // Shared outage cooldown suppresses another wire call.
   });
 });

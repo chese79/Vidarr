@@ -4,6 +4,14 @@ All notable user-visible and operational changes to Vidarr are documented here. 
 under **Unreleased** in the same commit as the change.
 
 ## Unreleased
+
+### MusicBrainz enrichment recovery (2026-11-19)
+
+- Share one paced MusicBrainz transport across recommendations and metadata consumers. Respect provider Retry-After and use bounded exponential cooldowns for temporary HTTP/network failures.
+- Persist incomplete-provider retry deadlines, pause fast continuation during outages and retain backoff across enrichment restarts. Keep permanent errors visible.
+- Retry exact failed videos without rewinding the scan cursor, resetting progress or rerunning reviewed/completed work. Preserve successful provider evidence and uncertain native request IDs.
+- Verify 117 server and 22 UI regressions, including real HTTP outage headers, shared request pacing, restart recovery, bounded retries, exact video identity and native publication safety.
+- Deploy locally with all 18,853 enrichment journals, configuration and playlists preserved; queue 1,063 failed videos in the existing batch without resetting its cursor or counters.
 ### Full review corrections and simpler shared workflows (2026-11-19)
 
 - Fix all ten reproduced findings: indexer identity admission, physical import containment, active artist deletion, bundle ownership, normalized unmatched counts, Live native count refresh, video-only connector sync, concurrent playlist publication, transient authentication failures and Base32 magnet handles.

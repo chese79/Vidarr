@@ -24,9 +24,8 @@ export async function metadataEnrichmentRoutes(app: FastifyInstance) {
     if (action === 'cancel') return prisma.metadataEnrichmentRun.update({ where: { id }, data: { status: 'cancelled' } });
     if (action === 'retry') {
       try { return await withMetadataEnrichmentControl(async () => {
-      const first = await prisma.metadataEnrichmentItem.findFirst({ where: { runId: id, status: 'failed' }, orderBy: { libraryVideoId: 'asc' } });
-      if (!first) return run;
       const failures = await prisma.metadataEnrichmentItem.findMany({ where: { runId: id, status: 'failed' } });
+      if (!failures.length) return run;
       if (failures.some(item => JSON.parse(item.proposalJson)?.reviewRequest)) return reply.code(409).send({ error: 'Retry the pending reviewed selection before retrying providers.' });
       for (const item of failures) {
         const proposal = JSON.parse(item.proposalJson);
@@ -36,8 +35,8 @@ export async function metadataEnrichmentRoutes(app: FastifyInstance) {
           await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { proposalJson: JSON.stringify({ ...proposal, retryProviders: true }) } });
         }
       }
-      await prisma.metadataEnrichmentItem.updateMany({ where: { runId: id, status: 'failed' }, data: { status: 'pending', error: null } });
-      return prisma.metadataEnrichmentRun.update({ where: { id }, data: { status: 'running', cursor: first.libraryVideoId - 1, error: null } });
+      await prisma.metadataEnrichmentItem.updateMany({ where: { runId: id, status: 'failed' }, data: { retryAt: new Date() } });
+      return prisma.metadataEnrichmentRun.update({ where: { id }, data: { status: 'running', error: null } });
       }); } catch (error) { return reply.code(409).send({ error: (error as Error).message }); }
     }
     return prisma.metadataEnrichmentRun.update({ where: { id }, data: { status: action === 'pause' ? 'paused' : 'running', error: null } });

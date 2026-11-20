@@ -183,6 +183,36 @@ an unverified native operation, and a pending reviewed selection must be retried
 Existing proposal JSON remains readable; these optional fields need no schema migration. Actor writes
 use a 30-second transaction bound (10-second lock wait) for the short artist candidate transaction;
 no provider/network call runs inside that transaction. Configuration/media mounts stay unchanged.
+
+## MusicBrainz outage recovery (2026-11-19)
+
+Metadata, identity, Live and recommendation consumers now share the same serial MusicBrainz
+transport, with at least 1.1 seconds between starts and no overlapping fetches. Recommendations
+previously had a separate limiter, which could exceed the application's combined request budget.
+MusicBrainz documents both per-IP and global-load 503 throttling in its
+[rate-limiting policy](https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting).
+
+HTTP 429/500/502/503/504 and temporary network/time-out errors open a shared cooldown: 30 seconds,
+doubling on successive failures up to 15 minutes. A longer numeric or HTTP-date Retry-After is
+honored. Calls during cooldown report the same transient deferral without contacting the provider.
+Success resets the backoff; permanent failures such as 404 remain distinct. Failed responses are
+never cached as empty evidence. This handles Vidarr recovery; it cannot eliminate an upstream outage
+or pace unrelated applications using the same public IP.
+
+After verified native read-back, incomplete provider research is retried using the existing item
+retryAt field and optional provider-error retryAt evidence. A failed item has at most six automatic
+attempts, then remains failed for review/manual retry. The worker stops its fast continuation during
+cooldown. Persisted future item deadlines also hold the batch after a process restart. Scheduled
+attempts retain the task's maintenance window; Run Now explicitly allows one bounded checkpoint.
+
+Retry failed now queues those exact saved items without rewinding the forward inventory cursor,
+resetting processed/updated totals, deleting journals or rerunning reviewed/completed items. Retry
+items are selected before fresh inventory; the cursor only moves forward. Failed outcomes remain
+visible until an attempt resolves them, and the batch waits for scheduled retries before declaring
+completion. Missing/unavailable videos retain their evidence and report failure without a retry loop.
+Confirmed native operations may receive fresh fingerprints/UUIDs for unfinished research;
+uncertain operations keep their original request and pending reviewed selections still block retry.
+No database migration is required because retryAt already exists and proposal fields are optional.
 ## Persistent lookup reuse (2026-11-06)
 
 In production with an absolute SQLite `DATABASE_URL`, successful public MusicBrainz responses also

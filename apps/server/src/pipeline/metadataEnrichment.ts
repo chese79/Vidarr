@@ -6,6 +6,7 @@ import { createAuthedFetcher } from '../providers/library/util.js';
 import { enrichmentAlbumEvidence, searchMusicBrainzArtists, type MusicBrainzArtist } from '../providers/metadata/musicbrainz.js';
 import { enrichmentVideoDirectors } from '../providers/metadata/imvdb.js';
 import { redactMessage } from '../security/redact.js';
+import { MusicBrainzUnavailable, musicBrainzRetryAt } from '../providers/metadata/musicBrainzTransport.js';
 import { videoIdentities, cleanVideoTitle, isPlausibleArtistName } from './videoIdentity.js';
 import { isUsableArtistHint } from './artistObservation.js';
 import { normalizeTitle } from './normalize.js';
@@ -92,7 +93,7 @@ export async function enrichAfterScan(connectorId: number) {
 
 export async function proposeMetadata(video: LibraryVideo, snapshot: EnrichmentSnapshot, serverUrl = '', previous?: EnrichmentProposal, artists?: EnrichmentArtist[]): Promise<EnrichmentProposal> {
   const proposal: EnrichmentProposal = { evidence: [], automatic: {}, missing: missingFacts(snapshot.Facts), notes: [], providerErrors: [], completedProviders: [] };
-  const failed = (source: string, error: unknown) => proposal.providerErrors!.push({ source, message: redactMessage(error instanceof Error ? error.message : String(error)) });
+  const failed = (source: string, error: unknown) => proposal.providerErrors!.push({ source, message: redactMessage(error instanceof Error ? error.message : String(error)), ...(error instanceof MusicBrainzUnavailable ? { retryAt: error.retryAt.toISOString() } : {}) });
   const observedAt = new Date().toISOString();
   const add = (facts: EnrichmentFacts, source: string, url: string, entityId: string, verified: boolean, reason: string, fetchedAt = observedAt) => proposal.evidence.push({ facts, source, url, entityId, observedAt: fetchedAt, verified, reason });
   if (!snapshot.NfoValid) { proposal.notes.push(snapshot.NfoError ?? 'Invalid NFO was preserved.'); return proposal; }
@@ -199,6 +200,9 @@ export async function runMetadataEnrichment(): Promise<string> {
       }
     }
     if (!run) return 'No enrichment batch queued.';
+    if (musicBrainzRetryAt()) return 'MusicBrainz cooling down; enrichment progress retained.';
+    // Persisted deferrals also hold after a process restart clears the in-memory circuit.
+    if (await prisma.metadataEnrichmentItem.count({ where: { runId: run.id, status: 'failed', retryAt: { gt: new Date() } } })) return 'MusicBrainz cooling down; enrichment progress retained.';
     const connector = await prisma.libraryConnector.findUniqueOrThrow({ where: { id: run.connectorId } });
     try {
       if (!sameId(connector.videoLibraryId ?? '', run.libraryId) || await target(connector) !== run.serverId) throw new Error('Server/library scope changed.');
@@ -210,11 +214,18 @@ export async function runMetadataEnrichment(): Promise<string> {
     for (let n = 0; n < 3; n++) {
       if ((await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).status !== 'running') break;
       const cursor = (await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } })).cursor;
-      const video = await prisma.libraryVideo.findFirst({ where: { connectorId: run.connectorId, available: true, id: { gt: cursor, lte: run.highWaterId } }, orderBy: { id: 'asc' } });
-      if (!video) { await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { status: 'completed' } }); break; }
+      const retry = await prisma.metadataEnrichmentItem.findFirst({ where: { runId: run.id, OR: [{ status: 'failed', retryAt: { lte: new Date() } }, { status: 'pending' }] }, orderBy: { id: 'asc' } });
+      const video = retry
+        ? await prisma.libraryVideo.findFirst({ where: { id: retry.libraryVideoId, externalId: retry.externalId, connectorId: run.connectorId, available: true } })
+        : await prisma.libraryVideo.findFirst({ where: { connectorId: run.connectorId, available: true, id: { gt: cursor, lte: run.highWaterId } }, orderBy: { id: 'asc' } });
+      if (!video) {
+        if (retry) { await prisma.metadataEnrichmentItem.update({ where: { id: retry.id }, data: { status: 'failed', retryAt: null, error: 'Video no longer available in this connector; saved evidence retained.' } }); await refreshCounters(run.id); continue; }
+        if (!await prisma.metadataEnrichmentItem.count({ where: { runId: run.id, status: 'failed', retryAt: { not: null } } })) await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { status: 'completed' } });
+        break;
+      }
       const item = await prisma.metadataEnrichmentItem.upsert({ where: { runId_externalId: { runId: run.id, externalId: video.externalId } }, create: { runId: run.id, libraryVideoId: video.id, externalId: video.externalId, title: video.title, artistName: video.artistName, beforeJson: 'null', proposalJson: 'null' }, update: {} });
       if (!['pending', 'failed'].includes(item.status)) {
-        await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { cursor: video.id } });
+        await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { cursor: Math.max(cursor, video.id) } });
         continue;
       }
       try {
@@ -242,14 +253,20 @@ export async function runMetadataEnrichment(): Promise<string> {
         const needsReview = proposal.notes.some(note => note.startsWith('Artist/video identity')) || proposal.evidence.some(row => Object.entries(row.facts).some(([field, value]) => populated(value) && JSON.stringify(value) !== JSON.stringify(after.Facts[field as EnrichmentField])));
         const status = proposal.providerErrors?.length ? 'failed' : needsReview ? 'review' : !missingFacts(after.Facts).length ? 'complete' : proposal.notes.length && !proposal.evidence.length ? 'review' : changes ? 'updated' : 'unknown';
         proposal.missing = missingFacts(after.Facts);
-        await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status, changed: item.changed || changes, proposalJson: JSON.stringify(proposal), resultJson: JSON.stringify(after), error: proposal.providerErrors?.length ? proposal.providerErrors.map(row => `${row.source}: ${row.message}`).join('; ') : null, attempts: { increment: 1 } } });
+        const retryDates = (proposal.providerErrors ?? []).flatMap(row => row.retryAt && Number.isFinite(Date.parse(row.retryAt)) ? [Date.parse(row.retryAt)] : []);
+        const retryAt = item.attempts + 1 < 6 && retryDates.length ? new Date(Math.max(...retryDates, Date.now() + Math.min(900_000, 30_000 * 2 ** Math.min(item.attempts, 5)))) : null;
+        if (retryAt) proposal.retryProviders = true; // Native read-back succeeded; refresh only unfinished research.
+        await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status, retryAt, changed: item.changed || changes, proposalJson: JSON.stringify(proposal), resultJson: JSON.stringify(after), error: proposal.providerErrors?.length ? proposal.providerErrors.map(row => `${row.source}: ${row.message}`).join('; ') : null, attempts: { increment: 1 } } });
       } catch (error) {
-        await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status: 'failed', error: redactMessage((error as Error).message), attempts: { increment: 1 } } });
+        await prisma.metadataEnrichmentItem.update({ where: { id: item.id }, data: { status: 'failed', retryAt: null, error: redactMessage((error as Error).message), attempts: { increment: 1 } } });
       }
-      await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { cursor: video.id, leaseAt: new Date() } });
+      await prisma.metadataEnrichmentRun.update({ where: { id: run.id }, data: { cursor: Math.max(cursor, video.id), leaseAt: new Date() } });
       await refreshCounters(run.id);
+      if (musicBrainzRetryAt()) break;
     }
-    continuing = await prisma.metadataEnrichmentRun.count({ where: { status: 'running' } }) > 0;
+    const current = await prisma.metadataEnrichmentRun.findUniqueOrThrow({ where: { id: run.id } });
+    continuing = !musicBrainzRetryAt() && current.status === 'running' && (!!await prisma.libraryVideo.count({ where: { connectorId: run.connectorId, available: true, id: { gt: current.cursor, lte: run.highWaterId } } })
+      || !!await prisma.metadataEnrichmentItem.count({ where: { runId: run.id, OR: [{ status: 'pending' }, { status: 'failed', retryAt: { lte: new Date() } }] } }));
     return 'Enrichment checkpoint saved.';
   } finally { busy = false; }
 }

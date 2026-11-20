@@ -1014,3 +1014,49 @@ container configuration and the previous image archive, with SHA-256 checksums. 
 failed and rollback containers, old image tags and identified review build records were removed
 after health, preservation and resume checks. Current shared layers and all configuration, media
 and staging volumes remain in place; unrelated services and research files were preserved.
+
+## MusicBrainz enrichment recovery — 2026-11-19
+
+The local `vidarr-musicbrainz-recovery-20261119:release` update adds a shared provider
+transport and exact-item retry recovery; see [enrichment recovery](metadata-enrichment.md).
+No schema migration, new batch or full connector scan is needed. Deployment retains the
+existing Vidarr environment/mounts, pauses and resumes only its saved enrichment owner,
+and keeps a private SQLite recovery bundle under
+`/config/operator-recovery/musicbrainz-recovery-20261119`.
+
+Before rollout, run 6 had cursor 6,520, high-water 12,096, 2,885 processed and 13 updated.
+Its 1,063 failed journals included 1,062 verified native read-backs and one uncertain
+operation; none had a pending reviewed selection. Retry preserves that uncertain request's
+UUID and reuses successful provider evidence. Live read-only checks returned MusicBrainz
+artist-ID lookup HTTP 200 but search HTTP 503 with Retry-After and the search rate-limit
+zone. These observations distinguish a provider search outage/throttle from missing metadata;
+they do not prove a unique cause or promise that the upstream failure is resolved.
+
+Node 22 Docker checks pass 117 server cases and 22 UI cases. Coverage includes real
+local HTTP Retry-After handling, shared recommendation/metadata request pacing,
+transient/permanent failures, persisted deferrals, six-attempt limits, exact server-ID
+guards and cursor/review/uncertain-publication preservation. Provider fixtures remain
+local; no simulated response or watch history is written to the production library.
+
+Both production builds passed, and the deployed manifest is
+`af2cc2a192585d16b16a975a8d9d9c0c009bcec183bf7ccc468bcf6409ab9caa`.
+The replacement passed LAN/container health with exact environment and four mount identities.
+SQLite quick_check, all 18,853 frozen journal hashes, live saved IDs, configuration and
+ordered-playlist fingerprints passed preservation checks. Run 6 resumed without a cursor or
+counter reset. The normal authenticated retry API then queued all 1,063 failed IDs at cursor
+6,520, retaining processed 2,885 and updated 13. No new batch or full scan was launched.
+
+One explicit Run Now checkpoint retried two original failures. One cleared its provider
+error and moved to review; the other retained an IMVDb 404 plus a fresh MusicBrainz search
+503 and received a durable backoff deadline. The checkpoint stopped on cooldown, as designed.
+The remaining 1,062 failed IDs retain retry deadlines; automatic work next starts at
+2026-11-20 08:00 UTC (02:00 Central). All 1,822 previously reviewed item hashes are unchanged,
+all original failed IDs remain present, and run 6 retains cursor 6,520, processed 2,885,
+updated 13 and high-water 12,096. The private retry-baseline and verification reports remain
+beside the verified database bundle. This is verified recovery behavior, not a claim that
+MusicBrainz search is healthy or that review metadata is complete.
+
+After these checks, removed the superseded release/helper containers and previous production
+tag; the intermediate image manifest was already absent. Scoped Vidarr build-cache pruning
+reclaimed 200 MB. Retained the current release, private verified recovery files, every volume
+and unrelated services, including the concurrently running independent review-test container.

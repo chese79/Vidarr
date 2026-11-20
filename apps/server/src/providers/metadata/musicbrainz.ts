@@ -1,18 +1,16 @@
 import { normalizeTitle, squash } from '../../pipeline/normalize.js';
-import { FairRequestQueue, JsonRequestCache } from './requestScheduling.js';
+import { JsonRequestCache } from './requestScheduling.js';
+import { musicBrainzRequest, resetMusicBrainzTransport } from './musicBrainzTransport.js';
 import { PublicResponseStore } from './publicResponseStore.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const API_BASE = 'https://musicbrainz.org/ws/2';
-const MIN_REQUEST_INTERVAL_MS = 1_100;
-const requests = new FairRequestQueue(MIN_REQUEST_INTERVAL_MS);
 const databaseFile = process.env.DATABASE_URL?.split('?')[0];
 const store = process.env.NODE_ENV === 'production' && databaseFile && /^file:(?:\/|[a-z]:[\\/])/i.test(databaseFile)
   ? new PublicResponseStore(path.join(path.dirname(fileURLToPath(new URL(databaseFile, import.meta.url))), 'cache', 'musicbrainz-v1')) : undefined;
 const cache = new JsonRequestCache(24 * 60 * 60_000, 512, 32 * 1024 * 1024, store);
 const observed = new WeakMap<object, string>();
-export const clearMusicBrainzCache = () => cache.clear();
+export const clearMusicBrainzCache = () => { cache.clear(); resetMusicBrainzTransport(); };
 
 export interface MusicBrainzArtist {
   id: string;
@@ -32,17 +30,7 @@ export interface MusicBrainzArtist {
 }
 
 async function rateLimitedGet(path: string): Promise<any> {
-  const result = await cache.get(path, () => requests.enqueue(async () => {
-    const response = await fetch(`${API_BASE}${path}`, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'Vidarr/0.1 (https://github.com/chese79/Vidarr)',
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!response.ok) throw new Error(`MusicBrainz request failed: ${response.status} ${response.statusText}`);
-    return { body: await response.json(), observedAt: new Date().toISOString() };
-  }));
+  const result = await cache.get(path, async () => ({ body: await musicBrainzRequest(path), observedAt: new Date().toISOString() }));
   if (result.body && typeof result.body === 'object') observed.set(result.body, result.observedAt);
   return result.body;
 }

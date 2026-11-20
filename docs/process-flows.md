@@ -800,3 +800,13 @@ for the selected profile → update only the matching inventory and confirmed ca
 retry that item. No library scan is triggered by playback completion. Failed snapshots do not
 establish completion; unknown counts stay unknown. Persistent retries and stale-state labels
 expose recovery. Qualification counters/webhooks remain retired; Last.fm is independent.
+
+## Enrichment provider outage recovery (2026-11-19)
+
+Transient MusicBrainz failure → preserve successful evidence and native read-back → record a bounded
+retry deadline → stop fast follow-up work until the provider cooldown expires → retry the exact item
+within the saved maintenance window → retain review/failed outcomes and continue the forward scan.
+All MusicBrainz consumers share one paced lane. Retry failed reserves the existing control lock,
+rejects uncertain reviewed selections, queues failed IDs and preserves cursor, completed/reviewed
+items, successful metadata and publication UUID safety. Restart retains item deadlines. No new batch
+or full library scan is required. See [metadata enrichment](metadata-enrichment.md).
